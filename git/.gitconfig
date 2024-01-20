@@ -1,0 +1,14 @@
+# This is Git's per-user configuration file.
+[user]
+# Please adapt and uncomment the following lines:
+	name = Cristian
+	email = cristiand2021@gmail.com
+
+[pull]
+	rebase = true
+[core]
+	editor = vim
+[alias]
+	cae = commit --amend --no-edit
+	l = log
+  s = status
