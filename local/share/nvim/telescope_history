@@ -12,3 +12,11 @@ options
 hidden
 'sync 'scripts
 sync
+dotfile
+dotfiles
+apply
+dotfile
+apply
+sync
+dotfiles
+apply
