@@ -53,6 +53,14 @@ alias python="python3"
 alias py="python3"
 alias gcalcli_activate="source ~/Repos/gcalcli/venv/bin/activate"
 
+alias gs="git status"
+alias gl="git log"
+alias gpl="git pull --rebase"
+alias ga="git add ."
+alias gcm="git commit -m"
+alias gca="git commit --amend"
+alias gcae="git commit --amend --no-edit"
+
 ## Path Exports
 export PATH="$HOME/Repos/tmux:$PATH"
 export PATH="$HOME/Repos/alacritty/target/release:$PATH"
