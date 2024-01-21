@@ -1,7 +1,22 @@
 #!/bin/sh
 
-rsync -avh --ignore-existing --info=progress2 ~/Repos/dotfiles/.local ~/.local
-rsync -avh --ignore-existing --info=progress2 ~/Repos/dotfiles/nvim ~/.config/nvim
+echo "=== Applying Neovim Config==="
+rsync -avh ~/Repos/dotfiles/local/share/nvim/ ~/.local/share/nvim/
+rsync -avh ~/Repos/dotfiles/nvim ~/.config/nvim
+echo "=== Done ==="
+echo ""
 
-rsync -avh --ignore-existing --info=progress2 ~/Repos/dotfiles/alacritty/ ~/.config/alacritty/
+echo "=== Applying Scripts ==="
+rsync -avh ~/Repos/dotfiles/scripts/ ~/Scripts/
+echo "=== Done ==="
+echo ""
+
+echo "=== Applying Alacritty Config ==="
+rsync -avh ~/Repos/dotfiles/alacritty/ ~/.config/alacritty/
+echo "=== Done ==="
+echo ""
+
+echo "=== Applying .zshrc ==="
 cp -v ~/Repos/dotfiles/zshrc/.zshrc ~/.zshrc
+echo "=== Done ==="
+echo ""
