@@ -1,0 +1,37 @@
+// Place your key bindings in this file to override the defaultsauto[]
+[
+    {
+        "key": "alt+1",
+        "command": "workbench.view.explorer",
+        "when": "!sideBarFocus"
+    },
+    {
+        "key": "alt+1",
+        "command": "workbench.action.focusActiveEditorGroup",
+        "when": "sideBarFocus"
+    },
+    {
+        "key": "alt+2",
+        "command": "workbench.files.action.focusOpenEditorsView",
+        "when": "!sideBarFocus"
+    },
+    {
+        "key": "alt+2",
+        "command": "workbench.view.explorer",
+        "when": "sideBarFocus"
+    },
+    {
+        "key": "alt+3",
+        "command": "outline.focus",
+        "when": "!sideBarFocus"
+    },
+    {
+        "key": "alt+3",
+        "command": "workbench.action.focusActiveEditorGroup",
+        "when": "sideBarFocus"
+    },
+    {
+        "key": "ctrl+y",
+        "command": "-redo"
+    },
+]
