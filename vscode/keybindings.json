@@ -31,7 +31,38 @@
         "when": "sideBarFocus"
     },
     {
+        "key": "alt+4",
+        "command": "workbench.action.terminal.toggleTerminal"
+    },
+    // quick file search shortcut
+    {
+        "key": "alt+o",
+        "command": "workbench.action.quickOpen"
+    },
+
+    // remove default keybindings that conflict with existing ones or vim shortcuts
+    {
+        "key": "ctrl+shift+r",
+        "command": "-rerunSearchEditorSearch",
+        "when": "inSearchEditor"
+    },
+    {
+        "key": "ctrl+shift+r",
+        "command": "-editor.action.refactor",
+        "when": "editorHasCodeActionsProvider && textInputFocus && !editorReadonly"
+    },
+    {
+        "key": "ctrl+shift+r",
+        "command": "-workbench.action.quickOpenNavigatePreviousInRecentFilesPicker",
+        "when": "inQuickOpen && inRecentFilesPicker"
+    },
+    {
         "key": "ctrl+y",
         "command": "-redo"
     },
+    {
+        "key": "ctrl+shift+r",
+        "command": "-workbench.action.replaceInFiles"
+    },
+
 ]
