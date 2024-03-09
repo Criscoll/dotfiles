@@ -1,0 +1,9 @@
+bradlc.vscode-tailwindcss
+christian-kohler.npm-intellisense
+esbenp.prettier-vscode
+k--kato.intellij-idea-keybindings
+pkief.material-icon-theme
+rust-lang.rust-analyzer
+visualstudioexptteam.intellicode-api-usage-examples
+visualstudioexptteam.vscodeintellicode
+vscodevim.vim
