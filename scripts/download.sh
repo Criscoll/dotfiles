@@ -5,4 +5,5 @@ rclone sync googledrive:Notes ~/Documents/Obsidian \
 	--ignore-checksum \
 	--delete-after \
 	--exclude 'node_modules/**' \
+  --exclude '.git/**' \
 	--verbose --progress \
