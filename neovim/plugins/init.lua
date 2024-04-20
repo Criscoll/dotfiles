@@ -24,11 +24,15 @@ require("lazy").setup({
     { 'williamboman/mason.nvim' },
     { 'williamboman/mason-lspconfig.nvim' },
     { 'neovim/nvim-lspconfig' },
-    { 'nvim-tree/nvim-tree.lua' }
+    { 'nvim-tree/nvim-tree.lua' },
+    { 'nvim-lua/plenary.nvim' },
+    -- { 'nvim-treesitter/nvim-treesitter' }, something isn't working here
+    { 'nvim-telescope/telescope.nvim' }
 })
 
 require('plugins.lsp-config')
 require('plugins.nvim-tree')
+require('plugins.nvim-telescope')
 
 
 
