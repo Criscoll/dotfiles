@@ -5,6 +5,10 @@ vim.g.maplocalleader = "\\" -- Same for `maplocalleader`
 local config_path = vim.fn.stdpath('config')
 package.path = package.path .. ';' .. config_path .. '/?.lua;' .. config_path .. '/?/init.lua'
 
+
+-- Load in keybindings
+require('keybindings')
+--
 -- Load in plugins
 require('plugins')
                                                     
