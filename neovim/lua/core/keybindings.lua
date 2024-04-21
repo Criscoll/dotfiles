@@ -10,3 +10,6 @@ vim.opt.relativenumber = true
 vim.opt.clipboard = "unnamedplus"
     
 vim.api.nvim_set_keymap('i', '<S-Tab>', "<Esc>:tabprevious<CR>i", {noremap = true, silent = true})
+vim.api.nvim_set_keymap('n', '<CR>', ":noh<CR>", {noremap = true, silent = true})
+
+
