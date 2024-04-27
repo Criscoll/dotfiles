@@ -6,13 +6,13 @@ family = "JetBrainsMonoNL Nerd Font"
 style = "Bold"
 
 [font.bold_italic]
-family = "JetBrainsMonoNL  Nerd Font"
+family = "JetBrainsMonoNL Nerd Font"
 style = "Bold Italic"
 
 [font.italic]
-family = "JetBrainsMonoNL  Nerd Font"
+family = "JetBrainsMonoNL Nerd Font"
 style = "Italic"
 
 [font.normal]
-family = "JetBrainsMonoNL  Nerd Font"
+family = "JetBrainsMonoNL Nerd Font"
 style = "Regular"
