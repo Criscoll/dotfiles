@@ -61,9 +61,14 @@ alias gcm="git commit -m"
 alias gca="git commit --amend"
 alias gcae="git commit --amend --no-edit"
 
+alias open="xdg-open"
+
+# alias nvim="~/Applications/nvim-linux64/bin/nvim"
+
 ## Path Exports
 export PATH="$HOME/Repos/tmux:$PATH"
 export PATH="$HOME/Repos/alacritty/target/release:$PATH"
+export PATH="$HOME/Applications/nvim-linux64/bin:$PATH"
 
 ## Utility Functions
 function aptsearch() {
@@ -74,15 +79,26 @@ function aptsearch() {
   apt-cache search --names-only "^$1" | fzf --preview "echo {} | awk '{print \$1}' | xargs -I % apt-cache show % | grep -E 'Description|Package'"
 }
 
+function fzf_rg_select() {
+	local file
+	file=$(rg --files | fzf)
+	if [[ -n $file ]]; then
+		BUFFER+="$file"
+		CURSOR=$#BUFFER
+	fi
+}
+
+zle -N fzf_rg_select
+
 
 ## pnpm
 export PNPM_HOME="/home/cristian/.local/share/pnpm"
 [[ ":$PATH:" != *":$PNPM_HOME:"* ]] && export PATH="$PNPM_HOME:$PATH"
 
 ## Timetrap
-# autoload -U compinit
-# compinit
-# fpath=(/var/lib/gems/3.0.0/gems/timetrap-*/completions/zsh $fpath)
+autoload -U compinit
+compinit
+fpath=(/var/lib/gems/3.0.0/gems/timetrap-*/completions/zsh $fpath)
 
 ## Maven
 alias mvn_build='mvn clean install -T 1C'
@@ -95,7 +111,14 @@ alias mvn_build_offline='mvn clean install --offline -T 1C'
 export KAKOUNE_CONFIG_DIR=~/.config/kak
 alias kak='~/Repos/kakoune/src/kak'
 
+## Keybindings
+bindkey '^T' fzf_rg_select
+
 export PATH="$HOME/.cargo/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 
 
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
