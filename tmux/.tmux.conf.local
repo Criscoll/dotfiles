@@ -421,6 +421,7 @@ set -g @plugin 'tmux-plugins/tmux-resurrect'
 
 # set ctrl+space as prefix key
 set -g prefix C-Space
+bind C-Space send-prefix
 
 # bind prefix+s for session selectio
 bind-key s choose-session
@@ -430,7 +431,6 @@ bind-key -T copy-mode-vi H send -X halfpage-up
 
 # Bind L to move to the bottom of the visible window in copy mode
 bind-key -T copy-mode-vi L send -X halfpage-down
-
 
 set -g @resurrect-save 'S'
 set -g @resurrect-restore 'R'
