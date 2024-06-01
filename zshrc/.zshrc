@@ -63,6 +63,26 @@ alias gcae="git commit --amend --no-edit"
 
 alias open="xdg-open"
 
+function pdfcompress() {
+    # Default resolution is set to 144
+    local resolution=${2:-144}
+    echo "Using resolution value: $resolution for compression"
+
+    ghostscript -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.3 -dPDFSETTINGS=/ebook -dEmbedAllFonts=true -dSubsetFonts=true -dColorImageDownsampleType=/Bicubic -dColorImageResolution=$resolution -dGrayImageDownsampleType=/Bicubic -dGrayImageResolution=$resolution -dMonoImageDownsampleType=/Bicubic -dMonoImageResolution=$resolution -sOutputFile=$1.compressed.pdf $1; 
+}
+
+function pdfcompress_higherquality()
+{
+    # Default resolution is set to 144
+    local resolution=${2:-144}
+    echo "Using resolution value: $resolution for compression"
+
+    ghostscript -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.3 -dPDFSETTINGS=/printer -dEmbedAllFonts=true -dSubsetFonts=true -dColorImageDownsampleType=/Bicubic -dColorImageResolution=$resolution -dGrayImageDownsampleType=/Bicubic -dGrayImageResolution=$resolution -dMonoImageDownsampleType=/Bicubic -dMonoImageResolution=$resolution -sOutputFile=$1.compressed.pdf $1; 
+
+
+}
+
+
 # alias nvim="~/Applications/nvim-linux64/bin/nvim"
 
 ## Path Exports

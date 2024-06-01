@@ -5,10 +5,31 @@
 	email = cristiand2021@gmail.com
 
 [pull]
-	rebase = true
+    rebase = true
+
 [core]
-	editor = vim
+    editor = nvim
+    pager = delta
+    
 [alias]
 	cae = commit --amend --no-edit
 	l = log
-  s = status
+    s = status
+
+[interactive]
+    diffFilter = delta --color-only
+
+[delta]
+    navigate = true
+    line-numbers = true
+    plus-style = green
+    minus-style = red
+    file-style = box bold orange
+    hunk-header-style = box bold green
+
+[merge]
+    conflictstyle = diff3
+
+[diff]
+    colorMoved = default
+
