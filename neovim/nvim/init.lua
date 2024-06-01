@@ -1,3 +1,4 @@
+-- vim.lsp.set_log_level("debug")
 vim.g.mapleader = " " -- Make sure to set `mapleader` before lazy so your mappings are correct
 vim.g.maplocalleader = "\\" -- Same for `maplocalleader`
 
@@ -10,7 +11,5 @@ require('core')
 
 -- Load in plugins
 require('lazy-plugin-manager')
-
-
 
 

@@ -1,18 +1,14 @@
 return {
     {
-        'williamboman/mason-lspconfig.nvim',
-    },
-    { 
         'williamboman/mason.nvim',
-        dependencies = {
-          "williamboman/mason-lspconfig.nvim"
-        },
         config = function()
             -- import mason
-            local mason = require("mason")
-        
-            -- import mason-lspconfig
-            local mason_lspconfig = require("mason-lspconfig")
+            local status, mason = pcall(require, "mason")
+            if not status then
+                print("Failed to load mason")
+                return
+            end
+            print("mason loaded successfully")
         
             -- enable mason and configure icons
             mason.setup({
@@ -24,28 +20,51 @@ return {
                 },
               },
             })
-        
+        end
+    },
+    {
+        'williamboman/mason-lspconfig.nvim',
+        dependencies = { "williamboman/mason.nvim" },
+        config = function()
+            local status, mason_lspconfig = pcall(require, "mason-lspconfig")
+            if not status then
+                print("Failed to load mason-lspconfig")
+                return
+            end
+            print("mason-lspconfig loaded successfully")
+
             mason_lspconfig.setup({
-              -- list of servers for mason to install
               ensure_installed = {
                 "tsserver",
                 "html",
                 "cssls",
                 "tailwindcss",
-                "lua_ls",
-                "pyright",
+                "lua_ls", -- Lua LSP Server
+                "pylsp", -- Python LSP Server
               },
-            })
+            }) 
         end
+
+
     },
     {
         'neovim/nvim-lspconfig',
+        dependencies = { "williamboman/mason-lspconfig.nvim" },
         config = function()
             -- import lspconfig plugin
-            local lspconfig = require("lspconfig")
+            local status, lspconfig = pcall(require, "lspconfig")
+            if not status then
+                print("Failed to load lspconfig")
+                return
+            end
+            print("lspconfig loaded succesfully")
         
             -- import mason_lspconfig plugin
-            local mason_lspconfig = require("mason-lspconfig")
+            local status, mason_lspconfig = pcall(require, "mason-lspconfig")
+            if not status then
+                print("Failed to load mason-lspconfig")
+                return
+            end
         
             -- Change the Diagnostic symbols in the sign column (gutter)
             local signs = { Error = " ", Warn = " ", Hint = "󰠠 ", Info = " " }
@@ -62,7 +81,7 @@ return {
               end,
               ["lua_ls"] = function()
                 -- configure lua server (with special settings)
-                lspconfig["lua_ls"].setup({
+                lspconfig.lua_ls.setup({
                   settings = {
                     Lua = {
                       -- make the language server recognize "vim" global
@@ -73,6 +92,19 @@ return {
                   },
                 })
               end,
+              ["pylsp"] = function()
+                lspconfig.pylsp.setup({
+                    settings = {
+                        python = {
+                            analysis = {
+                                typeCheckingMode = "strict",
+                                autoSearchPaths = true,
+                                useLibraryCodeForTypes = true,
+                            }
+                        }
+                    }
+                })
+              end
             })
         end
     }

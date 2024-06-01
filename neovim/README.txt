@@ -1,1 +1,1 @@
-Copy the contents of this directory into your nvim config directory. This should install lazy and all the plugins specified in init.lua by default. You can opt in for a manual install of lazy, just cp -r the repo to the nvim data directory (`~/.local/share/nvim/` on linux)
+Copy the nvim directory into your .config directory. This should install lazy and all the plugins specified in init.lua by default. You can opt in for a manual install of lazy, just cp -r the repo to the nvim data directory (`~/.local/share/nvim/` on linux)
