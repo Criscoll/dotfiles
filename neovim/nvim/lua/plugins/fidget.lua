@@ -5,7 +5,7 @@ return {
             progress = {
                 suppress_on_insert = false,
                 ignore_empty_message = false,
-                ignore = {},                -- List of LSP servers to ignore
+                ignore = {},                    -- List of LSP servers to ignore
 
                 display = {
                     render_limit = 16,          -- How many LSP messages to show at once
@@ -22,9 +22,13 @@ return {
                 filter = vim.log.levels.INFO, -- Minimum notifications level
                 view = {
                     stack_upwards = true,       -- Display notification items from bottom to top
+                    group_separator = "---",  -- Separator between notification groups
                 },
             },
 
+            logger = {
+                level = vim.log.levels.WARN
+            }
 
         })
     end

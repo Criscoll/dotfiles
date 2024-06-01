@@ -7,9 +7,11 @@ vim.g.maplocalleader = "\\" -- Same for `maplocalleader`
 -- package.path = package.path .. ';' .. config_path .. '/?.lua;' .. config_path .. '/?/init.lua'
 
 -- Load in keybindings
-require('core')
+require("core")
 
 -- Load in plugins
-require('lazy-plugin-manager')
+require("lazy-plugin-manager")
 
+-- Set color scheme
+vim.cmd("colorscheme kanagawa")
 
