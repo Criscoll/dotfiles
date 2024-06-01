@@ -1,3 +1,0 @@
-spectre abcde
-neovim()
-    vim.cmd [[setlocal buftype=nofile]]

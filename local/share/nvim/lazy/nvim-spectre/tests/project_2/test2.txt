@@ -1,3 +1,0 @@
-spectre visual
-neovim()
-    vim.cmd [[setlocal buftype=nofile]]
