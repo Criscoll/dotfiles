@@ -12,9 +12,13 @@
     pager = delta
     
 [alias]
+	cm = commit -m
 	cae = commit --amend --no-edit
 	l = log
+    la = log --oneline --graph
     s = status
+    ri = rebase -i HEAD^^^^^
+
 
 [interactive]
     diffFilter = delta --color-only

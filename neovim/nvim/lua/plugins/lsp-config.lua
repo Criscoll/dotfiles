@@ -1,16 +1,17 @@
 return {
 	{
 		"williamboman/mason.nvim",
+		dependencies = { "rcarriga/nvim-notify" }, -- ensure nvim-notify loaded first to hook into lsp message handler 
 		config = function()
 			-- import mason
+            local notify = require("notify")
 			local status, mason = pcall(require, "mason")
+
 			if not status then
-				print("Failed to load mason")
+			    notify("Failed to load Mason", "ERROR", { title = 'lsp-config.lua' })
 				return
 			end
-			print("mason loaded successfully")
 
-			-- enable mason and configure icons
 			mason.setup({
 				ui = {
 					icons = {
@@ -24,19 +25,20 @@ return {
 	},
 	{
 		"williamboman/mason-lspconfig.nvim",
-		dependencies = { "williamboman/mason.nvim" },
+		dependencies = { "williamboman/mason.nvim", "rcarriga/nvim-notify" },
 		config = function()
+            local notify = require("notify")
 			local status, mason_lspconfig = pcall(require, "mason-lspconfig")
+
 			if not status then
-				print("Failed to load mason-lspconfig")
+			    notify("Failed to load mason-lspconfig", "ERROR", { title = 'lsp-config.lua' })
 				return
 			end
-			print("mason-lspconfig loaded successfully")
 
 			mason_lspconfig.setup({
 				ensure_installed = {
 					"tsserver",
-					"html",
+					"html", -- HTML LSP Server
 					"cssls",
 					"tailwindcss",
 					"lua_ls",       -- Lua LSP Server
@@ -49,20 +51,23 @@ return {
 	},
 	{
 		"neovim/nvim-lspconfig",
-		dependencies = { "williamboman/mason-lspconfig.nvim" },
+		dependencies =
+            {
+            "williamboman/mason-lspconfig.nvim",
+            "rcarriga/nvim-notify" -- ensure nvim-notify loaded first to hook into lsp message handler
+            },
 		config = function()
-			-- import lspconfig plugin
+            local notify = require("notify")
 			local status, lspconfig = pcall(require, "lspconfig")
 			if not status then
-				print("Failed to load lspconfig")
+			    notify("Failed to load lspconfig", "ERROR", { title = 'lsp-config.lua' })
 				return
 			end
-			print("lspconfig loaded succesfully")
 
 			-- import mason_lspconfig plugin
 			local status, mason_lspconfig = pcall(require, "mason-lspconfig")
 			if not status then
-				print("Failed to load mason-lspconfig")
+			    notify("Failed to load mason-lspconfig", "ERROR", { title = 'lsp-config.lua' })
 				return
 			end
 
@@ -105,10 +110,19 @@ return {
 					})
 				end,
                 ["clangd"] = function()
-					lspconfig.clangd.setup({})
+					lspconfig.clangd.setup({
+                        filetypes = {"c", "cpp", "h", "hpp"},
+                        root_dir = function(fname)
+                            return require('lspconfig.util').root_pattern("compile_commands.json", ".git")(fname) or vim.fn.getcwd()
+                        end
+                    })
 				end,
                 ["jdtls"] = function()
-					lspconfig.jdtls.setup({})
+					lspconfig.jdtls.setup({
+                        root_dir = function(fname)
+                            return require('lspconfig.util').root_pattern("pom.xml", ".git")(fname) or vim.fn.getcwd()
+                        end
+                    })
 				end,
 			})
 		end,

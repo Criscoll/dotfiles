@@ -1,6 +1,8 @@
 -- vim.lsp.set_log_level("debug")
 vim.g.mapleader = " " -- Make sure to set `mapleader` before lazy so your mappings are correct
 vim.g.maplocalleader = "\\" -- Same for `maplocalleader`
+vim.o.termguicolors = true
+
 
 -- Set the package path to include the nvim directory
 -- local config_path = vim.fn.stdpath('config')
