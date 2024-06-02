@@ -37,10 +37,6 @@ return {
 
 			mason_lspconfig.setup({
 				ensure_installed = {
-					"tsserver",
-					"html", -- HTML LSP Server
-					"cssls",
-					"tailwindcss",
 					"lua_ls",       -- Lua LSP Server
 					"pylsp",        -- Python LSP Server
                     "clangd",       -- C++ LSP Server
@@ -57,6 +53,8 @@ return {
             "rcarriga/nvim-notify" -- ensure nvim-notify loaded first to hook into lsp message handler
             },
 		config = function()
+            vim.api.nvim_set_keymap('n', 'gd', '<cmd>lua vim.lsp.buf.definition()<CR>', { noremap = true, silent = true })
+
             local notify = require("notify")
 			local status, lspconfig = pcall(require, "lspconfig")
 			if not status then
