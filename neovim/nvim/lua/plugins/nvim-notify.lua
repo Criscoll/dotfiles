@@ -54,11 +54,10 @@ return {
       })[result.type]
       notify({ result.message }, lvl, {
         title = 'LSP | ' .. client.name,
-        timeout = 10000,
+        timeout = 5000,
       })
     end
 
-    notify("nvim-notify is configured", "INFO", { title = "nvim-notify" })
   end
 }
 

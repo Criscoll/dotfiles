@@ -9,7 +9,7 @@ return {
         local nvimtree = require('nvim-tree')
         nvimtree.setup({
             view = {
-              width = 35,
+              width = 70,
               relativenumber = true,
             },
             -- change folder arrow icons
@@ -39,5 +39,6 @@ return {
         })
 
         vim.api.nvim_set_keymap('n', '<Leader>1', ':NvimTreeToggle<CR>', {noremap = true, silent = true})
+        vim.api.nvim_set_keymap('n', '<leader>2', ':NvimTreeFindFile<CR>', { noremap = true, silent = true })
     end
 }

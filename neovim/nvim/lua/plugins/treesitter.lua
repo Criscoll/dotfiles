@@ -1,16 +1,19 @@
 return {
-  "nvim-treesitter/nvim-treesitter",
+    {'nvim-treesitter/nvim-treesitter-textobjects'},
+    {"nvim-treesitter/nvim-treesitter",
   event = { "BufReadPre", "BufNewFile" },
   build = ":TSUpdate",
   dependencies = {
     "windwp/nvim-ts-autotag",
+    "nvim-treesitter/nvim-treesitter-textobjects",
   },
   config = function()
     -- import nvim-treesitter plugin
-    local treesitter = require("nvim-treesitter.configs")
+    local ts = require("nvim-treesitter.configs")
+    require('nvim-ts-autotag').setup()
 
     -- configure treesitter
-    treesitter.setup({ -- enable syntax highlighting
+    ts.setup({ -- enable syntax highlighting
       highlight = {
         enable = true,
       },
@@ -29,11 +32,9 @@ return {
         "yaml",
         "html",
         "css",
-        "prisma",
         "markdown",
         "markdown_inline",
         "svelte",
-        "graphql",
         "bash",
         "lua",
         "vim",
@@ -42,7 +43,10 @@ return {
         "query",
         "vimdoc",
         "c",
+        "cpp",
+        "java",
       },
+      sync_install = false,
       incremental_selection = {
         enable = true,
         keymaps = {
@@ -52,6 +56,21 @@ return {
           node_decremental = "<bs>",
         },
       },
+      textobjects = {
+            move = {
+              enable = true,
+              set_jumps = true, -- Whether to set jumps in the jumplist
+              goto_next_start = {
+                ["]n"] = "@function.outer",
+                ["<C-n>"] = "@function.outer",
+              },
+              goto_previous_start = {
+                ["[n"] = "@function.outer",
+                ["<C-m>"] = "@function.outer",
+              },
+            },
+      },
     })
   end,
+    }
 }

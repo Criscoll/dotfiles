@@ -2,7 +2,9 @@
 vim.g.mapleader = " " -- Make sure to set `mapleader` before lazy so your mappings are correct
 vim.g.maplocalleader = "\\" -- Same for `maplocalleader`
 vim.o.termguicolors = true
-
+vim.o.ignorecase = true
+vim.o.smartcase = true
+vim.opt.clipboard = 'unnamedplus'
 
 -- Set the package path to include the nvim directory
 -- local config_path = vim.fn.stdpath('config')
@@ -15,5 +17,5 @@ require("core")
 require("lazy-plugin-manager")
 
 -- Set color scheme
-vim.cmd("colorscheme kanagawa")
+-- vim.cmd("colorscheme kanagawa")
 

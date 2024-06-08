@@ -54,6 +54,16 @@ return {
             },
 		config = function()
             vim.api.nvim_set_keymap('n', 'gd', '<cmd>lua vim.lsp.buf.definition()<CR>', { noremap = true, silent = true })
+            vim.api.nvim_set_keymap('n', '<leader>dd', '<cmd>lua vim.lsp.buf.definition()<CR>', { noremap = true, silent = true })
+            vim.api.nvim_set_keymap('n', '<leader>dn', '<cmd>lua vim.diagnostic.goto_next()<CR>', { noremap = true, silent = true })
+            vim.api.nvim_set_keymap('n', '<leader>dp', '<cmd>lua vim.diagnostic.goto_prev()<CR>', { noremap = true, silent = true })
+            vim.api.nvim_set_keymap('n', '<leader>dh', '<cmd>lua vim.lsp.buf.hover()<CR>', { noremap = true, silent = true })
+            vim.api.nvim_set_keymap('n', '<leader>ds', '<cmd>lua vim.lsp.buf.signature_help()<CR>', { noremap = true, silent = true })
+            vim.api.nvim_set_keymap('n', '<leader>di', '<cmd>lua vim.lsp.buf.implementation()<CR>', { noremap = true, silent = true })
+            vim.api.nvim_set_keymap('n', '<leader>dr', '<cmd>lua vim.lsp.buf.references()<CR>', { noremap = true, silent = true })
+            vim.api.nvim_set_keymap('n', '<leader>da', '<cmd>lua vim.diagnostic.open_float()<CR>', { noremap = true, silent = true })
+            vim.api.nvim_set_keymap('n', '<leader>dc', '<cmd>lua vim.lsp.buf.code_action()<CR>', { noremap = true, silent = true })
+
 
             local notify = require("notify")
 			local status, lspconfig = pcall(require, "lspconfig")
@@ -75,6 +85,8 @@ return {
 				local hl = "DiagnosticSign" .. type
 				vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
 			end
+
+
 
 			mason_lspconfig.setup_handlers({
 				-- default handler for installed servers
