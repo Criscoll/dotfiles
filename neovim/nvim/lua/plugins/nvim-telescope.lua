@@ -63,7 +63,12 @@ return {
                     prompt_title = 'call stack',
                     sort_mru = true,
                     ignore_current_buffer = true,
-                    -- layout_strategy = 'vertical'
+                    layout_config = {
+                        width = 0.5,
+                        vertical = 0.5,
+                        preview_width = 0.3,
+                    },
+                    path_display = { "truncate" },
                 }
                 require('telescope.builtin').buffers(require('telescope.themes').get_cursor(stackOptions))
             end
