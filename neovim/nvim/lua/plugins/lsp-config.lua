@@ -50,7 +50,8 @@ return {
 		dependencies =
             {
             "williamboman/mason-lspconfig.nvim",
-            "rcarriga/nvim-notify" -- ensure nvim-notify loaded first to hook into lsp message handler
+            'hrsh7th/cmp-nvim-lsp',             -- used to setup nvim-cmp lsp capabilities
+            "rcarriga/nvim-notify"              -- ensure nvim-notify loaded first to hook into lsp message handler
             },
 		config = function()
             vim.api.nvim_set_keymap('n', 'gd', '<cmd>lua vim.lsp.buf.definition()<CR>', { noremap = true, silent = true })
@@ -86,7 +87,7 @@ return {
 				vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
 			end
 
-
+            local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
 			mason_lspconfig.setup_handlers({
 				-- default handler for installed servers
@@ -96,6 +97,7 @@ return {
 				["lua_ls"] = function()
 					-- configure lua server (with special settings)
 					lspconfig.lua_ls.setup({
+                        capabilities = capabilities,
 						settings = {
 							Lua = {
 								-- make the language server recognize "vim" global
@@ -108,6 +110,7 @@ return {
 				end,
 				["pylsp"] = function()
 					lspconfig.pylsp.setup({
+                        capabilities = capabilities,
 						settings = {
 							python = {
 								analysis = {
@@ -121,6 +124,7 @@ return {
 				end,
                 ["clangd"] = function()
 					lspconfig.clangd.setup({
+                        capabilities = capabilities,
                         filetypes = {"c", "cpp", "h", "hpp"},
                         root_dir = function(fname)
                             return require('lspconfig.util').root_pattern("compile_commands.json", ".git")(fname) or vim.fn.getcwd()
@@ -143,6 +147,7 @@ return {
                     end
 
 					lspconfig.jdtls.setup({
+                        capabilities = capabilities,
                         root_dir = find_project_root
                     })
 				end,

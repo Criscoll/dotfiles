@@ -7,6 +7,7 @@ return {
         'hrsh7th/cmp-cmdline',
         'L3MON4D3/LuaSnip',         -- snippet engine
         'saadparwaiz1/cmp_luasnip',
+        'lukas-reineke/cmp-rg',     -- ripgrep cmp source. Provides project wide text completions
     },
     config = function()
         local cmp = require('cmp')
@@ -37,7 +38,6 @@ return {
           TypeParameter = "󰅲",
         }
 
-
         cmp.setup({
             snippet = {
                 expand = function(args)
@@ -50,7 +50,7 @@ return {
                 ['<C-S-Tab>'] = cmp.mapping.complete(),              -- Manually trigger completion menu
                 ['<Tab>'] = cmp.mapping(function(fallback)           -- Cycle forwards in the completion menu if cmp.visible() then cmp.select_next_item() elseif luasnip.expand_or_jumpable() then luasnip.expand_or_jump()
                     if cmp.visible() then
-                        cmp.select_prev_item()
+                        cmp.select_next_item()
                     elseif luasnip.jumpable(1) then
                         luasnip.jump(1)
                     else
@@ -69,11 +69,12 @@ return {
                 ['<C-e>'] = cmp.mapping.close(),                    -- Close the completion menu
                 ['<CR>'] = cmp.mapping.confirm({ select = true }),  -- Accept currently selected item. (Carriage return / enter)
             },
-            sources = cmp.config.sources({
+            sources = cmp.config.sources({                          -- defines sources and their priority
                 { name = 'nvim_lsp' },
                 { name = 'luasnip' },
-            }, {
                 { name = 'buffer' },
+            }, {
+                { name = "rg" , keyword_length = 3},                -- rg has lower priority over buffer
                 { name = 'path' },
             }),
             formatting = {
@@ -87,6 +88,7 @@ return {
                     luasnip = "[LuaSnip]",
                     nvim_lua = "[Lua]",
                     latex_symbols = "[LaTeX]",
+                    rg = "[RG]",
                   })[entry.source.name]
                   return vim_item
                 end,
@@ -108,6 +110,6 @@ return {
                 { name = 'cmdline' }
             })
         })
-    end 
+    end
 }
 
