@@ -58,6 +58,13 @@ return {
       })
     end
 
+
+    local function clear_notifications()
+        notify.dismiss({ silent = true, pending = true })
+    end
+
+    vim.api.nvim_create_user_command('ClearNotifications', clear_notifications, {}) -- make command to clear notifications
+
   end
 }
 
