@@ -128,10 +128,22 @@ return {
                     })
 				end,
                 ["jdtls"] = function()
-					lspconfig.jdtls.setup({
-                        root_dir = function(fname)
-                            return require('lspconfig.util').root_pattern("pom.xml", ".git")(fname) or vim.fn.getcwd()
+                    local project_roots = {             -- Add your java projects here to help LSP find project root
+                        "/home/user/project/project1",
+                        "/home/user/project/project2",
+                    }
+
+                    local function find_project_root(fname)
+                        for _, root in ipairs(project_roots) do
+                            if fname:find(root, 1, true) then
+                                return root
+                            end
                         end
+                        return require('lspconfig.util').root_pattern("pom.xml", ".git")(fname) or vim.fn.getcwd()
+                    end
+
+					lspconfig.jdtls.setup({
+                        root_dir = find_project_root
                     })
 				end,
 			})
