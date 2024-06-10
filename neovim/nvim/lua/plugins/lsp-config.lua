@@ -143,6 +143,8 @@ return {
                                 return root
                             end
                         end
+
+                        notify("Unable to determine project root_dir. Using fallback.", "WARN", { title = 'lsp-config.lua' })
                         return require('lspconfig.util').root_pattern("pom.xml", ".git")(fname) or vim.fn.getcwd()
                     end
 
