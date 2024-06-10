@@ -28,7 +28,7 @@ return {
                 },
                 pickers = {
                     find_files = {
-                        find_command = { 'rg', '--files', '--no-ignore', '--glob', '!.git/', '--glob', '!*.class', '--glob', '!*.jar'}
+                        find_command = { 'rg', '--files'}
                     },
                     live_grep = {
                         grep_command = 'rg',
@@ -47,13 +47,21 @@ return {
 
             require('telescope').load_extension('fzf')
 
+            -- function to find_files with hidden files and directories included in search
+            _G.find_files_with_hidden = function()
+                require('telescope.builtin').find_files({
+                    prompt_title = "Find Files (Hidden Included)",
+                    find_command = {'rg', '--files', '-uu' }
+                })
+            end
 
             -- Function to prompt for a search term and invoke find_string
             _G.prompt_and_search = function()
               local term = vim.fn.input("Search for: ")
               if term ~= "" then
                 require('telescope.builtin').grep_string({
-                  search = term
+                  prompt_title = "Find String (Manual)",
+                  search = term,
                 })
               end
             end
@@ -73,10 +81,9 @@ return {
                 require('telescope.builtin').buffers(require('telescope.themes').get_cursor(stackOptions))
             end
 
-
-
             vim.api.nvim_set_keymap('n', '<Leader>fh', ':lua _G.search_buffer_history()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fl', ':lua _G.prompt_and_search()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>fu', ':lua _G.find_files_with_hidden()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>ff', ':Telescope find_files<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fb', ':Telescope buffers<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fg', ':Telescope live_grep<CR>', {noremap = true, silent = true})
