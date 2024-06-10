@@ -51,7 +51,7 @@ return {
             _G.find_files_with_hidden = function()
                 require('telescope.builtin').find_files({
                     prompt_title = "Find Files (Hidden Included)",
-                    find_command = {'rg', '--files', '-uu' }
+                    find_command = {'rg', '--files', '-uu', '-L'}
                 })
             end
 
