@@ -47,7 +47,7 @@ return {
             mapping = {
                 ['<C-b>'] = cmp.mapping.scroll_docs(-4),
                 ['<C-f>'] = cmp.mapping.scroll_docs(4),
-                ['<C-S-Tab>'] = cmp.mapping.complete(),              -- Manually trigger completion menu
+                ['<C-e>'] = cmp.mapping.complete(),              -- Manually trigger completion menu
                 ['<Tab>'] = cmp.mapping(function(fallback)           -- Cycle forwards in the completion menu if cmp.visible() then cmp.select_next_item() elseif luasnip.expand_or_jumpable() then luasnip.expand_or_jump()
                     if cmp.visible() then
                         cmp.select_next_item()
@@ -66,7 +66,7 @@ return {
                         fallback()
                     end
                 end, { 'i', 's' }),
-                ['<C-e>'] = cmp.mapping.close(),                    -- Close the completion menu
+                ['<C-c>'] = cmp.mapping.close(),                    -- Close the completion menu
                 ['<CR>'] = cmp.mapping.confirm({ select = true }),  -- Accept currently selected item. (Carriage return / enter)
             },
             sources = cmp.config.sources({                          -- defines sources and their priority
@@ -97,6 +97,12 @@ return {
 
         -- Use buffer source for `/` (if you enabled `native_menu`, this won't work anymore).
         cmp.setup.cmdline('/', {
+            mapping = {
+                ['<Tab>'] = cmp.mapping(cmp.mapping.select_next_item(), { 'c' }),
+                ['<S-Tab>'] = cmp.mapping(cmp.mapping.select_prev_item(), { 'c' }),
+                ['<C-e>'] = cmp.mapping.close(),
+                ['<CR>'] = cmp.mapping.confirm({ select = true }),
+            },
             sources = {
                 { name = 'buffer' }
             }
@@ -104,6 +110,12 @@ return {
 
         -- Use cmdline & path source for ':' (if you enabled `native_menu`, this won't work anymore).
         cmp.setup.cmdline(':', {
+            mapping = {
+                ['<Tab>'] = cmp.mapping(cmp.mapping.select_next_item(), { 'c' }),
+                ['<S-Tab>'] = cmp.mapping(cmp.mapping.select_prev_item(), { 'c' }),
+                ['<C-e>'] = cmp.mapping.close(),
+                ['<CR>'] = cmp.mapping.confirm({ select = true }),
+            },
             sources = cmp.config.sources({
                 { name = 'path' }
             }, {
@@ -111,5 +123,6 @@ return {
             })
         })
     end
+
 }
 

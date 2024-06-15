@@ -4,16 +4,11 @@ return {
   event = { "BufReadPre", "BufNewFile" },
   build = ":TSUpdate",
   dependencies = {
-    "windwp/nvim-ts-autotag",
     "nvim-treesitter/nvim-treesitter-textobjects",
   },
   config = function()
-    -- import nvim-treesitter plugin
-    local ts = require("nvim-treesitter.configs")
-    require('nvim-ts-autotag').setup()
-
     -- configure treesitter
-    ts.setup({ -- enable syntax highlighting
+    require('nvim-treesitter.configs').setup({ -- enable syntax highlighting
       highlight = {
         enable = true,
       },
@@ -42,6 +37,7 @@ return {
         "cpp",
         "java",
       },
+
       sync_install = false,
       incremental_selection = {
         enable = true,
@@ -66,7 +62,21 @@ return {
               },
             },
       },
+        autotag = {
+            enable = true,
+        }
     })
   end,
-    }
+    },
+    {
+        'windwp/nvim-ts-autotag',
+        dependencies = {
+            "nvim-treesitter/nvim-treesitter"
+        },
+      config = function ()
+        require('nvim-ts-autotag').setup({})
+      end,
+      lazy = true,
+      event = "VeryLazy"
+    },
 }

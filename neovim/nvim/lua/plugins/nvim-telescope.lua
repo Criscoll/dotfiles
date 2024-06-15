@@ -51,7 +51,7 @@ return {
             _G.find_files_with_hidden = function()
                 require('telescope.builtin').find_files({
                     prompt_title = "Find Files (Hidden Included)",
-                    find_command = {'rg', '--files', '-uu', '-L'}
+                    find_command = {'rg', '--files', '-uu'}
                 })
             end
 
@@ -92,7 +92,7 @@ return {
             vim.api.nvim_set_keymap('n', '<Leader>fr', ':Telescope lsp_references<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fd', ':Telescope lsp_definitions<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fi', ':Telescope lsp_implementations<CR>', {noremap = true, silent = true})
-
+            -- vim.keymap.set("n", "<leader>fe", function() builtin.find_files({ cwd = utils.buffer_dir() }) end, {desc = "Find files in buffer dir"})
             notify({ "nvim-telescope has been configured" }, "INFO", {
               title = 'Plugin Ready | nvim-telescope',
               timeout = 2000,
