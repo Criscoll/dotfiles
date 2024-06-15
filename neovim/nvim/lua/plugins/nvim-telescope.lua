@@ -81,9 +81,27 @@ return {
                 require('telescope.builtin').buffers(require('telescope.themes').get_cursor(stackOptions))
             end
 
+            _G.live_grep_open_buffers = function ()
+                require('telescope.builtin').live_grep({
+                    prompt_title = "Live Grep in Open Buffers",
+                    grep_open_files = true, -- only grep opened buffers
+                })
+            end
+
+            _G.search_directory_files = function ()
+                local cwd = vim.fn.expand('%:p:h')
+                require('telescope.builtin').find_files({
+                    prompt_title = "Find Files in Current Directory",
+                    cwd = cwd,
+                })
+            end
+
             vim.api.nvim_set_keymap('n', '<Leader>fh', ':lua _G.search_buffer_history()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fl', ':lua _G.prompt_and_search()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fu', ':lua _G.find_files_with_hidden()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>fe', ':lua _G.search_directory_files()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>fk', ':lua _G.live_grep_open_buffers()<CR>', {noremap = true, silent = true})
+
             vim.api.nvim_set_keymap('n', '<Leader>ff', ':Telescope find_files<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fb', ':Telescope buffers<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fg', ':Telescope live_grep<CR>', {noremap = true, silent = true})
@@ -92,7 +110,7 @@ return {
             vim.api.nvim_set_keymap('n', '<Leader>fr', ':Telescope lsp_references<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fd', ':Telescope lsp_definitions<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fi', ':Telescope lsp_implementations<CR>', {noremap = true, silent = true})
-            -- vim.keymap.set("n", "<leader>fe", function() builtin.find_files({ cwd = utils.buffer_dir() }) end, {desc = "Find files in buffer dir"})
+
             notify({ "nvim-telescope has been configured" }, "INFO", {
               title = 'Plugin Ready | nvim-telescope',
               timeout = 2000,
