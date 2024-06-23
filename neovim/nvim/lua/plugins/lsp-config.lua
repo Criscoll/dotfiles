@@ -4,11 +4,10 @@ return {
 		dependencies = { "rcarriga/nvim-notify" }, -- ensure nvim-notify loaded first to hook into lsp message handler 
 		config = function()
 			-- import mason
-            local notify = require("notify")
 			local status, mason = pcall(require, "mason")
 
 			if not status then
-			    notify("Failed to load Mason", "ERROR", { title = 'lsp-config.lua' })
+			    vim.notify("Failed to load Mason", "ERROR", { title = 'lsp-config.lua' })
 				return
 			end
 
@@ -27,11 +26,10 @@ return {
 		"williamboman/mason-lspconfig.nvim",
 		dependencies = { "williamboman/mason.nvim", "rcarriga/nvim-notify" },
 		config = function()
-            local notify = require("notify")
 			local status, mason_lspconfig = pcall(require, "mason-lspconfig")
 
 			if not status then
-			    notify("Failed to load mason-lspconfig", "ERROR", { title = 'lsp-config.lua' })
+			    vim.notify("Failed to load mason-lspconfig", "ERROR", { title = 'lsp-config.lua' })
 				return
 			end
 
@@ -45,6 +43,9 @@ return {
 			})
 		end,
 	},
+    {
+        "mfussenegger/nvim-jdtls", -- java is special and needs some more effort to setup properly. See java.lua
+    },
 	{
 		"neovim/nvim-lspconfig",
 		dependencies =
@@ -65,18 +66,16 @@ return {
             vim.api.nvim_set_keymap('n', '<leader>da', '<cmd>lua vim.diagnostic.open_float()<CR>', { noremap = true, silent = true })
             vim.api.nvim_set_keymap('n', '<leader>dc', '<cmd>lua vim.lsp.buf.code_action()<CR>', { noremap = true, silent = true })
 
-
-            local notify = require("notify")
 			local status, lspconfig = pcall(require, "lspconfig")
 			if not status then
-			    notify("Failed to load lspconfig", "ERROR", { title = 'lsp-config.lua' })
+			    vim.notify("Failed to load lspconfig", "ERROR", { title = 'lsp-config.lua' })
 				return
 			end
 
 			-- import mason_lspconfig plugin
 			local status, mason_lspconfig = pcall(require, "mason-lspconfig")
 			if not status then
-			    notify("Failed to load mason-lspconfig", "ERROR", { title = 'lsp-config.lua' })
+			    vim.notify("Failed to load mason-lspconfig", "ERROR", { title = 'lsp-config.lua' })
 				return
 			end
 
@@ -132,25 +131,8 @@ return {
                     })
 				end,
                 ["jdtls"] = function()
-                    local project_roots = {             -- Add your java projects here to help LSP find project root
-                        "/home/user/project/project1",
-                        "/home/user/project/project2",
-                    }
-
-                    local function find_project_root(fname)
-                        for _, root in ipairs(project_roots) do
-                            if fname:find(root, 1, true) then
-                                return root
-                            end
-                        end
-
-                        notify("Unable to determine project root_dir. Using fallback.", "WARN", { title = 'lsp-config.lua' })
-                        return require('lspconfig.util').root_pattern("pom.xml", ".git")(fname) or vim.fn.getcwd()
-                    end
-
-					lspconfig.jdtls.setup({
-                        capabilities = capabilities,
-                        root_dir = find_project_root
+                    lspconfig.jdtls.setup({
+                        autostart = false,
                     })
 				end,
 			})

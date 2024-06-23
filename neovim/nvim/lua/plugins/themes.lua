@@ -1,6 +1,7 @@
 return {
     {
         'rebelot/kanagawa.nvim',
+        lazy = false,
          config = function()
              require("kanagawa").setup({
                  colors = {
@@ -14,7 +15,6 @@ return {
                  }
              })
 
-             vim.cmd("colorscheme kanagawa")
              -- Set custom highlights for Tree-sitter groups
              -- vim.cmd [[
              --     highlight! @keyword.return guibg=NONE
@@ -28,8 +28,29 @@ return {
     },
     {
         'catppuccin/nvim',
+        lazy = false,
         name = 'catppuccin',
         priority = 10000
+    },
+    {
+        'sainnhe/everforest',
+        lazy = false,
+        priority = 1000,
+--        config = function ()
+--            require('everforest').setup({
+--                everforest_background = 'hard',
+--            })
+--        end
+    },
+    {
+        'savq/melange-nvim',
+        lazy = false,
+        priority = 1000,
+    },
+    {
+        'AlexvZyl/nordic.nvim',
+        lazy = false,
+        priority = 1000,
     }
 }
 

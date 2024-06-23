@@ -5,11 +5,10 @@ return {
 
     notify.setup({
         render = "wrapped-compact",
-        stages = "fade",
-        timeout = 5000,
+        stages = "static",
+        timeout = 2000,
         background_colour = "#2E3440",
-        minimum_width = 50,
-        max_width = 60,
+        minimum_width = 50, max_width = 60,
         wrap = true,
         icons = {
           ERROR = "",
@@ -20,6 +19,7 @@ return {
         },
         level = vim.log.levels.DEBUG
     })
+
     vim.notify = notify
         --
     -- Intercept LSP log messages
@@ -39,7 +39,7 @@ return {
 
       notify(result.message, lvl, {
         title = 'LSP Log | ' .. client.name,
-        timeout = 5000,
+        timeout = 1000,
       })
     end
 
@@ -54,7 +54,7 @@ return {
       })[result.type]
       notify({ result.message }, lvl, {
         title = 'LSP | ' .. client.name,
-        timeout = 5000,
+        timeout = 2000,
       })
     end
 

@@ -35,3 +35,10 @@ end, {})
 vim.api.nvim_create_user_command('PWD', function()
   vim.cmd('!echo %')
 end, {})
+
+-- Define :ClearMarks command
+vim.api.nvim_create_user_command('ClearMarks', function()
+  vim.cmd(':delm! | delm A-Z0-9')
+end, {})
+
+
