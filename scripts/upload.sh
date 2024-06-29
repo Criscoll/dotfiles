@@ -6,5 +6,6 @@ rclone sync ~/Documents/Obsidian googledrive:Notes \
 	--delete-during \
 	--exclude 'node_modules/**' \
 	--exclude '.git/**' \
+	--exclude 'venv/**' \
 	--verbose --progress \
 	--metadata \
