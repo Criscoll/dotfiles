@@ -1,5 +1,6 @@
 return {
   'rcarriga/nvim-notify',
+  priority = 1000,
   config = function()
     local notify = require("notify")
 
@@ -37,10 +38,17 @@ return {
         [4] = 'DEBUG',
       })[result.type]
 
-      notify(result.message, lvl, {
-        title = 'LSP Log | ' .. client.name,
-        timeout = 1000,
-      })
+      if lvl == 1 then
+          notify(result.message, lvl, {
+            title = 'LSP Log | ' .. client.name,
+            timeout = 500,
+          })
+      elseif lvl == 2 then
+          notify(result.message, lvl, {
+            title = 'LSP Log | ' .. client.name,
+            timeout = 3000,
+          })
+      end
     end
 
     -- Intercept LSP showMessage

@@ -7,6 +7,7 @@ vim.o.smartcase = true
 vim.opt.clipboard = 'unnamedplus'
 vim.opt.tabstop = 4
 vim.opt.shiftwidth = 4
+vim.opt.wrap = false
 
 
 -- Set the package path to include the nvim directory

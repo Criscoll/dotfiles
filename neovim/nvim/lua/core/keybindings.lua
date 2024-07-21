@@ -40,3 +40,7 @@ vim.api.nvim_create_user_command('ClearMarks', function()
   vim.cmd(':delm! | delm A-Z0-9')
 end, {})
 
+-- Define Clear Buffers Command
+vim.api.nvim_create_user_command('ClearBufferList', function()
+    vim.cmd("bufdo bdelete")
+end, {})

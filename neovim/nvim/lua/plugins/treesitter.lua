@@ -36,6 +36,7 @@ return {
         "c",
         "cpp",
         "java",
+        "scala",
       },
 
       sync_install = false,

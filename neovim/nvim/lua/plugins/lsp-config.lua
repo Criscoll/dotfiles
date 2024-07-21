@@ -38,7 +38,7 @@ return {
 					"lua_ls",       -- Lua LSP Server
 					"pylsp",        -- Python LSP Server
                     "clangd",       -- C++ LSP Server
-                    "jdtls",        -- Java LSP Server
+                    -- "jdtls",        -- Java LSP Server
 				},
 			})
 		end,
@@ -87,7 +87,7 @@ return {
 			end
 
             local capabilities = require('cmp_nvim_lsp').default_capabilities()
-
+            local noop = function() end
 			mason_lspconfig.setup_handlers({
 				-- default handler for installed servers
 				function(server_name)
@@ -130,11 +130,12 @@ return {
                         end
                     })
 				end,
-                ["jdtls"] = function()
-                    lspconfig.jdtls.setup({
-                        autostart = false,
-                    })
-				end,
+                ["jdtls"] = noop,
+--                    = function()
+--                    lspconfig.jdtls.setup({
+--                        autostart = false,
+--                    })
+--				end,
 			})
 		end,
 	},

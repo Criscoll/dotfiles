@@ -135,6 +135,10 @@ return {
             vim.api.nvim_set_keymap('n', '<Leader>fum', ':Telescope man_pages<CR>', {noremap = true, silent = true})
 
             -- LSP Search
+            vim.api.nvim_set_keymap('n', '<Leader>gr', ':Telescope lsp_incoming_calls<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>gr', ':Telescope lsp_definitions<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>gi', ':Telescope lsp_implementations,<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>flc', ':Telescope lsp_incoming_calls<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>flr', ':Telescope lsp_references<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fld', ':Telescope lsp_definitions<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fli', ':Telescope lsp_implementations<CR>', {noremap = true, silent = true})

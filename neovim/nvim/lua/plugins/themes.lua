@@ -51,6 +51,11 @@ return {
         'AlexvZyl/nordic.nvim',
         lazy = false,
         priority = 1000,
+    },
+    {
+        'rmehri01/onenord.nvim',
+        lazy = false,
+        priority = 1000,
     }
 }
 
