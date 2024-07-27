@@ -54,12 +54,18 @@ export PATH="$HOME/Applications/nvim-linux64/bin:$PATH"
 
 export PATH="$HOME/.cargo/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.go/bin:$PATH"
+
 
 
 ## pnpm
 export PNPM_HOME="/home/cristian/.local/share/pnpm"
 [[ ":$PATH:" != *":$PNPM_HOME:"* ]] && export PATH="$PNPM_HOME:$PATH"
 
+
+## ------------------------- Environment Variables -----------------------------
+
+export GOPATH="$HOME/.go/"
 
 
 ## ------------------------- Aliases -----------------------------
@@ -79,11 +85,17 @@ alias gcm="git commit -m"
 alias gca="git commit --amend"
 alias gcae="git commit --amend --no-edit"
 alias gds="git diff | delta --side-by-side"
+alias gla="git log --oneline --graph"
 
 alias open="xdg-open"
 
 alias mvn_build='mvn clean install -T 1C'
 alias mvn_build_offline='mvn clean install --offline -T 1C'
+
+alias notes="type notes; cd /home/cristian/Documents/Obsidian"
+
+
+alias ,alacritty_new_window="type ,alacritty_new_window; alacritty msg create-window || alacritty"
 
 
 ## ------------------------- Functions -----------------------------
