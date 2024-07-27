@@ -44,3 +44,9 @@ end, {})
 vim.api.nvim_create_user_command('ClearBufferList', function()
     vim.cmd("bufdo bdelete")
 end, {})
+
+-- Define Reload from Disk Command
+vim.api.nvim_create_user_command('ReloadFromDisk', function()
+    vim.cmd("bufdo e!")
+end, {})
+
