@@ -7,7 +7,7 @@
     },
     {
         "key": "alt+1",
-        "command": "workbench.action.focusActiveEditorGroup",
+        "command": "workbench.action.toggleSidebarVisibility",
         "when": "sideBarFocus"
     },
     {
