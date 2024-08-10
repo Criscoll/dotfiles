@@ -1,0 +1,8 @@
+#!/usr/bin/awk -f
+
+# Prints the field value for each field in a record
+{
+    for (i = 1; i <= NF; i++) {
+        print "Field " i ": " $i
+    }
+}
