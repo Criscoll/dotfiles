@@ -100,6 +100,17 @@ return {
                 })
             end
 
+            _G.live_grep_current_directory_files= function ()
+                local cwd = vim.fn.expand('%:p:h')
+                require('telescope.builtin').live_grep({
+                    prompt_title = "Live Grep in in (" .. cwd .. ")",
+                    cwd = cwd,
+                    mappings = {
+                        i =  { ["<c-f>"] = require('telescope.actions').to_fuzzy_refine }, -- shortcut to fuzzy refine the search
+                    },
+                })
+            end
+
             _G.search_jump_list = function ()
                 local stackOptions = {
                     sort_mru = true,
@@ -108,10 +119,55 @@ return {
                 require('telescope.builtin').jumplist(stackOptions)
             end
 
+            local nvim_tree = require('nvim-tree.api')
+            _G.search_nvim_tree_directory_files = function ()
+                local node = nvim_tree.tree.get_node_under_cursor()
+                if not node then
+                    vim.notify("Selected node is not a directory")
+                    return
+                end
+
+                local cwd = node.absolute_path
+                if not vim.fn.isdirectory(cwd) then
+                    vim.notify("Selected node is not a directory")
+                    return
+                end
+
+                require('telescope.builtin').find_files({
+                    prompt_title = "Find files in (" .. cwd .. ")",
+                    cwd = cwd,
+                })
+            end
+
+
+            _G.live_grep_nvim_tree_directory_files = function ()
+                local node = nvim_tree.tree.get_node_under_cursor()
+                if not node then
+                    vim.notify("Selected node is not a directory")
+                    return
+                end
+
+                local cwd = node.absolute_path
+                if not vim.fn.isdirectory(cwd) then
+                    vim.notify("Selected node is not a directory")
+                    return
+                end
+
+                require('telescope.builtin').live_grep({
+                    prompt_title = "Live Grep in in (" .. cwd .. ")",
+                    cwd = cwd,
+                    mappings = {
+                        i =  { ["<c-f>"] = require('telescope.actions').to_fuzzy_refine }, -- shortcut to fuzzy refine the search
+                    },
+                })
+            end
+
+
             -- File Search
             vim.api.nvim_set_keymap('n', '<Leader>ff', ':Telescope find_files<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fz', ':lua _G.find_files_with_hidden()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fd', ':lua _G.search_directory_files()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>ftf', ':lua _G.search_nvim_tree_directory_files()<CR>', {noremap = true, silent = true})
 
             -- Buffer File Search / History Search
             vim.api.nvim_set_keymap('n', '<Leader>fb', ':Telescope buffers<CR>', {noremap = true, silent = true})
@@ -125,6 +181,8 @@ return {
             vim.api.nvim_set_keymap('n', '<Leader>fsl', ':Telescope live_grep<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fsp', ':lua _G.prompt_and_search()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fsb', ':lua _G.live_grep_open_buffers()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>ftl', ':lua _G.live_grep_nvim_tree_directory_files()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>fsd', ':lua _G.live_grep_current_directory_files()<CR>', {noremap = true, silent = true})
 
             -- Util Pickers
             vim.api.nvim_set_keymap('n', '<Leader>fm', ':Telescope marks<CR>', {noremap = true, silent = true})
