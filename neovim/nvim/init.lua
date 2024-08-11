@@ -19,6 +19,9 @@ require("core")
 -- Load in plugins
 require("lazy-plugin-manager")
 
+-- Load in snippets
+require("snippets")
+
 -- Set default colorscheme
 vim.cmd("colorscheme everforest")
 
