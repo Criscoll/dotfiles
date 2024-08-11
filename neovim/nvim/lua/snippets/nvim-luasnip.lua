@@ -41,3 +41,4 @@ ls.add_snippets("markdown", {
         i(0),  -- Final cursor position
     }),
 })
+

@@ -50,3 +50,32 @@ vim.api.nvim_create_user_command('ReloadFromDisk', function()
     vim.cmd("bufdo e!")
 end, {})
 
+function ToggleCheckbox()
+    local line = vim.fn.line('.')
+    local text = vim.fn.getline(line)
+
+    -- Check if the line starts with '- [ ]' or '- [X]'
+    if string.match(text, "^%s*%-%s%[%s*%]") or string.match(text, "^%s*%-%s%[%s*X%s*%]") then
+        -- Toggle between '[ ]' and '[X]'
+        if string.match(text, "%[%s*%]") then
+            text = string.gsub(text, "%[%s*%]", "[X]")
+        elseif string.match(text, "%[%s*X%s*%]") then
+            text = string.gsub(text, "%[%s*X%s*%]", "[ ]")
+        end
+    else
+        -- Prepend '- [ ]' if it doesn't start with a checkbox
+        text = "- [ ] " .. text
+    end
+
+    -- Set the modified line
+    vim.fn.setline(line, text)
+end
+
+-- Keybinding for toggling checkbox
+vim.api.nvim_set_keymap('n', '<leader>c', [[:lua ToggleCheckbox()<CR>]], { noremap = true, silent = true })
+
+
+vim.api.nvim_create_user_command('ReloadConfig', function()
+    vim.cmd("source ~/.config/nvim/init.lua")
+end, {})
+
