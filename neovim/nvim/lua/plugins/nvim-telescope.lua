@@ -163,12 +163,44 @@ return {
                 })
             end
 
+            _G.live_grep_notes = function ()
+                local cwd = "/home/cristian/Documents/Obsidian/01_Notes"
+                require('telescope.builtin').live_grep({
+                    prompt_title = "Live Grep in in (" .. cwd .. ")",
+                    cwd = cwd,
+                    mappings = {
+                        i =  { ["<c-f>"] = require('telescope.actions').to_fuzzy_refine }, -- shortcut to fuzzy refine the search
+                    },
+                })
+            end
+
+
+            _G.live_grep_tasks = function ()
+                local cwd = "/home/cristian/Documents/Obsidian/03_Tasks"
+                require('telescope.builtin').live_grep({
+                    prompt_title = "Live Grep in in (" .. cwd .. ")",
+                    cwd = cwd,
+                    mappings = {
+                        i =  { ["<c-f>"] = require('telescope.actions').to_fuzzy_refine }, -- shortcut to fuzzy refine the search
+                    },
+                })
+            end
+
+            _G.find_task_note = function ()
+                local cwd = "/home/cristian/Documents/Obsidian/03_Tasks"
+
+                require('telescope.builtin').find_files({
+                    prompt_title = "Find files in (" .. cwd .. ")",
+                    cwd = cwd,
+                })
+            end
 
             -- File Search
             vim.api.nvim_set_keymap('n', '<Leader>ff', ':Telescope find_files<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fz', ':lua _G.find_files_with_hidden()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fd', ':lua _G.search_directory_files()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>ftf', ':lua _G.search_nvim_tree_directory_files()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>fe', ':lua _G.find_task_note()<CR>', {noremap = true, silent = true})
 
             -- Buffer File Search / History Search
             vim.api.nvim_set_keymap('n', '<Leader>fb', ':Telescope buffers<CR>', {noremap = true, silent = true})
@@ -184,6 +216,8 @@ return {
             vim.api.nvim_set_keymap('n', '<Leader>fsb', ':lua _G.live_grep_open_buffers()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>ftl', ':lua _G.live_grep_nvim_tree_directory_files()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fsd', ':lua _G.live_grep_current_directory_files()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>fsn', ':lua _G.live_grep_notes()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>fse', ':lua _G.live_grep_tasks()<CR>', {noremap = true, silent = true})
 
             -- Util Pickers
             vim.api.nvim_set_keymap('n', '<Leader>fm', ':Telescope marks<CR>', {noremap = true, silent = true})
@@ -195,7 +229,7 @@ return {
 
             -- LSP Search
             vim.api.nvim_set_keymap('n', '<Leader>gr', ':Telescope lsp_incoming_calls<CR>', {noremap = true, silent = true})
-            vim.api.nvim_set_keymap('n', '<Leader>gr', ':Telescope lsp_definitions<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>gd', ':Telescope lsp_definitions<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>gi', ':Telescope lsp_implementations,<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>flc', ':Telescope lsp_incoming_calls<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>flr', ':Telescope lsp_references<CR>', {noremap = true, silent = true})

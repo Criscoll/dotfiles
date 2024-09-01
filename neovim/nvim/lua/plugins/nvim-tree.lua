@@ -8,6 +8,9 @@ return {
 
         local nvimtree = require('nvim-tree')
         nvimtree.setup({
+            git = {
+                enable = false,
+            },
             view = {
               width = 70,
               relativenumber = true,
