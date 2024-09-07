@@ -24,24 +24,14 @@ export GOPATH="$HOME/.go/"
 
 ## ------------------------- Aliases -----------------------------
 
+alias open="xdg-open"
+
+# Git Aliases
+alias sgs="type sgs; stg status"
+alias sgss="type sgss; stg series"
+alias sgp="type sgp; stg pop --all; sgss; git pull --rebase"
 alias glh="git log --stat -p --max-count=1"
-
-
-
-
-
-#
-alias update_all="snap refresh && flatpak update && sudo apt update"
-alias apts="apt search --names-only"
-alias rg="rg --hidden --max-columns 100"
-
-alias ,upload_notes="source /home/cristian/Scripts/upload.sh"
-alias ,download_notes="source /home/cristian/Scripts/download.sh"
-
-alias python="python3"
-alias py="python3"
-alias gcalcli_activate="source ~/Repos/gcalcli/venv/bin/activate"
-
+alias gp="git pull --rebase"
 alias gs="git status"
 alias gl="git log"
 alias gpl="git pull --rebase"
@@ -52,21 +42,36 @@ alias gcae="git commit --amend --no-edit"
 alias gds="git diff | delta --side-by-side"
 alias gla="git log --oneline --graph"
 
-alias open="xdg-open"
+
+alias update_all="snap refresh && flatpak update && sudo apt update"
+alias apts="apt search --names-only"
+alias rg="rg --hidden --max-columns 100"
+alias python="python3"
+alias py="python3"
+
+alias gcalcli_activate="source ~/Repos/gcalcli/venv/bin/activate"
 
 alias mvn_build='mvn clean install -T 1C'
 alias mvn_build_offline='mvn clean install --offline -T 1C'
-
 alias notes="type notes; cd /home/cristian/Documents/Obsidian"
 alias tasks="type tasks; cd /home/cristian/Documents/Obsidian/03_Tasks"
 
-
+## ------------------------- Utils -----------------------------
+alias ,upload_notes="source /home/cristian/Scripts/upload.sh"
+alias ,download_notes="source /home/cristian/Scripts/download.sh"
 alias ,alacritty_new_window="type ,alacritty_new_window; alacritty msg create-window || alacritty"
 
+function select_comma_command() {
+    local selected_command=$(compgen -ac | grep '^,' | sort -u | fzf)
+    if [[ -n $selected_command ]]; then
+        LBUFFER+="$selected_command"
+    fi
+    zle redisplay
+}
+zle -N select_comma_command
+bindkey '^e' select_comma_command
 
-## ------------------------- Utils -----------------------------
-
-function aptsearch() {
+function ,aptsearch() {
   if [ -z "$1" ]; then
     echo "Usage: aptsearch <package-name>"
     return 1
@@ -74,17 +79,18 @@ function aptsearch() {
   apt-cache search --names-only "^$1" | fzf --preview "echo {} | awk '{print \$1}' | xargs -I % apt-cache show % | grep -E 'Description|Package'"
 }
 
-function fzf_rg_select() {
+function ,fzf_rg_select() {
 	local file file=$(rg --files | fzf)
 	if [[ -n $file ]]; then
 		BUFFER+="$file"
 		CURSOR=$#BUFFER
 	fi
 }
-
 zle -N fzf_rg_select
+bindkey '^T' fzf_rg_select
 
-function pdfcompress() {
+
+function ,pdfcompress() {
     # Default resolution is set to 144
     local resolution=${2:-144}
     echo "Using resolution value: $resolution for compression"
@@ -92,38 +98,20 @@ function pdfcompress() {
     ghostscript -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.3 -dPDFSETTINGS=/ebook -dEmbedAllFonts=true -dSubsetFonts=true -dColorImageDownsampleType=/Bicubic -dColorImageResolution=$resolution -dGrayImageDownsampleType=/Bicubic -dGrayImageResolution=$resolution -dMonoImageDownsampleType=/Bicubic -dMonoImageResolution=$resolution -sOutputFile=$1.compressed.pdf $1; 
 }
 
-function pdfcompress_higherquality()
+function ,pdfcompress_higherquality()
 {
     # Default resolution is set to 144
     local resolution=${2:-144}
     echo "Using resolution value: $resolution for compression"
 
     ghostscript -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.3 -dPDFSETTINGS=/printer -dEmbedAllFonts=true -dSubsetFonts=true -dColorImageDownsampleType=/Bicubic -dColorImageResolution=$resolution -dGrayImageDownsampleType=/Bicubic -dGrayImageResolution=$resolution -dMonoImageDownsampleType=/Bicubic -dMonoImageResolution=$resolution -sOutputFile=$1.compressed.pdf $1; 
-
-
 }
 
 
-## ------------------------- Keybindings -----------------------------
-bindkey '^T' fzf_rg_select
-
-
-## ------------------------- Misc -----------------------------
 
 ## _________________FZF__________________
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-
-## _______________Timetrap________________
-autoload -U compinit
-compinit
-fpath=(/var/lib/gems/3.0.0/gems/timetrap-*/completions/zsh $fpath)
-
-
-
-## _______________Kakoune__________________
-export KAKOUNE_CONFIG_DIR=~/.config/kak
-alias kak='~/Repos/kakoune/src/kak'
 
 ## _______________NVM__________________
 export NVM_DIR="$HOME/.nvm"
