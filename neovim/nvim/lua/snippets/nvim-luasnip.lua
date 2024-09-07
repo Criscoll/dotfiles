@@ -31,13 +31,14 @@ ls.add_snippets("markdown", {
     }, {
         t("---"),
         t({"", "aliases: "}),
+        t({"", "- "}),
         i(1, ""),  -- Placeholder for aliases
-        t({"", "tags:"}),
-        t({"", "  - \""}),
-        i(2, "#Task/backlog"),  -- Default value for the first tag
-        t({"\"", ""}),
-        t({"topics:"}),
+        t({"", "topics:"}),
         t({"", "---"}),
+        t({"", ""}),
+        t({"", ""}),
+        t({"", "# Recursive Outline"}),
+        t({"", ""}),
         i(0),  -- Final cursor position
     }),
 })
