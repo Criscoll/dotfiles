@@ -175,8 +175,8 @@ return {
             end
 
 
-            _G.live_grep_tasks = function ()
-                local cwd = "/home/cristian/Documents/Obsidian/03_Tasks"
+            _G.live_grep_workbench = function ()
+                local cwd = "/home/cristian/Documents/Obsidian/02_Workbench"
                 require('telescope.builtin').live_grep({
                     prompt_title = "Live Grep in in (" .. cwd .. ")",
                     cwd = cwd,
@@ -186,8 +186,8 @@ return {
                 })
             end
 
-            _G.find_task_note = function ()
-                local cwd = "/home/cristian/Documents/Obsidian/03_Tasks"
+            _G.find_work_note = function ()
+                local cwd = "/home/cristian/Documents/Obsidian/02_Workbench"
 
                 require('telescope.builtin').find_files({
                     prompt_title = "Find files in (" .. cwd .. ")",
@@ -200,7 +200,7 @@ return {
             vim.api.nvim_set_keymap('n', '<Leader>fz', ':lua _G.find_files_with_hidden()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fd', ':lua _G.search_directory_files()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>ftf', ':lua _G.search_nvim_tree_directory_files()<CR>', {noremap = true, silent = true})
-            vim.api.nvim_set_keymap('n', '<Leader>fe', ':lua _G.find_task_note()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>fe', ':lua _G.find_work_note()<CR>', {noremap = true, silent = true})
 
             -- Buffer File Search / History Search
             vim.api.nvim_set_keymap('n', '<Leader>fb', ':Telescope buffers<CR>', {noremap = true, silent = true})
@@ -217,7 +217,7 @@ return {
             vim.api.nvim_set_keymap('n', '<Leader>ftl', ':lua _G.live_grep_nvim_tree_directory_files()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fsd', ':lua _G.live_grep_current_directory_files()<CR>', {noremap = true, silent = true})
             vim.api.nvim_set_keymap('n', '<Leader>fsn', ':lua _G.live_grep_notes()<CR>', {noremap = true, silent = true})
-            vim.api.nvim_set_keymap('n', '<Leader>fse', ':lua _G.live_grep_tasks()<CR>', {noremap = true, silent = true})
+            vim.api.nvim_set_keymap('n', '<Leader>fse', ':lua _G.live_grep_workbench()<CR>', {noremap = true, silent = true})
 
             -- Util Pickers
             vim.api.nvim_set_keymap('n', '<Leader>fm', ':Telescope marks<CR>', {noremap = true, silent = true})

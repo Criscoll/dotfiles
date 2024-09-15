@@ -8,6 +8,7 @@ vim.opt.clipboard = 'unnamedplus'
 vim.opt.tabstop = 4
 vim.opt.shiftwidth = 4
 vim.opt.wrap = false
+vim.opt.colorcolumn = "100"
 
 -- Set the package path to include the nvim directory
 -- local config_path = vim.fn.stdpath('config')
