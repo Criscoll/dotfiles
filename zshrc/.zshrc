@@ -28,12 +28,14 @@ alias open="xdg-open"
 
 # Git Aliases
 alias sgs="type sgs; stg status"
-alias sgss="type sgss; stg series"
+alias sgss="type sgss; stg series; git status"
+alias sgra="type sgra; git add .; stg refresh"
 alias sgp="type sgp; stg pop --all; sgss; git pull --rebase"
 alias glh="git log --stat -p --max-count=1"
 alias gp="git pull --rebase"
 alias gs="git status"
 alias gl="git log"
+alias gll="git log --oneline"
 alias gpl="git pull --rebase"
 alias ga="git add ."
 alias gcm="git commit -m"
@@ -54,7 +56,9 @@ alias gcalcli_activate="source ~/Repos/gcalcli/venv/bin/activate"
 alias mvn_build='mvn clean install -T 1C'
 alias mvn_build_offline='mvn clean install --offline -T 1C'
 alias notes="type notes; cd /home/cristian/Documents/Obsidian"
-alias tasks="type tasks; cd /home/cristian/Documents/Obsidian/03_Tasks"
+alias workbench="type tasks; cd /home/cristian/Documents/Obsidian/02_Workbench/"
+alias tasks="type tasks; cd /home/cristian/Documents/Obsidian/02_Workbench/02_Tasks"
+alias projects="type projects; cd /home/cristian/Repos/01_Projects"
 
 ## ------------------------- Utils -----------------------------
 alias ,upload_notes="source /home/cristian/Scripts/upload.sh"

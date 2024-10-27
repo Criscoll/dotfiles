@@ -1,0 +1,29 @@
+pane	5	1	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	monitoring	1	0	:-	1	pop-os	:/home/cristian	1	htop	:htop
+pane	monitoring	2	1	:*M	1	pop-os	:/home/cristian	0	zsh	:
+pane	monitoring	2	1	:*M	2	pop-os	:/home/cristian	0	htop	:htop
+pane	monitoring	2	1	:*M	3	pop-os	:/home/cristian	1	zsh	:
+pane	monitoring	3	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	1	0	:	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	notes	2	0	:	1	pop-os	:/home/cristian/Documents/Obsidian	1	nvim	:nvim .
+pane	notes	3	1	:*	1	pop-os	:/home/cristian/Documents/Obsidian	1	zsh	:
+pane	notes	4	0	:-	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	5	0	:	1	pop-os	:/home/cristian/Scripts	1	zsh	:
+pane	nvim	1	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	tmp	1	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	tmp	2	0	:	1	pop-os	:/home/cristian	1	nvim	:nvim /home/cristian/.config/nvim
+pane	tmp	3	0	:-	1	pop-os	:/home/cristian/Documents/Obsidian/06_Boxes/00_Compass/posts/discipline	1	zsh	:
+window	5	1	:zsh	1	:*	53fd,179x137,0,0,16	:
+window	monitoring	1	:htop	0	:-	a78e,179x137,0,0,1	off
+window	monitoring	2	:nvtop-GPU	1	:*M	c99b,179x137,0,0{89x137,0,0,2,89x137,90,0[89x68,90,0,3,89x68,90,69,4]}	off
+window	monitoring	3	:timetrap	0	:	a792,179x137,0,0,5	off
+window	notes	1	:notes-shell	0	:	a793,179x137,0,0,6	off
+window	notes	2	:notes-todo	0	:	a794,179x137,0,0,7	off
+window	notes	3	:notes	1	:*	a795,179x137,0,0,8	off
+window	notes	4	:compass	0	:-	a796,179x137,0,0,9	off
+window	notes	5	:backup_sync	0	:	53f7,179x137,0,0,10	off
+window	nvim	1	:zsh	1	:*	53fc,179x137,0,0,15	:
+window	tmp	1	:cli	1	:*	53f8,179x137,0,0,11	off
+window	tmp	2	:models	0	:	53fa,179x137,0,0,13	off
+window	tmp	3	:test	0	:-	53fb,179x137,0,0,14	off
+state	nvim	tmp

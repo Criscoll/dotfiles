@@ -1,0 +1,31 @@
+pane	AI_Accountant	1	0	:-M	1	pop-os	:/home/cristian	1	zsh	:
+pane	AI_Accountant	2	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	AI_Accountant	3	0	:	1	pop-os	:/home/cristian/Documents/Obsidian/06_Boxes/00_Compass/posts/discipline	1	zsh	:
+pane	environment	1	0	:-	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	environment	2	1	:*	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	monitoring	1	0	:-	1	pop-os	:/home/cristian	1	htop	:htop
+pane	monitoring	2	1	:*	1	pop-os	:/home/cristian	0	zsh	:
+pane	monitoring	2	1	:*	2	pop-os	:/home/cristian	0	htop	:htop
+pane	monitoring	2	1	:*	3	pop-os	:/home/cristian	1	zsh	:
+pane	monitoring	3	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	1	0	:	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	notes	2	0	:	1	pop-os	:/home/cristian/Documents/Obsidian	1	nvim	:nvim .
+pane	notes	3	0	:-	1	pop-os	:/home/cristian/Documents/Obsidian	1	zsh	:
+pane	notes	4	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	tooling	1	0	:-	1	pop-os	:/home/cristian	1	zsh	:
+pane	tooling	2	1	:*	1	pop-os	:/home/cristian/.tmux/resurrect	1	zsh	:
+window	AI_Accountant	1	:cli	0	:-M	53f8,179x137,0,0,11	off
+window	AI_Accountant	2	:aider	1	:*	53fa,179x137,0,0,13	off
+window	AI_Accountant	3	:test	0	:	53fb,179x137,0,0,14	off
+window	environment	1	:download/upload-sync	0	:-	5400,179x137,0,0,19	off
+window	environment	2	:update	1	:*	d3f7,179x137,0,0,20	off
+window	monitoring	1	:htop	0	:-	a78e,179x137,0,0,1	off
+window	monitoring	2	:nvtop-GPU	1	:*	c99b,179x137,0,0{89x137,0,0,2,89x137,90,0[89x68,90,0,3,89x68,90,69,4]}	off
+window	monitoring	3	:timetrap	0	:	a792,179x137,0,0,5	off
+window	notes	1	:cli	0	:	a793,179x137,0,0,6	off
+window	notes	2	:notes-todo	0	:	a794,179x137,0,0,7	off
+window	notes	3	:notes	0	:-	a795,179x137,0,0,8	off
+window	notes	4	:compass	1	:*	a796,179x137,0,0,9	off
+window	tooling	1	:nvim	0	:-	53fc,179x137,0,0,15	off
+window	tooling	2	:tmux	1	:*	53fe,179x137,0,0,17	off
+state	tooling	environment
