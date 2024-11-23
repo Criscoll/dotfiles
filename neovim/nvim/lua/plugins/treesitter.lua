@@ -37,6 +37,7 @@ return {
         "cpp",
         "java",
         "scala",
+        "python",
       },
 
       sync_install = false,

@@ -43,3 +43,34 @@ ls.add_snippets("markdown", {
     }),
 })
 
+ls.add_snippets("html", {
+    s({
+        trig = "html",  -- Trigger for the snippet
+        name = "HTML Template",  -- Name of the snippet
+        dscr = "Basic HTML5 template with head and body",  -- Description of the snippet
+    }, {
+        t({
+            "<!DOCTYPE html>",
+            "<html lang=\"en\">",
+            "    <head>",
+            "        <meta charset=\"UTF-8\">",
+            "        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
+            "        <meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">",
+            "        <title>"
+        }),
+        i(1, "Document Title"),  -- Placeholder for the document title
+        t({
+            "</title>",
+            "    </head>",
+            "    <body>",
+            "        "
+        }),
+        i(2, "<!-- Content goes here -->"),  -- Placeholder for main content
+        t({
+            "",
+            "    </body>",
+            "</html>"
+        }),
+        i(0),  -- Final cursor position
+    }),
+})

@@ -26,10 +26,10 @@ return {
                 },
                 pickers = {
                     find_files = {
-                        find_command = { 'rg', '--files', '--glob', '!**/venv/**' }
+                        find_command = { 'rg', '--files', '--glob', '!**/venv/**', '--glob', '!**/node_modules/**' }
                     },
                     live_grep = {
-                        file_ignore_patterns = { 'node_modules', '.git', 'venv' },
+                        file_ignore_patterns = { 'node_modules', '.git', 'venv', 'node_modules' },
                         grep_command = 'rg',
                         grep_args = { '--color=always', '--with-filename', '--line-number', '--column', '--no-ignore'},
                         mappings = {

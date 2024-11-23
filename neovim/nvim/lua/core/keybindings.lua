@@ -79,3 +79,31 @@ vim.api.nvim_create_user_command('ReloadConfig', function()
     vim.cmd("source ~/.config/nvim/init.lua")
 end, {})
 
+-- Command to disable diagnostics globally
+vim.api.nvim_create_user_command(
+    'DisableDiagnostics',
+    function() vim.diagnostic.disable() end,
+    {}
+)
+
+-- Command to enable diagnostics globally
+vim.api.nvim_create_user_command(
+    'EnableDiagnostics',
+    function() vim.diagnostic.enable() end,
+    {}
+)
+
+-- Command to disable diagnostics for the current buffer
+vim.api.nvim_create_user_command(
+    'DisableBufferDiagnostics',
+    function() vim.diagnostic.disable(0) end,
+    {}
+)
+
+-- Command to enable diagnostics for the current buffer
+vim.api.nvim_create_user_command(
+    'EnableBufferDiagnostics',
+    function() vim.diagnostic.enable(0) end,
+    {}
+)
+
