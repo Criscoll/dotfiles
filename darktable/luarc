@@ -1,0 +1,53 @@
+dt = require "darktable"
+
+local function assign_tag(tag_name)
+    local images = dt.gui.action_images
+    if #images > 0 then
+        -- Get or create the tag object
+        local tag = dt.tags.create(tag_name)
+        if not tag then
+            dt.print("Failed to create or retrieve the tag: " .. tag_name)
+            return
+        end
+        -- Attach the tag to each selected image
+        for _, image in ipairs(images) do
+            dt.tags.attach(tag, image)
+        end
+        dt.print("Tag '" .. tag_name .. "' assigned to selected images")
+    else
+        dt.print("No images selected")
+    end
+end
+
+local function delete_tags()
+    local images = dt.gui.action_images
+    if #images > 0 then
+        for _, image in ipairs(images) do
+            local image_tags = dt.tags.get_tags(image)
+            for _, t in ipairs(image_tags) do
+                dt.tags.detach(t, image)
+            end
+        end
+    end
+end
+
+
+local function assign_no_edit(event, shortcut)
+    assign_tag("no_edit")
+end
+
+local function assign_detach_tags(event, shortcut)
+    delete_tags()
+end
+
+
+dt.register_event("no edit shortcut",
+       "shortcut",
+       assign_no_edit,
+       "A shortcut to assign 'no_edit' tag to an image")
+
+dt.register_event("detach tags shortcut",
+       "shortcut",
+       assign_detach_tags,
+       "A shortcut to detach tags from an image")
+
