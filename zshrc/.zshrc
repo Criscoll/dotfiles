@@ -34,8 +34,8 @@ alias sgp="type sgp; stg pop --all; sgss; git pull --rebase"
 alias glh="git log --stat -p --max-count=1"
 alias gp="git pull --rebase"
 alias gs="git status"
-alias gl="git log --oneline"
-alias gll="git log --oneline | head"
+alias gl="git log --oneline --color"
+alias gll="git log --oneline --color | head"
 alias gpl="git pull --rebase"
 alias ga="git add ."
 alias gcm="git commit -m"
@@ -64,6 +64,16 @@ alias projects="type projects; cd /home/cristian/Repos/01_Projects"
 alias ,upload_notes="source /home/cristian/Scripts/upload.sh"
 alias ,download_notes="source /home/cristian/Scripts/download.sh"
 alias ,alacritty_new_window="type ,alacritty_new_window; alacritty msg create-window || alacritty"
+# Then put source -> destination afterwards
+alias ,myrsync="type ,myrsync; rsync -avh --ignore-existing --info=progress2 --info=name0"
+
+function ,file_count() {
+    for i in *; do
+        if [[ -d "$i" ]]; then
+            echo "$i: $(ls "$i" | wc -l)"
+        fi
+    done
+}
 
 function select_comma_command() {
     local selected_command=$(compgen -ac | grep '^,' | sort -u | fzf)
