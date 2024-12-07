@@ -1,8 +1,8 @@
 # This is Git's per-user configuration file.
 [user]
 # Please adapt and uncomment the following lines:
-	name = Cristian
-	email = cristiand2021@gmail.com
+        name = Cristian
+        email = cristiand2021@gmail.com
 
 [pull]
     rebase = true
@@ -10,15 +10,6 @@
 [core]
     editor = nvim
     pager = delta
-    
-[alias]
-	cm = commit -m
-	cae = commit --amend --no-edit
-	l = log
-    la = log --oneline --graph
-    s = status
-    ri = rebase -i HEAD^^^^^
-
 
 [interactive]
     diffFilter = delta --color-only
@@ -26,8 +17,8 @@
 [delta]
     navigate = true
     line-numbers = true
-    plus-style = green
-    minus-style = red
+    plus-style = "syntax auto"
+    minus-style = "syntax auto"
     file-style = box bold orange
     hunk-header-style = box bold green
 
