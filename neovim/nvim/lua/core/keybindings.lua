@@ -107,3 +107,6 @@ vim.api.nvim_create_user_command(
     {}
 )
 
+-- Split Tab
+vim.api.nvim_set_keymap('n', '<C-w>z', ':tab split<CR>', { noremap = true, silent = true })
+
