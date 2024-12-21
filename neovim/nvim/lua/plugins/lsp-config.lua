@@ -118,6 +118,11 @@ return {
 									useLibraryCodeForTypes = true,
 								},
 							},
+                            pycodestyle = {
+                                enabled=true,
+                                ignore={'E501', 'E231'},
+                                maxLineLength=120
+                            },
 						},
 					})
 				end,

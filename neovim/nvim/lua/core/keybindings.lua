@@ -110,3 +110,21 @@ vim.api.nvim_create_user_command(
 -- Split Tab
 vim.api.nvim_set_keymap('n', '<C-w>z', ':tab split<CR>', { noremap = true, silent = true })
 
+
+-- Example usage:
+-- :ReplaceBelow foo bar
+-- This will replace all occurrences of "foo" with "bar" from the current line downward.
+vim.api.nvim_create_user_command(
+  'ReplaceBelow',
+  function(opts)
+    if #opts.fargs ~= 2 then
+      vim.api.nvim_err_writeln("ReplaceBelow requires exactly two arguments: <search> <replace>")
+      return
+    end
+
+    vim.cmd('.,$s/' .. opts.fargs[1] .. '/' .. opts.fargs[2] .. '/g')
+  end,
+  { nargs = '*' }
+)
+
+
