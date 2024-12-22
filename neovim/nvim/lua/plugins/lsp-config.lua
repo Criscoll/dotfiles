@@ -111,6 +111,16 @@ return {
 					lspconfig.pylsp.setup({
                         capabilities = capabilities,
 						settings = {
+                            pylsp = {
+                                plugins = {
+                                    pyflakes = { enabled = false },
+                                    pylint= { enabled = false },
+                                    pycodestyle = { enabled = false },
+                                    ruff = { enabled = true },
+                                    yapf = { enabled = false },
+                                    black = { enabled = true },
+                                },
+                            },
 							python = {
 								analysis = {
 									typeCheckingMode = "strict",
@@ -118,11 +128,6 @@ return {
 									useLibraryCodeForTypes = true,
 								},
 							},
-                            pycodestyle = {
-                                enabled=true,
-                                ignore={'E501', 'E231'},
-                                maxLineLength=120
-                            },
 						},
 					})
 				end,
