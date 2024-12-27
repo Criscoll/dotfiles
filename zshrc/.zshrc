@@ -26,6 +26,8 @@ export GOPATH="$HOME/.go/"
 
 alias open="xdg-open"
 
+alias lsr="ls -1tr"
+
 # Git Aliases
 alias sgs="type sgs; stg status"
 alias sgss="type sgss; stg series; git status"
