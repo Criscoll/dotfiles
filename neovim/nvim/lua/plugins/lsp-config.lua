@@ -150,6 +150,11 @@ return {
                         capabilities = capabilities
                     })
                 end,
+                ["svelte-language-server"] = function()
+                	lspconfig.svelte.setup({
+                        capabilities = capabilities
+                    })
+                end,
             })
 		end,
 	},
