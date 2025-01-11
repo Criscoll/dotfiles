@@ -47,8 +47,25 @@ alias gla="git log --oneline --graph"
 alias gl="git log --color --pretty=format:'%C(yellow)%h %C(reset)%C(cyan)(%ar)%C(reset) %C(white)%s - %C(reset)%C(green)%an%C(reset)'"
 alias gll="gl | head"
 alias gld="git log --color --date=short --stat -p"
-alias gli="git show --color --stat -p"
-alias glh="git show --stat -p HEAD"
+alias glh="git show --stat -p -U30 HEAD | delta --line-numbers"
+alias glhnl="git show --stat -p -U30 HEAD"
+alias glinl="git show --color --stat -p -U30 | "
+
+function gli() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: gli <commit-hash>"
+        return 1
+    fi
+
+    local context_lines=30
+    if [[ -n "$2" ]]; then
+        context_lines=$2
+    fi
+
+    cmd="git show --color --stat -p -U$context_lines $1 | delta --line-numbers"
+    echo $cmd
+    eval $cmd
+}
 
 alias update_all="snap refresh && flatpak update && sudo apt update"
 alias apts="apt search --names-only"
