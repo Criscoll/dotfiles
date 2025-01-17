@@ -16,11 +16,20 @@
 
 [delta]
     navigate = true
-    line-numbers = true
+    line-numbers = false 
+    line-numbers-wrap = true
+    max-line-length = 200
+
     plus-style = "syntax auto"
     minus-style = "syntax auto"
-    file-style = box bold orange
-    hunk-header-style = box bold green
+
+    file-style = "orange bold"
+    file-decoration-style = "orange box"
+
+    hunk-header-style = "green bold"
+    hunk-decoration-style = "green box"
+
+    dark = true
 
 [merge]
     conflictstyle = diff3
