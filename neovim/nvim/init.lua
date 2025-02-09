@@ -10,12 +10,14 @@ vim.opt.shiftwidth = 4
 vim.opt.wrap = false
 vim.opt.colorcolumn = "100"
 vim.opt.textwidth = 100
-vim.o.formatlistpat = [[^\s*\d\+[\]:.)]\s\+\|^\s*[-*+]\s\+]]
-vim.o.formatoptions = vim.o.formatoptions .. 'n'
+vim.opt.autoindent = true
+-- vim.o.formatlistpat = [[^\s*\d\+[\]:.)]\s\+\|^\s*[-*+]\s\+]]
+-- vim.o.formatoptions = vim.o.formatoptions .. 'n'
 
 -- Set the package path to include the nvim directory
 -- local config_path = vim.fn.stdpath('config')
 -- package.path = package.path .. ';' .. config_path .. '/?.lua;' .. config_path .. '/?/init.lua'
+
 
 -- Load in keybindings
 require("core")
@@ -27,7 +29,7 @@ require("lazy-plugin-manager")
 require("snippets")
 
 -- Set default colorscheme
-vim.cmd("colorscheme catppuccin-frappe")
+vim.cmd("colorscheme catppuccin")
 
 -- Enabel gx url opening for unix
 if vim.fn.has("unix") == 1 then
