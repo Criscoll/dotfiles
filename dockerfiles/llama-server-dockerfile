@@ -1,0 +1,46 @@
+FROM ubuntu:22.04
+
+
+COPY llama-bin /app/
+WORKDIR /app
+
+# Copy the entire directory containing llama-server and its libraries
+RUN ls -lah
+
+RUN apt-get update && apt-get install -y curl libgomp1
+
+# Make sure the binary is executable
+RUN chmod +x /app/llama-server
+
+# Set default environment variables
+ENV PORT=8012 \
+    HOST="0.0.0.0" \
+    NGL=99 \
+    BATCH_SIZE=1024 \
+    CTX_SIZE=0 \
+    CACHE_REUSE=256
+
+# Create an entrypoint script that properly expands variables
+RUN echo '#!/bin/bash\n\
+args=(); for arg in "$@"; do\n\
+    expanded=$(eval echo "$arg")\n\
+    args+=("$expanded")\n\
+done\n\
+cmd="/app/llama-server ${args[*]}"\n\
+echo "Executing: $cmd"\n\
+eval "$cmd"' > /app/entrypoint.sh && \
+    chmod +x /app/entrypoint.sh
+
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["-hf", "ggml-org/Qwen2.5-Coder-3B-Q8_0-GGUF", \
+     "--host", "${HOST}", \
+     "--port", "${PORT}", \
+     "-ngl", "${NGL}", \
+     "-fa", \
+     "-ub", "${BATCH_SIZE}", \
+     "-b", "${BATCH_SIZE}", \
+     "--ctx-size", "${CTX_SIZE}", \
+     "--verbose", \
+     "--log-colors", \
+     "--cache-reuse", "${CACHE_REUSE}"]
