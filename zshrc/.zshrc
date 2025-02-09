@@ -10,9 +10,12 @@ DEFAULT_USER=$USER
 export PATH="$HOME/Repos/tmux:$PATH"
 export PATH="$HOME/Repos/alacritty/target/release:$PATH"
 export PATH="$HOME/Applications/nvim-linux64/bin:$PATH"
+export PATH="$HOME/Applications/helix:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.go/bin:$PATH"
+export PATH="$HOME/Applications/llama_cpp/build/bin:$PATH"
+export PATH="/usr/local/cuda-12/bin:$PATH"
 
 ## pnpm
 export PNPM_HOME="/home/cristian/.local/share/pnpm"
@@ -41,7 +44,8 @@ alias ga="git add ."
 alias gcm="git commit -m"
 alias gca="git commit --amend"
 alias gcae="git commit --amend --no-edit"
-alias gd="git diff --stat -p"
+alias gd="git diff --stat -p | delta --line-numbers"
+alias gdnl="git diff --stat -p"
 alias gds="git diff --stat -p | delta --side-by-side"
 alias gla="git log --oneline --graph"
 alias gl="git log --color --pretty=format:'%C(yellow)%h %C(reset)%C(cyan)(%ar)%C(reset) %C(white)%s - %C(reset)%C(green)%an%C(reset)'"
@@ -69,7 +73,7 @@ function gli() {
 
 alias update_all="snap refresh && flatpak update && sudo apt update"
 alias apts="apt search --names-only"
-alias rg="rg --hidden --max-columns 100"
+alias ,rg_max_columns="rg --hidden --max-columns 100"
 alias python="python3"
 alias py="python3"
 
@@ -155,3 +159,6 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/home/cristian/.lmstudio/bin"
