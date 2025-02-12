@@ -56,7 +56,7 @@ alias glhnl="git show --stat -p -U30 HEAD | delta"
 alias glhs="git show --stat -p -U30 HEAD | delta --line-numbers --side-by-side"
 alias glhsnl="git show --stat -p -U30 HEAD | delta --side-by-side"
 alias glhnl="git show --stat -p -U30 HEAD"
-alias glinl="git show --color --stat -p -U30 | "
+alias glinl="git show --color --stat -p -U30"
 
 function gli() {
     if [[ -z "$1" ]]; then
@@ -73,6 +73,23 @@ function gli() {
     echo $cmd
     eval $cmd
 }
+
+function glis() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: gli <commit-hash>"
+        return 1
+    fi
+
+    local context_lines=30
+    if [[ -n "$2" ]]; then
+        context_lines=$2
+    fi
+
+    cmd="git show --color --stat -p -U$context_lines $1 | delta --line-numbers --side-by-side"
+    echo $cmd
+    eval $cmd
+}
+
 
 alias update_all="snap refresh && flatpak update && sudo apt update"
 alias apts="apt search --names-only"
