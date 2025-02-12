@@ -52,6 +52,9 @@ alias gl="git log --color --pretty=format:'%C(yellow)%h %C(reset)%C(cyan)(%ar)%C
 alias gll="gl | head"
 alias gld="git log --color --date=short --stat -p"
 alias glh="git show --stat -p -U30 HEAD | delta --line-numbers"
+alias glhnl="git show --stat -p -U30 HEAD | delta"
+alias glhs="git show --stat -p -U30 HEAD | delta --line-numbers --side-by-side"
+alias glhsnl="git show --stat -p -U30 HEAD | delta --side-by-side"
 alias glhnl="git show --stat -p -U30 HEAD"
 alias glinl="git show --color --stat -p -U30 | "
 
