@@ -1,14 +1,10 @@
-alacritty:
-place in .config
 
-nvim:
-place in .config
 
-zshrc:
-place in home(~) directory
+# Installation
+1. Clone this repository
+2. Run the following:
+```
+stow -v -t ~ <cloned-repo-path>/stow-managed/
+```
 
-tmux:
-place in home(~) directory
-
-fonts:
-  linux: place in `.local/share/fonts`
+This will crete symlinks in your home directory to the dotfiles in the stow managed directory
