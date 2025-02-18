@@ -1,0 +1,9 @@
+[submodule "stow-managed/.tmux/plugins/tpm"]
+	path = stow-managed/.tmux/plugins/tpm
+	url = https://github.com/tmux-plugins/tpm
+[submodule "stow-managed/.tmux/plugins/tmux-resurrect"]
+	path = stow-managed/.tmux/plugins/tmux-resurrect
+	url = https://github.com/tmux-plugins/tmux-resurrect
+[submodule "stow-managed/.tmux/plugins/tmux2k"]
+	path = stow-managed/.tmux/plugins/tmux2k
+	url = https://github.com/2KAbhishek/tmux2k
