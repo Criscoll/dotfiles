@@ -1,0 +1,10 @@
+[Desktop Entry]
+Encoding=UTF-8
+Version=1.0
+Type=Application
+Terminal=false
+Exec=/home/cristian/Repos/alacritty/target/release/alacritty
+Name=Alacritty
+Icon=/home/cristian/.local/share/applications/icons/alacritty.jpeg
+MimeType=text/html;
+Keywords=Alacritty;alacritty;

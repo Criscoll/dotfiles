@@ -1,5 +1,8 @@
 
 
+
+
+
 # Installation
 1. Clone this repository
 2. Run the following (make sure gnu stow is installed)
@@ -18,6 +21,9 @@ This will crete symlinks in your home directory to the dotfiles in the stow mana
 ### Alacritty
 
 
+### ohmyzsh
+
+
 ### Tmux
 
 
@@ -27,3 +33,18 @@ To keep this aligned with the scripts, make sure you use the same remote name as
 script files.
 
 ### 
+
+
+
+# Stow Commands
+
+Create new symlinks in the -t directory from the stow package directory
+```
+stow -v -t ~ <cloned-repo-path>/stow-managed/
+```
+
+Move matching files that are not links or directories from -t to the stow package and then create
+the symlinks. Will override you stow directory files so make sure that it is in version control.
+```
+stow -v --adopt -t ~ <cloned-repo-path>/stow-managed/
+```
