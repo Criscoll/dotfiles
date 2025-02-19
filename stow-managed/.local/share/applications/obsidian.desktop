@@ -1,0 +1,9 @@
+[Desktop Entry]
+Encoding=UTF-8
+Version=1.0
+Type=Application
+Terminal=false
+Exec=/home/cristian/Applications/Obsidian-LATEST
+Name=Obsidian
+Icon=/home/cristian/Applications/icons/obsidian-icon.svg
+MimeType=x-scheme-handler/obsidian;text/html;

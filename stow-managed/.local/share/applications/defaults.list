@@ -1,0 +1,16 @@
+[Default Applications]
+text/x-makefile=lvim.desktop
+text/x-pascal=lvim.desktop
+text/x-java=org.gnome.gedit.desktop;lvim.desktop
+text/x-chdr=org.gnome.gedit.desktop;lvim.desktop
+text/x-c++=lvim.desktop
+text/x-c++src=ubuntusdk.desktop;lvim.desktop
+text/plain=org.gnome.gedit.desktop;lvim.desktop
+text/x-tcl=lvim.desktop
+text/english=lvim.desktop
+text/x-c++hdr=ubuntusdk.desktop;lvim.desktop
+text/x-tex=lvim.desktop
+text/x-moc=lvim.desktop
+text/x-csrc=org.gnome.gedit.desktop;lvim.desktop
+text/x-c=lvim.desktop
+application/x-shellscript=lvim.desktop

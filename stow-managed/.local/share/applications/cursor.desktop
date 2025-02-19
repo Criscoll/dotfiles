@@ -1,0 +1,10 @@
+[Desktop Entry]
+Encoding=UTF-8
+Version=1.0
+Type=Application
+Terminal=false
+Exec=/home/cristian/Applications/cursor-0.44.11x86_64.AppImage
+Name=Cursor
+Icon=/home/cristian/Applications/icons/cursor-ai-icon.png
+MimeType=text/html;
+Keywords=Cursor;CursorAI;
