@@ -2,3 +2,17 @@
 name = "python"
 language-servers = ["pylsp"]
 formatter = {command = 'black', args = ["--quiet", "-"]}
+
+[[language]]
+name = "javascript"
+language-servers = [
+  "typescript-language-server", # optional
+  "vscode-eslint-language-server",
+]
+
+[[language]]
+name = "typescript"
+language-servers = [
+  "typescript-language-server",
+  "vscode-eslint-language-server",
+]
