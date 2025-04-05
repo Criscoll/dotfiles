@@ -1,10 +1,14 @@
 #!/bin/bash
 
-echo "Timer started. Press Ctrl+C to stop."
+echo "Timer started."
+echo "Press 'p' to pause/resume, Ctrl+C to stop."
 echo ""
 
-# Store the start time
+# Store the start time and initialize variables
 start_time=$(date +%s)
+paused_time=0
+is_paused=false
+pause_start=0
 
 # Function to format time
 format_time() {
@@ -18,22 +22,61 @@ format_time() {
 # Function to handle exit
 cleanup() {
     local current_time=$(date +%s)
-    local elapsed_seconds=$((current_time - start_time))
-    local formatted_time=$(format_time $elapsed_seconds)
+    local total_elapsed=$elapsed_seconds
+    local formatted_time=$(format_time $total_elapsed)
     echo -e "\n\nTimer stopped. Total elapsed time: $formatted_time"
+    # Reset terminal settings
+    stty echo
     exit 0
 }
 
-# Register the cleanup function for Ctrl+C
-trap cleanup INT
+# Function to toggle pause state
+toggle_pause() {
+    if $is_paused; then
+        # Resume: calculate how long we were paused and add to total paused time
+        local current=$(date +%s)
+        paused_time=$((paused_time + current - pause_start))
+        is_paused=false
+        echo -e "\rTimer resumed                            "
+    else
+        # Pause: record when we paused
+        pause_start=$(date +%s)
+        is_paused=true
+        echo -e "\rTimer paused                             "
+    fi
+}
 
-# Loop to update the timer display
+# Set up terminal to capture keystrokes without requiring Enter
+stty -echo
+stty cbreak
+
+# Register the cleanup function for Ctrl+C and ensure terminal is reset
+trap cleanup INT
+trap 'stty echo; exit' TERM
+
+# Function to check for user input
+check_input() {
+    if read -t 0.1 -n 1 key; then
+        if [[ "$key" == "p" ]]; then
+            toggle_pause
+        fi
+    fi
+}
+
+# Main loop
 while true; do
-    current_time=$(date +%s)
-    elapsed_seconds=$((current_time - start_time))
-    formatted_time=$(format_time $elapsed_seconds)
+    # Check for key presses
+    check_input
     
-    # Clear the previous line and display the updated time
-    printf "\rElapsed time: %s" "$formatted_time"
-    sleep 1
+    # Only update time if not paused
+    if ! $is_paused; then
+        current_time=$(date +%s)
+        # Calculate elapsed time minus the time spent paused
+        elapsed_seconds=$((current_time - start_time - paused_time))
+        formatted_time=$(format_time $elapsed_seconds)
+        # Display time
+        printf "\rElapsed time: %s" "$formatted_time"
+    fi
+    
+    sleep 0.1
 done
