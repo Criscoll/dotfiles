@@ -7,3 +7,6 @@
 [submodule "stow-managed/.tmux/plugins/tmux2k"]
 	path = stow-managed/.tmux/plugins/tmux2k
 	url = https://github.com/2KAbhishek/tmux2k
+[submodule "stow-managed/powerlevel10k"]
+	path = stow-managed/powerlevel10k
+	url = https://github.com/romkatv/powerlevel10k.git
