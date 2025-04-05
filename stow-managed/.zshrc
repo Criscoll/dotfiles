@@ -36,7 +36,15 @@ export GOPATH="$HOME/.go/"
 
 alias open="xdg-open"
 
+# Color support
 alias lsr="ls -1tr"
+alias ls="ls --color=auto"
+alias l="ls -lah --color=auto"
+alias dir="dir --color=auto"
+alias vdir="vdir --color=auto"
+alias grep="grep --color=auto"
+alias fgrep="fgrep --color=auto"
+alias egrep="egrep --color=auto"
 
 # Git Aliases
 alias sgs="type sgs; stg status"
@@ -117,8 +125,12 @@ alias projects="type projects; cd /home/cristian/Repos/01_Projects"
 alias ,upload_notes="source /home/cristian/Scripts/upload.sh"
 alias ,download_notes="source /home/cristian/Scripts/download.sh"
 alias ,alacritty_new_window="type ,alacritty_new_window; alacritty msg create-window || alacritty"
+#
 # Then put source -> destination afterwards
 alias ,myrsync="type ,myrsync; rsync -avh --ignore-existing --info=progress2 --info=name0"
+
+# c stands for clipboard
+alias ,clipboard="xclip -selection clipboard <"
 
 function ,file_count() {
     for i in *; do
@@ -184,8 +196,6 @@ function ,pdfcompress_higherquality()
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-
 
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/home/cristian/.lmstudio/bin"
