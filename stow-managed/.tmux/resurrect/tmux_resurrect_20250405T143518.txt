@@ -1,0 +1,33 @@
+pane	7	1	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	8	1	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	devenv	1	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	devenv	2	0	:-	1	pop-os	:/home/cristian	1	zsh	:
+pane	devenv	3	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	environment	1	0	:-	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	environment	2	1	:*	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	monitoring	1	0	:-	1	pop-os	:/home/cristian	1	zsh	:
+pane	monitoring	2	1	:*	1	pop-os	:/home/cristian	0	zsh	:
+pane	monitoring	2	1	:*	2	pop-os	:/home/cristian	0	zsh	:
+pane	monitoring	2	1	:*	3	pop-os	:/home/cristian	1	zsh	:
+pane	monitoring	3	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	1	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	2	0	:	1	pop-os	:/home/cristian/Documents/Obsidian	1	nvim	:nvim .
+pane	notes	3	0	:-	1	pop-os	:/home/cristian	1	zsh	:
+pane	personal-analytics	1	1	:*	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics	1	zsh	:
+pane	photos	1	1	:*	1	pop-os	:/home/cristian/Repos	1	zsh	:
+window	7	1	:zsh	1	:*	62f4,319x74,0,0,15	:
+window	8	1	:zsh	1	:*	62f5,319x74,0,0,16	:
+window	devenv	1	:build 	0	:	c57e,319x74,0,0,1	off
+window	devenv	2	:git	0	:-	c57f,319x74,0,0,2	off
+window	devenv	3	:run	1	:*	c580,319x74,0,0,3	off
+window	environment	1	:download/upload-sync	0	:-	c581,319x74,0,0,4	off
+window	environment	2	:update	1	:*	c582,319x74,0,0,5	off
+window	monitoring	1	:htop	0	:-	c583,319x74,0,0,6	off
+window	monitoring	2	:nvtop-GPU	1	:*	93b2,319x74,0,0{159x74,0,0,7,159x74,160,0[159x36,160,0,8,159x37,160,37,9]}	off
+window	monitoring	3	:timetrap	0	:	62ef,319x74,0,0,10	off
+window	notes	1	:cli	1	:*	62f0,319x74,0,0,11	off
+window	notes	2	:notes	0	:	62f1,319x74,0,0,12	off
+window	notes	3	:zsh	0	:-	62f6,319x74,0,0,17	:
+window	personal-analytics	1	:nvim	1	:*	62f2,319x74,0,0,13	off
+window	photos	1	:cli	1	:*	62f3,319x74,0,0,14	off
+state	notes	photos
