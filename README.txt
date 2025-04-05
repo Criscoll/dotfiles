@@ -43,8 +43,18 @@ Create new symlinks in the -t directory from the stow package directory
 stow -v -t ~ <cloned-repo-path>/stow-managed/
 ```
 
+Simulate changes before applying them
+```
+stow -v -t ~ <cloned-repo-path>/stow-managed/ --simulate
+```
+
 Move matching files that are not links or directories from -t to the stow package and then create
 the symlinks. Will override you stow directory files so make sure that it is in version control.
 ```
 stow -v --adopt -t ~ <cloned-repo-path>/stow-managed/
+```
+
+Simulate changes before applying them
+```
+stow -v --adopt -t ~ <cloned-repo-path>/stow-managed/ --simulate
 ```
