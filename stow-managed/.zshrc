@@ -34,6 +34,9 @@ export GOPATH="$HOME/.go/"
 
 ## ------------------------- Aliases -----------------------------
 
+bindkey "^[[1;5D" backward-word    # Ctrl+left arrow
+bindkey "^[[1;5C" forward-word     # Ctrl+right arrow
+
 alias open="xdg-open"
 
 # Color support
@@ -47,8 +50,8 @@ alias fgrep="fgrep --color=auto"
 alias egrep="egrep --color=auto"
 
 # Git Aliases
-alias sgs="type sgs; stg status"
-alias sgss="type sgss; stg series; git status"
+alias sgs="stg series"
+alias sgss="stg series; git status"
 alias sgra="type sgra; git add .; stg refresh"
 alias sgp="type sgp; stg pop --all; sgss; git pull --rebase"
 alias gp="git pull --rebase"
@@ -109,7 +112,6 @@ function glis() {
 alias update_all="snap refresh && flatpak update && sudo apt update"
 alias apts="apt search --names-only"
 alias ,rg_max_columns="rg --hidden --max-columns 100"
-alias python="python3"
 alias py="python3"
 
 alias gcalcli_activate="source ~/Repos/gcalcli/venv/bin/activate"
