@@ -12,6 +12,29 @@ source ~/powerlevel10k/powerlevel10k.zsh-theme
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
+# Completion styling
+zstyle ':completion:*' menu select
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+autoload -Uz compinit
+compinit
+
+# ====================== History Settings ===================
+#
+# History settings for sharing between sessions
+setopt SHARE_HISTORY          # Share history between all sessions
+setopt INC_APPEND_HISTORY     # Add commands as they are typed, not at shell exit
+setopt HIST_EXPIRE_DUPS_FIRST # Expire duplicate entries first
+setopt HIST_IGNORE_DUPS       # Don't record duplicate commands
+setopt HIST_IGNORE_ALL_DUPS   # Remove older duplicate commands from history
+setopt HIST_FIND_NO_DUPS      # Do not display duplicates when searching
+setopt HIST_IGNORE_SPACE      # Don't record commands starting with a space
+setopt HIST_SAVE_NO_DUPS      # Don't write duplicate entries to history file
+
+# Set history size
+HISTSIZE=10000
+SAVEHIST=10000
+HISTFILE=~/.zsh_history      # Make sure this path is consistent
+
 ## ------------------------- Environment Variables -----------------------------
 
 export PATH="$HOME/Repos/tmux:$PATH"
