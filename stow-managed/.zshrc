@@ -57,9 +57,13 @@ export GOPATH="$HOME/.go/"
 
 ## ------------------------- Aliases -----------------------------
 
-bindkey "^[[1;5D" backward-word    # Ctrl+left arrow
-bindkey "^[[1;5C" forward-word     # Ctrl+right arrow
+# Option+arrows for word jumping
+bindkey "^[[1;3D" backward-word     # Option+left
+bindkey "^[[1;3C" forward-word      # Option+right
 
+# Ctrl+arrows for line start/end
+bindkey "^[[1;5D" beginning-of-line # Ctrl+left
+bindkey "^[[1;5C" end-of-line       # Ctrl+right
 alias open="xdg-open"
 
 # Color support
