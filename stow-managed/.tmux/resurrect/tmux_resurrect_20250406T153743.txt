@@ -1,0 +1,38 @@
+pane	devenv	1	0	:	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics	1	nvim	:nvim .gitignore
+pane	devenv	2	1	:*	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics	1	zsh	:
+pane	devenv	3	0	:-	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver	0	zsh	:
+pane	devenv	3	0	:-	2	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver/notebooks	1	zsh	:
+pane	devenv	4	0	:	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics	1	python3	:/home/cristian/.local/share/uv/tools/aider-chat/bin/python3 /home/cristian/.local/bin/aider --model openrouter/deepseek/deepseek-r1 --cache-prompts --thinking-tokens 20k
+pane	devenv	5	0	:	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics	1	zsh	:
+pane	environment	1	0	:-	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	environment	2	1	:*	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	monitoring	1	0	:-	1	pop-os	:/home/cristian	1	zsh	:
+pane	monitoring	2	1	:*	1	pop-os	:/home/cristian	0	zsh	:
+pane	monitoring	2	1	:*	2	pop-os	:/home/cristian	0	zsh	:
+pane	monitoring	2	1	:*	3	pop-os	:/home/cristian	1	zsh	:
+pane	monitoring	3	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	1	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	2	0	:-	1	pop-os	:/home/cristian/Documents/Obsidian	1	nvim	:nvim .
+pane	personal-analytics	1	1	:*	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver	1	nvim	:nvim .
+pane	photos	1	1	:*	1	pop-os	:/home/cristian/Repos	1	zsh	:
+pane	utils	1	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	utils	2	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	utils	3	0	:-	1	pop-os	:/home/cristian/Documents/Obsidian/06_Boxes/Stash/Reactions	1	zsh	:
+window	devenv	1	:build 	0	:	c57e,319x74,0,0,1	off
+window	devenv	2	:git	1	:*	ab8f,179x138,0,0,2	off
+window	devenv	3	:run	0	:-	f522,179x138,0,0[179x69,0,0,3,179x68,0,70,4]	off
+window	devenv	4	:aider	0	:	ab92,179x138,0,0,5	off
+window	devenv	5	:aider-history	0	:	d5f7,179x138,0,0,20	off
+window	environment	1	:download/upload-sync	0	:-	c583,319x74,0,0,6	off
+window	environment	2	:update	1	:*	c584,319x74,0,0,7	off
+window	monitoring	1	:htop	0	:-	c585,319x74,0,0,8	off
+window	monitoring	2	:nvtop-GPU	1	:*	e5bf,319x74,0,0{159x74,0,0,9,159x74,160,0[159x36,160,0,10,159x37,160,37,11]}	off
+window	monitoring	3	:timetrap	0	:	62f1,319x74,0,0,12	off
+window	notes	1	:cli	1	:*	55fa,179x138,0,0,13	off
+window	notes	2	:notes	0	:-	55fb,179x138,0,0,14	off
+window	personal-analytics	1	:nvim	1	:*	68f4,319x77,0,0,15	off
+window	photos	1	:cli	1	:*	55fd,179x138,0,0,16	off
+window	utils	1	:python-calculator	0	:	62f6,319x74,0,0,17	off
+window	utils	2	:timer	1	:*	55ff,179x138,0,0,18	off
+window	utils	3	:reac	0	:-	5600,179x138,0,0,19	off
+state	utils	notes
