@@ -43,9 +43,9 @@ export PATH="$HOME/Applications/nvim-linux64/bin:$PATH"
 export PATH="$HOME/Applications/helix:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
-export PATH="$HOME/.go/bin:$PATH"
 export PATH="$HOME/Applications/llama_cpp/build/bin:$PATH"
 export PATH="/usr/local/cuda-12/bin:$PATH"
+export PATH=$PATH:/usr/local/go/bin
 
 ## pnpm
 export PNPM_HOME="/home/cristian/.local/share/pnpm"
@@ -187,15 +187,6 @@ function ,aptsearch() {
   apt-cache search --names-only "^$1" | fzf --preview "echo {} | awk '{print \$1}' | xargs -I % apt-cache show % | grep -E 'Description|Package'"
 }
 
-function ,fzf_rg_select() {
-	local file file=$(rg --files | fzf)
-	if [[ -n $file ]]; then
-		BUFFER+="$file"
-		CURSOR=$#BUFFER
-	fi
-}
-zle -N fzf_rg_select
-bindkey '^T' fzf_rg_select
 
 
 function ,pdfcompress() {
@@ -220,6 +211,20 @@ function ,pdfcompress_higherquality()
 ## _________________FZF__________________
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
+# Set up fzf key bindings and fuzzy completion
+source <(fzf --zsh)
+
+function fzf_rg_select() {
+	local file file=$(rg --files | fzf)
+	if [[ -n $file ]]; then
+		BUFFER+="$file"
+		CURSOR=$#BUFFER
+	fi
+}
+zle -N fzf_rg_select
+bindkey '^T' fzf_rg_select
+
+export FZF_DEFAULT_COMMAND='rg --files'
 
 ## _______________NVM__________________
 export NVM_DIR="$HOME/.nvm"
@@ -228,3 +233,5 @@ export NVM_DIR="$HOME/.nvm"
 
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/home/cristian/.lmstudio/bin"
+
+source ~/.zshrc.local
