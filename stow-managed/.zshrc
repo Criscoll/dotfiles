@@ -135,6 +135,61 @@ function glis() {
     eval $cmd
 }
 
+function ,gli_range() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: ,gli_range <commit-hash-start> [<commit-hash-end>] [<context-lines>]"
+        return 1
+    fi
+
+    local start_commit="$1"
+    local end_commit="HEAD"
+    local context_lines=30
+
+    # Handle second parameter (end commit)
+    if [[ -n "$2" ]]; then
+        end_commit="$2"
+    fi
+
+    # Handle third parameter (context lines)
+    if [[ -n "$3" ]]; then
+        context_lines="$3"
+    fi
+
+    # Create the commit range
+    local commit_range="${start_commit}..${end_commit}"
+
+    cmd="git log --color --stat -p -U${context_lines} ${commit_range} | delta --line-numbers"
+    echo $cmd
+    eval $cmd
+}
+
+function ,glis_range() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: ,gli_range <commit-hash-start> [<commit-hash-end>] [<context-lines>]"
+        return 1
+    fi
+
+    local start_commit="$1"
+    local end_commit="HEAD"
+    local context_lines=30
+
+    # Handle second parameter (end commit)
+    if [[ -n "$2" ]]; then
+        end_commit="$2"
+    fi
+
+    # Handle third parameter (context lines)
+    if [[ -n "$3" ]]; then
+        context_lines="$3"
+    fi
+
+    # Create the commit range
+    local commit_range="${start_commit}..${end_commit}"
+
+    cmd="git log --color --stat -p -U${context_lines} ${commit_range} | delta --line-numbers --side-by-side"
+    echo $cmd
+    eval $cmd
+}
 
 alias update_all="snap refresh && flatpak update && sudo apt update"
 alias apts="apt search --names-only"
