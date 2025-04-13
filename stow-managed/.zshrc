@@ -205,6 +205,9 @@ alias workbench="type tasks; cd /home/cristian/Documents/Obsidian/02_Workbench/"
 alias tasks="type tasks; cd /home/cristian/Documents/Obsidian/02_Workbench/02_Tasks"
 alias projects="type projects; cd /home/cristian/Repos/01_Projects"
 
+alias ,jupytext-ipynb-to-py="jupytext --set-formats ipynb,py:percent *.py"
+alias ,jupytext-py-to-ipynb="jupytext --set-formats ipynb,py:percent *.ipynb"
+
 ## ------------------------- Utils -----------------------------
 alias ,upload_notes="source /home/cristian/Scripts/upload.sh"
 alias ,download_notes="source /home/cristian/Scripts/download.sh"
