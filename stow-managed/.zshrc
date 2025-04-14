@@ -54,6 +54,8 @@ export PNPM_HOME="/home/cristian/.local/share/pnpm"
 
 export GOPATH="$HOME/.go/"
 
+export TERM="tmux-256color"
+
 
 ## ------------------------- Aliases -----------------------------
 
