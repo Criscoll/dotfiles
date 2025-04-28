@@ -39,7 +39,7 @@ HISTFILE=~/.zsh_history      # Make sure this path is consistent
 
 export PATH="$HOME/Repos/tmux:$PATH"
 export PATH="$HOME/Repos/alacritty/target/release:$PATH"
-export PATH="$HOME/Applications/nvim-linux64/bin:$PATH"
+export PATH="$HOME/Applications/nvim-linux-x86_64/bin:$PATH"
 export PATH="$HOME/Applications/helix:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
