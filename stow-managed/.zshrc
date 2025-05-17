@@ -217,6 +217,7 @@ alias ,alacritty_new_window="type ,alacritty_new_window; alacritty msg create-wi
 #
 # Then put source -> destination afterwards
 alias ,myrsync="type ,myrsync; rsync -avh --ignore-existing --info=progress2 --info=name0"
+alias ,myrsync_dryrun="type ,myrsync_dryrun; rsync -avh --dry-run -i --ignore-existing --info=progress2 --info=name0"
 
 # c stands for clipboard
 alias ,clipboard="xclip -selection clipboard <"

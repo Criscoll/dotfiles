@@ -1,0 +1,56 @@
+pane	devenv	1	0	:-	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver	1	zsh	:
+pane	devenv	2	0	:Z	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver	1	zsh	:
+pane	devenv	2	0	:Z	2	pop-os	:/home/cristian	0	nvim	:nvim .gitconfig
+pane	devenv	3	0	:	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver	0	zsh	:
+pane	devenv	3	0	:	2	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver/notebooks	1	zsh	:
+pane	devenv	4	0	:	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics	1	zsh	:
+pane	devenv	5	0	:	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics	1	zsh	:
+pane	devenv	6	0	:	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver/resources/gdrive_data	1	zsh	:
+pane	devenv	7	1	:*	1	pop-os	:/home/cristian/Downloads	0	zsh	:
+pane	devenv	7	1	:*	2	pop-os	:/home/cristian	1	zsh	:
+pane	environment	1	0	:-	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	environment	2	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	1	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	1	1	:*	2	pop-os	:/home/cristian	0	zsh	:
+pane	notes	2	0	:-	1	pop-os	:/home/cristian/Documents/Obsidian	1	nvim	:nvim .
+pane	notes	3	0	:	1	pop-os	:/home/cristian	1	bash	:/bin/bash /home/cristian/bin/,timer
+pane	notes	4	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	nvim	1	0	:-	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver/src	1	nvim	:nvim .
+pane	nvim	2	0	:	1	pop-os	:/home/cristian/Repos/01_Projects/moneyanalysis/src	1	nvim	:nvim .
+pane	nvim	3	1	:*	1	pop-os	:/home/cristian/Repos/01_Projects/personal-analytics/webserver	1	zsh	:
+pane	photos	1	1	:*	1	pop-os	:/home/cristian/Media/01_Photography/new_zealand_2025/DEST	0	zsh	:
+pane	photos	1	1	:*	2	pop-os	:/home/cristian/Media/01_Photography/new_zealand_2025	1	zsh	:
+pane	photos	2	0	:	1	pop-os	:/home/cristian/Repos	1	zsh	:
+pane	photos	3	0	:	1	pop-os	:/home/cristian/Applications	1	zsh	:
+pane	photos	4	0	:-	1	pop-os	:/media/cristian/BFFB-71A7/DCIM/100CANON	1	zsh	:
+pane	utils	1	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	utils	2	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	utils	3	0	:-	1	pop-os	:/home/cristian/Documents/Obsidian/06_Boxes/Stash/Reactions	1	zsh	:
+pane	utils	4	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	utils	5	0	:	1	pop-os	:/home/cristian	1	zsh	:
+window	devenv	1	:build 	0	:-	c63e,159x74,0,0,1	off
+window	devenv	2	:git	0	:Z	a9e2,159x74,0,0{79x74,0,0,2,79x74,80,0,3}	off
+window	devenv	3	:run	0	:	b88c,159x74,0,0[159x37,0,0,4,159x36,0,38,5]	off
+window	devenv	4	:aider	0	:	c643,159x74,0,0,6	off
+window	devenv	5	:aider-history	0	:	c644,159x74,0,0,7	off
+window	devenv	6	:file-view	0	:	c645,159x74,0,0,8	off
+window	devenv	7	:zsh	1	:*	5555,159x74,0,0{79x74,0,0,9,79x74,80,0,10}	:
+window	environment	1	:download/upload-sync	0	:-	6350,159x74,0,0,11	off
+window	environment	2	:update	1	:*	6351,159x74,0,0,12	off
+window	notes	1	:cli	1	:*	0f8c,319x74,0,0{159x74,0,0,13,159x74,160,0,14}	off
+window	notes	2	:notes	0	:-	62f4,319x74,0,0,15	off
+window	notes	3	:timer	0	:	62f5,319x74,0,0,16	off
+window	notes	4	:zsh	0	:	e2f8,319x74,0,0,29	:
+window	nvim	1	:nvim	0	:-	6356,159x74,0,0,17	off
+window	nvim	2	:nvim-old-finances	0	:	6357,159x74,0,0,18	off
+window	nvim	3	:zsh	1	:*	6358,159x74,0,0,19	:
+window	photos	1	:media	1	:*	8f89,319x74,0,0{159x74,0,0,20,159x74,160,0,21}	off
+window	photos	2	:drives	0	:	e2f1,319x74,0,0,22	off
+window	photos	3	:darktable	0	:	e352,159x74,0,0,23	off
+window	photos	4	:external-drives	0	:-	62f1,319x74,0,0,31	off
+window	utils	1	:python-calculator	0	:	e353,159x74,0,0,24	off
+window	utils	2	:timer	1	:*	e354,159x74,0,0,25	off
+window	utils	3	:reac	0	:-	e355,159x74,0,0,26	off
+window	utils	4	:htop	0	:	e356,159x74,0,0,27	off
+window	utils	5	:nvtop	0	:	e357,159x74,0,0,28	off
+state	notes	photos
