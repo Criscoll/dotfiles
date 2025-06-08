@@ -4,3 +4,4 @@ source cristiand2021@gmail.com.muttrc
 source color.muttrc
 macro index,pager i1 '<sync-mailbox><enter-command>source /home/cristian/.config/mutt/accounts/cristiand2021@gmail.com.muttrc<enter><change-folder>!<enter>;<check-stats>' "switch to cristiand2021@gmail.com"
 set header_cache_backend = "lmdb"
+set read_only = yes
