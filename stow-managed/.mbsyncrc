@@ -1,0 +1,24 @@
+IMAPStore cristiand2021@gmail.com-remote
+Host imap.gmail.com
+Port 993
+User cristiand2021@gmail.com
+PassCmd "pass cristiand2021@gmail.com"
+AuthMechs LOGIN
+SSLType IMAPS
+CertificateFile /etc/ssl/certs/ca-certificates.crt
+
+MaildirStore cristiand2021@gmail.com-local
+Subfolders Verbatim
+Path /home/cristian/snap/neomutt/current/Mail/cristiand2021@gmail.com/
+Inbox /home/cristian/snap/neomutt/current/Mail/cristiand2021@gmail.com/INBOX
+
+Channel cristiand2021@gmail.com
+Expunge Both
+Master :cristiand2021@gmail.com-remote:
+Slave :cristiand2021@gmail.com-local:
+Patterns * !"[Gmail]/All Mail" !"*fts-flatcurve*" !"*virtual*"
+Create Both
+SyncState *
+MaxMessages 0
+ExpireUnread no
+# End profile
