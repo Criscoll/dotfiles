@@ -1,0 +1,11 @@
+account cristiand2021@gmail.com
+host smtp.gmail.com
+port 465
+from cristiand2021@gmail.com
+user cristiand2021@gmail.com
+passwordeval "pass cristiand2021@gmail.com"
+auth on
+tls on
+tls_trust_file	/etc/ssl/certs/ca-certificates.crt
+logfile /home/cristian/.local/state/msmtp/msmtp.log
+tls_starttls off
