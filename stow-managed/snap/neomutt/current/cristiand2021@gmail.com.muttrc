@@ -1,0 +1,23 @@
+# vim: filetype=neomuttrc
+# muttrc file for account cristiand2021@gmail.com
+set real_name = "cristian"
+set from = "cristiand2021@gmail.com"
+set sendmail = "msmtp -a cristiand2021@gmail.com"
+alias me cristiand2021 <cristiand2021@gmail.com>
+set mbox_type = Maildir
+set hostname = "gmail.com"
+set postponed = "+Drafts"
+set trash = "+Trash"
+set record = "+Sent"
+
+set header_cache = "mutt-wizard/cristiand2021_gmail.com/headers"
+set message_cachedir = "mutt-wizard/cristiand2021_gmail.com/bodies"
+
+macro index o "<shell-escape>mailsync cristiand2021@gmail.com<enter>" "sync cristiand2021@gmail.com"
+
+source "mutt-wizard/switch.muttrc"
+
+set folder = "/home/cristian/snap/neomutt/current/Mail/cristiand2021@gmail.com"
+set spoolfile = "+INBOX"
+mailboxes `./tree ./Mail/cristiand2021@gmail.com -l -d -I "Archive|cur|new|tmp|certs|.notmuch|INBOX|\[Gmail\]" -afin --noreport | awk '{if(NR>1) {gsub(/^\.\/Mail\/cristiand2021@gmail\.com\//, ""); print "\"+" $0 "\""}}' | tr '\n' ' '`
+
