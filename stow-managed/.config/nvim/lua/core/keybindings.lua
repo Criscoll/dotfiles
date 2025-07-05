@@ -71,8 +71,49 @@ function ToggleCheckbox()
     vim.fn.setline(line, text)
 end
 
+function ToggleStrikethrough()
+    local line = vim.fn.line('.')
+    local text = vim.fn.getline(line)
+
+    -- Check if the line starts with a checkbox pattern
+    local checkbox_pattern = "^(%s*%-%s%[%s*[X%s]*%s*%]%s*)"
+    local checkbox_prefix = string.match(text, checkbox_pattern)
+
+    if checkbox_prefix then
+        -- Extract the text after the checkbox
+        local content = string.sub(text, string.len(checkbox_prefix) + 1)
+
+        -- Toggle strikethrough on the content only
+        if string.match(content, "^~.*~$") then
+            -- Remove strikethrough
+            content = string.gsub(content, "^~(.*)~$", "%1")
+        else
+            -- Add strikethrough
+            content = "~" .. content .. "~"
+        end
+
+        -- Reconstruct the line
+        text = checkbox_prefix .. content
+    else
+        -- No checkbox, toggle strikethrough on entire line
+        if string.match(text, "^~.*~$") then
+            -- Remove strikethrough
+            text = string.gsub(text, "^~(.*)~$", "%1")
+        else
+            -- Add strikethrough
+            text = "~" .. text .. "~"
+        end
+    end
+
+    -- Set the modified line
+    vim.fn.setline(line, text)
+end
+
 -- Keybinding for toggling checkbox
 vim.api.nvim_set_keymap('n', '<leader>c', [[:lua ToggleCheckbox()<CR>]], { noremap = true, silent = true })
+
+-- Keybinding for toggling strikethrough
+vim.api.nvim_set_keymap('n', '<leader>s', [[:lua ToggleStrikethrough()<CR>]], { noremap = true, silent = true })
 
 
 vim.api.nvim_create_user_command('ReloadConfig', function()
