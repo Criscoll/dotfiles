@@ -105,6 +105,9 @@ alias glhsnl="git show --stat -p -U30 HEAD | delta --side-by-side"
 alias glhnl="git show --stat -p -U30 HEAD"
 alias glinl="git show --color --stat -p -U30"
 
+alias bat="batcat"
+alias fd="fdfind"
+
 function gli() {
     if [[ -z "$1" ]]; then
         echo "Usage: gli <commit-hash>"
