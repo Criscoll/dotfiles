@@ -79,7 +79,7 @@ alias fgrep="fgrep --color=auto"
 alias egrep="egrep --color=auto"
 
 # Tool Aliases
-alias bat="batcat"
+alias bat="bat"
 alias fd="fdfind"
 
 # Git Aliases
