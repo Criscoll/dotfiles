@@ -78,6 +78,10 @@ alias grep="grep --color=auto"
 alias fgrep="fgrep --color=auto"
 alias egrep="egrep --color=auto"
 
+# Tool Aliases
+alias bat="batcat"
+alias fd="fdfind"
+
 # Git Aliases
 alias sgs="stg series"
 alias sgss="stg series; git status"
@@ -97,16 +101,19 @@ alias gds="git diff --stat -p | delta --side-by-side"
 alias gla="git log --oneline --graph"
 alias gl="git log --color --pretty=format:'%C(yellow)%h %C(reset)%C(cyan)(%ar)%C(reset) %C(white)%s - %C(reset)%C(green)%an%C(reset)'"
 alias gll="gl | head"
+alias gllm="gl --author='Cristian Bernal'| head"
+alias glm="gl --author='Cristian Bernal'"
 alias gld="git log --color --date=short --stat -p"
 alias glh="git show --stat -p -U30 HEAD | delta --line-numbers"
+alias glhf="git show --name-only HEAD"
 alias glhnl="git show --stat -p -U30 HEAD | delta"
 alias glhs="git show --stat -p -U30 HEAD | delta --line-numbers --side-by-side"
 alias glhsnl="git show --stat -p -U30 HEAD | delta --side-by-side"
 alias glhnl="git show --stat -p -U30 HEAD"
 alias glinl="git show --color --stat -p -U30"
-
-alias bat="batcat"
-alias fd="fdfind"
+alias glif="git show --name-only"
+alias gbl="git blame -w -M -C"
+alias grh="git restore --source=HEAD^ --"
 
 function gli() {
     if [[ -z "$1" ]]; then
