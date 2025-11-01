@@ -1,0 +1,59 @@
+pane	devenv	1	0	:-	1	pop-os	:/home/cristian	1	zsh	:
+pane	devenv	2	0	:Z	1	pop-os	:/home/cristian	1	zsh	:
+pane	devenv	2	0	:Z	2	pop-os	:/home/cristian	0	nvim	:nvim .gitconfig
+pane	devenv	3	0	:	1	pop-os	:/home/cristian	0	zsh	:
+pane	devenv	3	0	:	2	pop-os	:/home/cristian	1	zsh	:
+pane	devenv	4	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	devenv	5	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	devenv	6	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	devenv	7	1	:*	1	pop-os	:/home/cristian/Downloads	0	zsh	:
+pane	devenv	7	1	:*	2	pop-os	:/home/cristian	1	zsh	:
+pane	environment	1	0	:-	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	environment	2	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	notes	1	1	:*	1	pop-os	:/home/cristian/Repos/dotfiles/stow-managed/Scripts	1	zsh	:zsh
+pane	notes	1	1	:*	2	✳ Greeting Started	:/home/cristian/Repos/01_Projects/TrainTracker	0	zsh	:
+pane	notes	1	1	:*	3	pop-os	:/home/cristian	0	nvim	:nvim litellm_config.yaml
+pane	notes	2	0	:-	1	pop-os	:/home/cristian/Documents/Obsidian	1	nvim	:nvim .
+pane	notes	3	0	:	1	pop-os	:/home/cristian	1	bash	:/bin/bash /home/cristian/bin/,timer
+pane	notes	4	0	:	1	pop-os	:/home/cristian	1	zsh	:zsh
+pane	notes	5	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	nvim	1	0	:-	1	pop-os	:/home/cristian	1	nvim	:nvim .
+pane	nvim	2	0	:	1	pop-os	:/home/cristian	1	nvim	:nvim .
+pane	nvim	3	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	photos	1	1	:*	1	pop-os	:/home/cristian	0	zsh	:
+pane	photos	1	1	:*	2	pop-os	:/home/cristian	1	zsh	:
+pane	photos	2	0	:	1	pop-os	:/home/cristian/Repos	1	zsh	:
+pane	photos	3	0	:	1	pop-os	:/home/cristian/Applications	1	zsh	:
+pane	photos	4	0	:-	1	pop-os	:/home/cristian	1	zsh	:
+pane	utils	1	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	utils	2	1	:*	1	pop-os	:/home/cristian	1	zsh	:
+pane	utils	3	0	:-	1	pop-os	:/home/cristian/Documents/Obsidian/06_Boxes/Stash/Reactions	1	zsh	:
+pane	utils	4	0	:	1	pop-os	:/home/cristian	1	zsh	:
+pane	utils	5	0	:	1	pop-os	:/home/cristian	1	zsh	:
+window	devenv	1	:build 	0	:-	c1de,239x54,0,0,1	off
+window	devenv	2	:git	0	:Z	4f09,239x54,0,0{119x54,0,0,2,119x54,120,0,3}	off
+window	devenv	3	:run	0	:	9333,239x54,0,0[239x27,0,0,4,239x26,0,28,5]	off
+window	devenv	4	:aider	0	:	c1e3,239x54,0,0,6	off
+window	devenv	5	:aider-history	0	:	c1e4,239x54,0,0,7	off
+window	devenv	6	:file-view	0	:	c1e5,239x54,0,0,8	off
+window	devenv	7	:zsh	1	:*	27de,239x54,0,0{119x54,0,0,9,119x54,120,0,10}	:
+window	environment	1	:download/upload-sync	0	:-	6120,239x54,0,0,11	off
+window	environment	2	:update	1	:*	6121,239x54,0,0,12	off
+window	notes	1	:cli	1	:*	8746,239x54,0,0{79x54,0,0,13,79x54,80,0,31,79x54,160,0,14}	off
+window	notes	2	:notes	0	:-	6124,239x54,0,0,15	off
+window	notes	3	:timer	0	:	6125,239x54,0,0,16	off
+window	notes	4	:zsh	0	:	6126,239x54,0,0,17	:
+window	notes	5	:cli_2	0	:	6122,239x54,0,0,32	off
+window	nvim	1	:nvim	0	:-	6127,239x54,0,0,18	off
+window	nvim	2	:nvim-old-finances	0	:	6128,239x54,0,0,19	off
+window	nvim	3	:zsh	1	:*	e11f,239x54,0,0,20	:
+window	photos	1	:media	1	:*	68fa,239x54,0,0{119x54,0,0,21,119x54,120,0,22}	off
+window	photos	2	:drives	0	:	e122,239x54,0,0,23	off
+window	photos	3	:darktable	0	:	e123,239x54,0,0,24	off
+window	photos	4	:external-drives	0	:-	e124,239x54,0,0,25	off
+window	utils	1	:python-calculator	0	:	e125,239x54,0,0,26	off
+window	utils	2	:timer	1	:*	e126,239x54,0,0,27	off
+window	utils	3	:reac	0	:-	e127,239x54,0,0,28	off
+window	utils	4	:htop	0	:	e128,239x54,0,0,29	off
+window	utils	5	:nvtop	0	:	6120,239x54,0,0,30	off
+state	notes	photos
