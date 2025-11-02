@@ -18,6 +18,13 @@ vim.opt.autoindent = true
 -- local config_path = vim.fn.stdpath('config')
 -- package.path = package.path .. ';' .. config_path .. '/?.lua;' .. config_path .. '/?/init.lua'
 
+vim.api.nvim_create_autocmd({ "FileType" }, {
+  pattern = { "markdown", "text" },
+  callback = function()
+    vim.opt_local.spell = true
+    vim.opt_local.spelllang = { "en_au" }
+  end,
+})
 
 -- Load in keybindings
 require("core")
