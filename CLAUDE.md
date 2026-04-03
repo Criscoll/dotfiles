@@ -26,6 +26,22 @@ stow -v -t ~ ~/Repos/dotfiles/stow-managed/
 
 This makes the repo the single source of truth. Files like `~/.zshrc` and `~/.tmux.conf` are symlinks back into this repo.
 
+**Always simulate before applying.** Run stow with `--simulate` first to preview what it will do and catch conflicts before they happen:
+```bash
+stow -v --simulate -t ~ ~/Repos/dotfiles/stow-managed/
+```
+
+## What Must Never Be Committed
+
+This repo is version-controlled and potentially synced across machines — **never commit sensitive or runtime-specific data.** Before staging any changes, verify that no file contains:
+
+- **Credentials or secrets** — API keys, tokens, passwords, `.credentials.json`
+- **Shell history** — `.zsh_history`, `.bash_history`
+- **Runtime state** — session data, plans, todos, cache, debug output
+- **Machine-specific private data** — anything that should stay in a `.local` file
+
+If in doubt, use a `.local` file (untracked) rather than the shared config. The `.gitignore` should be kept up to date to prevent accidental commits of these file types.
+
 ## Tool Stack
 
 - **Shell**: Zsh + Powerlevel10k

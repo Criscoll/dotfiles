@@ -1,0 +1,14 @@
+{
+  "alwaysThinkingEnabled": true,
+  "statusLine": {
+    "type": "command",
+    "command": "bash /home/cristian/.claude/statusline-command.sh"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(ls *)",
+      "Bash(rg *)",
+      "Bash(fd *)"
+    ]
+  }
+}
