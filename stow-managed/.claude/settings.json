@@ -1,5 +1,6 @@
 {
   "alwaysThinkingEnabled": true,
+  "effortLevel": "high",
   "statusLine": {
     "type": "command",
     "command": "bash /home/cristian/.claude/statusline-command.sh"
