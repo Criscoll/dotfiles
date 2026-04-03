@@ -28,6 +28,7 @@ dotfiles/
 │   └── .local/share/
 │       ├── fonts/       # Nerd Fonts and Powerline fonts
 │       └── nvim/        # Neovim data files
+├── .claude/             # Claude Code config (user-scope CLAUDE.md, design docs)
 ├── aider/               # Aider AI pair programmer config
 ├── vscode/              # VS Code settings (copied manually)
 ├── darktable/           # DarkTable photo editor config
