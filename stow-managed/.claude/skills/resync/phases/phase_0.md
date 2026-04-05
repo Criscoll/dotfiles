@@ -64,6 +64,48 @@ This file persists across context compaction. Append all findings to it as you w
 
 ---
 
+## Step 4: Version Check
+
+The README contains a **Tool Stack** table with the versions this config was last tested against. Check what is installed locally and compare.
+
+For each tool in the table, run the version command below and note the output:
+
+| Tool | Version command |
+|------|----------------|
+| zsh | `zsh --version` |
+| alacritty | `alacritty --version 2>/dev/null` |
+| tmux | `tmux -V 2>/dev/null` |
+| neovim | `nvim --version 2>/dev/null \| head -1` |
+| helix | `hx --version 2>/dev/null` |
+| delta | `delta --version 2>/dev/null` |
+| fzf | `fzf --version 2>/dev/null` |
+| ripgrep | `rg --version 2>/dev/null \| head -1` |
+| rclone | `rclone --version 2>/dev/null \| head -1` |
+| mbsync | `mbsync --version 2>/dev/null` |
+| msmtp | `msmtp --version 2>/dev/null \| head -1` |
+
+For each tool, classify the result as:
+- `CURRENT` — installed version matches or is newer than the README version
+- `OUTDATED` — installed version is older than the README version
+- `NOT_INSTALLED` — command not found or produced no output
+
+Skip classification for tools where the README version cell shows `—`.
+
+Append a version status table to `/tmp/resync-audit.md`:
+
+```
+## Tool Version Check
+
+| Tool | README version | Installed version | Status |
+|------|----------------|-------------------|--------|
+| zsh | ... | ... | CURRENT / OUTDATED / NOT_INSTALLED |
+...
+```
+
+**Present this table to the user.** For any `OUTDATED` tool, note that the installed version may not be compatible with the current config. For any `NOT_INSTALLED` tool, note that the tool is absent from this machine and its associated config will have nothing to target.
+
+---
+
 ## Next
 
 ```bash
