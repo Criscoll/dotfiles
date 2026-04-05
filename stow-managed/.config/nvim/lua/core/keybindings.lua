@@ -106,8 +106,30 @@ function ToggleStrikethrough()
     vim.fn.setline(line, text)
 end
 
+function ToggleBlocked()
+    local line = vim.fn.line('.')
+    local text = vim.fn.getline(line)
+
+    if string.match(text, "^%s*%-%s%[.-%]") then
+        -- Has a checkbox — toggle between [-] and [ ]
+        if string.match(text, "%[%-%]") then
+            text = string.gsub(text, "%[%-%]", "[ ]")
+        else
+            text = string.gsub(text, "%[.-%]", "[-]")
+        end
+    else
+        -- No checkbox, prepend blocked checkbox
+        text = "- [-] " .. text
+    end
+
+    vim.fn.setline(line, text)
+end
+
 -- Keybinding for toggling checkbox
 vim.keymap.set('n', '<leader>c', ToggleCheckbox, { silent = true })
+
+-- Keybinding for toggling blocked
+vim.keymap.set('n', '<leader>b', ToggleBlocked, { silent = true })
 
 -- Keybinding for toggling strikethrough
 vim.keymap.set('n', '<leader>s', ToggleStrikethrough, { silent = true })
