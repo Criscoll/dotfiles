@@ -107,17 +107,19 @@ For a thorough, guided reconciliation — especially on a machine that has drift
 
 ## Tool Stack
 
-| Category | Tool |
-|----------|------|
-| Shell | Zsh + Powerlevel10k |
-| Terminal | Alacritty |
-| Multiplexer | Tmux (tpm, tmux-resurrect, tmux2k) |
-| Editor (primary) | Neovim (Lua config, lazy.nvim) |
-| Editor (secondary) | Helix |
-| Git diff | delta |
-| Fuzzy finder | fzf + ripgrep |
-| Cloud sync | rclone (Google Drive) |
-| Mail sync | mbsync + msmtp + NeoMutt (WIP) |
+Versions shown are what the config was last tested against on the primary machine. If your installed version is significantly older, things may break — especially Neovim, where the Lua API changes between minor versions.
+
+| Category | Tool | Last tested |
+|----------|------|-------------|
+| Shell | Zsh + Powerlevel10k | zsh 5.8.1 |
+| Terminal | Alacritty | 0.13.0-dev |
+| Multiplexer | Tmux (tpm, tmux-resurrect, tmux2k) | next-3.4 |
+| Editor (primary) | Neovim (Lua config, lazy.nvim) | v0.11.1 |
+| Editor (secondary) | Helix | — |
+| Git diff | delta | 0.17.0 |
+| Fuzzy finder | fzf + ripgrep | fzf 0.61.1 / rg 13.0.0 |
+| Cloud sync | rclone (Google Drive) | v1.62.2 |
+| Mail sync | mbsync + msmtp + NeoMutt (WIP) | isync 1.4.4 / msmtp 1.8.16 |
 
 ---
 
