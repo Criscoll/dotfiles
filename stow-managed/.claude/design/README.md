@@ -6,6 +6,7 @@ This directory contains design documents for configuring and optimising our Clau
 
 - [workflows.md](workflows.md) — Efficient prompting patterns and session workflows
 - [setup.md](setup.md) — Current Claude Code setup overview and key config notes
+- [skills.md](skills.md) — Skill architecture patterns: skills vs commands, phased orchestration, cross-machine path resolution
 
 ## Scope
 

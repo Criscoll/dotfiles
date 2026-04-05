@@ -43,9 +43,9 @@ mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills
 With a real directory in place, stow places individual file symlinks inside it. Local-only skills or agents sit alongside them as untracked regular files — the repo never sees them.
 
 Current guard directories:
-- `~/.claude/commands/` — legacy slash commands (tracked in repo) + machine-specific (local only)
+- `~/.claude/skills/` — global skills (tracked in repo) + machine-specific skills (local only); **preferred mechanism for new additions**
 - `~/.claude/agents/` — global agents (tracked in repo) + machine-specific agents (local only)
-- `~/.claude/skills/` — global skills (tracked in repo) + machine-specific skills (local only)
+- `~/.claude/commands/` — legacy; skills can be invoked exactly like commands, so prefer `skills/` for anything new
 
 ## What Must Never Be Committed
 

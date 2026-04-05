@@ -52,6 +52,7 @@ Project-scoped persistent memory for the dotfiles repo lives at:
 Current memory index entries:
 - `project_purpose.md` — Uni-directional sync model, `.local` file pattern
 - `feedback_stow_simulate.md` — Always simulate stow before applying
+- `feedback_design_docs_location.md` — Keep `.claude/design/` in the repo; not symlinked, not auto-loaded
 
 ---
 
@@ -70,6 +71,9 @@ This directory. Not symlinked — kept in the repo as a manual reference, not lo
 | Path | Purpose |
 |------|---------|
 | `~/.claude/settings.json` | Global Claude Code settings |
+| `~/.claude/skills/` | Global skills — guard directory, pre-create on new machines |
+| `~/.claude/agents/` | Global agents — guard directory, pre-create on new machines |
+| `~/.claude/commands/` | Legacy commands — guard directory, prefer `skills/` for new additions |
 | `~/Repos/dotfiles/.claude/design/` | Config design reference docs (this repo, not symlinked) |
 | `~/.claude/projects/.../memory/` | Project-scoped persistent memory |
 | `~/Repos/dotfiles/CLAUDE.md` | Project instructions for this repo |
