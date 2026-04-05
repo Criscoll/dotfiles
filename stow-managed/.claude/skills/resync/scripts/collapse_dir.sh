@@ -75,6 +75,12 @@ echo "All files verified as repo-managed symlinks."
 
 # ── Collapse ──────────────────────────────────────────────────────────────────
 
+BACKUP_DIR="/tmp/resync-backup-$(date +%Y%m%d-%H%M%S)"
+echo "Backing up $target to $BACKUP_DIR/$REL_DIR"
+mkdir -p "$BACKUP_DIR/$(dirname "$REL_DIR")"
+cp -a "$target" "$BACKUP_DIR/$REL_DIR"
+echo "Backup complete."
+
 echo "Removing: $target"
 rm -rf "$target"
 

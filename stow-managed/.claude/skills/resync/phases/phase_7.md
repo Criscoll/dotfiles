@@ -93,7 +93,10 @@ Act only on items where the user has recorded a resolution in the approved plan.
 
 **Take repo:**
 ```bash
-cp $HOME_DIR/<file> $HOME_DIR/<file>.bak   # back up first
+BACKUP_DIR="/tmp/resync-backup-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR/$(dirname <rel/path>)"
+cp -a $HOME_DIR/<file> "$BACKUP_DIR/<rel/path>"
+echo "Backed up to $BACKUP_DIR/<rel/path>"
 ```
 Verify the backup contains everything from the local version, then run `safe_remove.sh` and stow.
 

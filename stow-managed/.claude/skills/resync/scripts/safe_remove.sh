@@ -46,7 +46,25 @@ if (( errors > 0 )); then
   exit 1
 fi
 
-# Second pass: remove.
+# Second pass: back up then remove.
+BACKUP_DIR="/tmp/resync-backup-$(date +%Y%m%d-%H%M%S)"
+backed_up=0
+
+for rel in "$@"; do
+  target="$HOME_DIR/$rel"
+  if [[ ! -e "$target" && ! -L "$target" ]]; then
+    continue
+  fi
+  dest="$BACKUP_DIR/$rel"
+  mkdir -p "$(dirname "$dest")"
+  cp -a "$target" "$dest"
+  backed_up=$((backed_up + 1))
+done
+
+if (( backed_up > 0 )); then
+  echo "Backed up $backed_up file(s) to $BACKUP_DIR"
+fi
+
 for rel in "$@"; do
   target="$HOME_DIR/$rel"
   if [[ ! -e "$target" && ! -L "$target" ]]; then
