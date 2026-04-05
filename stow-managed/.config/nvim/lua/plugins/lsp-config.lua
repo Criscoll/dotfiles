@@ -56,16 +56,16 @@ return {
             "rcarriga/nvim-notify"              -- ensure nvim-notify loaded first to hook into lsp message handler
             },
 		config = function()
-            vim.api.nvim_set_keymap('n', 'gd', '<cmd>lua vim.lsp.buf.definition()<CR>', { noremap = true, silent = true })
-            vim.api.nvim_set_keymap('n', '<leader>dd', '<cmd>lua vim.lsp.buf.definition()<CR>', { noremap = true, silent = true })
-            vim.api.nvim_set_keymap('n', '<leader>dn', '<cmd>lua vim.diagnostic.goto_next()<CR>', { noremap = true, silent = true })
-            vim.api.nvim_set_keymap('n', '<leader>dp', '<cmd>lua vim.diagnostic.goto_prev()<CR>', { noremap = true, silent = true })
-            vim.api.nvim_set_keymap('n', '<leader>dh', '<cmd>lua vim.lsp.buf.hover()<CR>', { noremap = true, silent = true })
-            vim.api.nvim_set_keymap('n', '<leader>ds', '<cmd>lua vim.lsp.buf.signature_help()<CR>', { noremap = true, silent = true })
-            vim.api.nvim_set_keymap('n', '<leader>di', '<cmd>lua vim.lsp.buf.implementation()<CR>', { noremap = true, silent = true })
-            vim.api.nvim_set_keymap('n', '<leader>dr', '<cmd>lua vim.lsp.buf.references()<CR>', { noremap = true, silent = true })
-            vim.api.nvim_set_keymap('n', '<leader>da', '<cmd>lua vim.diagnostic.open_float()<CR>', { noremap = true, silent = true })
-            vim.api.nvim_set_keymap('n', '<leader>dc', '<cmd>lua vim.lsp.buf.code_action()<CR>', { noremap = true, silent = true })
+            vim.keymap.set('n', 'gd',          vim.lsp.buf.definition,        { silent = true, desc = 'Go to definition' })
+            vim.keymap.set('n', '<leader>dd', vim.lsp.buf.definition,        { silent = true, desc = 'Go to definition' })
+            vim.keymap.set('n', '<leader>dn', vim.diagnostic.goto_next,      { silent = true, desc = 'Next diagnostic' })
+            vim.keymap.set('n', '<leader>dp', vim.diagnostic.goto_prev,      { silent = true, desc = 'Prev diagnostic' })
+            vim.keymap.set('n', '<leader>dh', vim.lsp.buf.hover,             { silent = true, desc = 'Hover docs' })
+            vim.keymap.set('n', '<leader>ds', vim.lsp.buf.signature_help,    { silent = true, desc = 'Signature help' })
+            vim.keymap.set('n', '<leader>di', vim.lsp.buf.implementation,    { silent = true, desc = 'Go to implementation' })
+            vim.keymap.set('n', '<leader>dr', vim.lsp.buf.references,        { silent = true, desc = 'References' })
+            vim.keymap.set('n', '<leader>da', vim.diagnostic.open_float,     { silent = true, desc = 'Diagnostic float' })
+            vim.keymap.set('n', '<leader>dc', vim.lsp.buf.code_action,       { silent = true, desc = 'Code action' })
 
 			local status, lspconfig = pcall(require, "lspconfig")
 			if not status then

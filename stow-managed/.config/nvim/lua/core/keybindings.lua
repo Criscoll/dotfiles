@@ -1,6 +1,3 @@
-vim.g.loaded_netrw = 1
-vim.g.loaded_netrwPlugin = 1
-
 vim.opt.syntax = "true"
 vim.opt.tabstop = 4
 vim.opt.shiftwidth = 4
@@ -9,17 +6,17 @@ vim.opt.number = true
 vim.opt.relativenumber = true
 vim.opt.clipboard = "unnamedplus"
 
--- vim.api.nvim_set_keymap('i', '<S-Tab>', "<Esc>:tabprevious<CR>i", {noremap = true, silent = true})
-vim.api.nvim_set_keymap('n', '<CR>', ":noh<CR>", {noremap = true, silent = true})
+-- vim.keymap.set('i', '<S-Tab>', "<Esc>:tabprevious<CR>i", { silent = true })
+vim.keymap.set('n', '<CR>', ':noh<CR>', { silent = true })
 
 -- Unindent line in normal mode
-vim.api.nvim_set_keymap('n', '<S-Tab>', '<<', { noremap = true, silent = true })
+vim.keymap.set('n', '<S-Tab>', '<<', { silent = true })
 
 -- Unindent line in insert mode
-vim.api.nvim_set_keymap('i', '<S-Tab>', '<C-o><<', { noremap = true, silent = true })
+vim.keymap.set('i', '<S-Tab>', '<C-o><<', { silent = true })
 
 -- Unindent selected lines in visual mode
-vim.api.nvim_set_keymap('v', '<S-Tab>', '<<', { noremap = true, silent = true })
+vim.keymap.set('v', '<S-Tab>', '<<', { silent = true })
 
 -- Define :SaveSession command
 vim.api.nvim_create_user_command('SaveSession', function()
@@ -110,10 +107,10 @@ function ToggleStrikethrough()
 end
 
 -- Keybinding for toggling checkbox
-vim.api.nvim_set_keymap('n', '<leader>c', [[:lua ToggleCheckbox()<CR>]], { noremap = true, silent = true })
+vim.keymap.set('n', '<leader>c', ToggleCheckbox, { silent = true })
 
 -- Keybinding for toggling strikethrough
-vim.api.nvim_set_keymap('n', '<leader>s', [[:lua ToggleStrikethrough()<CR>]], { noremap = true, silent = true })
+vim.keymap.set('n', '<leader>s', ToggleStrikethrough, { silent = true })
 
 
 vim.api.nvim_create_user_command('ReloadConfig', function()
@@ -149,7 +146,7 @@ vim.api.nvim_create_user_command(
 )
 
 -- Split Tab
-vim.api.nvim_set_keymap('n', '<C-w>z', ':tab split<CR>', { noremap = true, silent = true })
+vim.keymap.set('n', '<C-w>z', ':tab split<CR>', { silent = true })
 
 
 -- Example usage:

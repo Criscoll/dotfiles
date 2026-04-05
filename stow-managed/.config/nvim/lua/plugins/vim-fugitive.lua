@@ -1,6 +1,6 @@
 return {
     "tpope/vim-fugitive",
-    config = function ()
-        vim.api.nvim_set_keymap('n', '<Leader>gb', ':Git blame<CR>', {noremap = true, silent = true})
-    end
+    keys = {
+        { '<Leader>gb', '<cmd>Git blame<CR>', desc = 'Git blame' },
+    },
 }

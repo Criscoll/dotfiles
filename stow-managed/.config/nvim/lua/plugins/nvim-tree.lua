@@ -1,11 +1,16 @@
 return {
     'nvim-tree/nvim-tree.lua',
     dependencies = "nvim-tree/nvim-web-devicons",
-    config = function()
-        -- recommended settings from nvim-tree documentation
+    -- init runs at startup even when lazy, ensuring netrw is disabled before it loads
+    init = function()
         vim.g.loaded_netrw = 1
         vim.g.loaded_netrwPlugin = 1
-
+    end,
+    keys = {
+        { '<Leader>1', '<cmd>NvimTreeToggle<CR>',   desc = 'Toggle file tree' },
+        { '<leader>2', '<cmd>NvimTreeFindFile<CR>', desc = 'Reveal in file tree' },
+    },
+    config = function()
         local nvimtree = require('nvim-tree')
         nvimtree.setup({
             git = {
@@ -41,7 +46,5 @@ return {
             },
         })
 
-        vim.api.nvim_set_keymap('n', '<Leader>1', ':NvimTreeToggle<CR>', {noremap = true, silent = true})
-        vim.api.nvim_set_keymap('n', '<leader>2', ':NvimTreeFindFile<CR>', { noremap = true, silent = true })
     end
 }

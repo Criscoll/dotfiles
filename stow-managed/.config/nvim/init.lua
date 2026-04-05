@@ -40,6 +40,6 @@ vim.cmd("colorscheme catppuccin")
 
 -- Enabel gx url opening for unix
 if vim.fn.has("unix") == 1 then
-  vim.api.nvim_set_keymap('n', 'gx', ':silent execute "!xdg-open " . shellescape(expand("<cfile>"), 1)<CR><CR>', { noremap = true, silent = true })
+  vim.keymap.set('n', 'gx', ':silent execute "!xdg-open " . shellescape(expand("<cfile>"), 1)<CR><CR>', { silent = true })
 end
 
