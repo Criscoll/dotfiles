@@ -1,30 +1,34 @@
 # Phase 2: Timeline Analysis
 
-Read `HOME_DIR` and `REPO_DIR` from the `## Confirmed Paths` section of `/tmp/resync-audit.md` and substitute them in all commands below.
+Read `HOME_DIR` and `REPO_DIR` from the `## Confirmed Paths` section of `/tmp/resync-audit.md`.
 
-For each file classified as `EXISTS_LOCALLY` in Phase 1:
+Run the timeline script against the `EXISTS_LOCALLY` files identified in Phase 1:
 
-1. Get when the **repo version** was last changed:
-   ```bash
-   git -C $REPO_DIR log --follow -1 --format="%ai %s" -- stow-managed/<path>
-   ```
+```bash
+bash ${CLAUDE_SKILL_DIR}/scripts/timeline.sh $HOME_DIR $REPO_DIR
+```
 
-2. Get when the **local version** was last modified:
-   ```bash
-   stat -c "%y" $HOME_DIR/<file>
-   ```
+The script reads `/tmp/resync-exists-locally.txt` (written by inventory.sh) and outputs a TSV with four columns:
 
-3. Note which side is newer and by how much.
+| Column | Meaning |
+|---|---|
+| `REL_PATH` | File path relative to HOME_DIR |
+| `REPO_DATE` | Date of the last git commit that touched this file |
+| `LOCAL_DATE` | Local file's last-modified timestamp |
+| `NEWER` | `REPO`, `LOCAL`, `SAME`, or `UNKNOWN` |
 
-Use this to calibrate how seriously to treat divergence:
+Use the `NEWER` column to calibrate how seriously to treat divergence in Phase 3:
 
 | Situation | Interpretation |
 |---|---|
-| Local recent, repo untouched for a long time | Likely intentional local customisation — treat carefully |
-| Repo updated recently, local stale | Probably just needs repo version applied |
-| Both changed recently | Genuine conflict — needs careful review in Phase 3 |
+| `SAME` | Timestamps within 60s — local was likely the source of the commit; content is probably identical |
+| `REPO` | Repo is newer — machine is behind, probably just needs the repo version applied |
+| `LOCAL` | Local is newer — possible intentional local change, or local was updated after the last commit |
+| `UNKNOWN` | File has no git history or stat failed — inspect manually |
 
-Append timeline findings to `/tmp/resync-audit.md`.
+Append the timeline output to `/tmp/resync-audit.md`.
+
+---
 
 ## Next
 

@@ -34,6 +34,28 @@ Present a structured sync plan using the classifications from Phase 5. Use this 
 ### Sensitive data found in repo (remediation required)
 - `[file]`: [what was found, line reference if possible]
 
+### Fragmented directories (collapsible to a single dir symlink)
+
+For each `COLLAPSIBLE_DIR`, present:
+- The directory path
+- What is inside (file count, brief description of contents)
+- The tradeoff: collapsing gives a cleaner structure and means new repo files appear automatically; leaving as-is preserves the ability to add local-only files alongside tracked ones
+
+Ask the user for each one: **collapse or leave as-is, and why?**
+
+If the user chooses **leave as-is**, record their reason and respond with judgment:
+- "I plan to add a local-only file here" → note that this is the right call; suggest naming conventions if relevant (e.g. a `.local.lua` companion file pattern for neovim plugins)
+- "I'm not sure" → help them decide based on the directory's contents and likely use
+- "It's fine as-is" → accept it; note that running `/resync` in future will flag it again unless collapsed
+
+Format in the plan:
+```
+- `[dir]`: [N files, description]
+  Tradeoff: [one sentence on collapse vs keep]
+  Action: [ ] collapse  [ ] leave as-is
+  Reason (if leave as-is): ___
+```
+
 ---
 
 **Stop here.** Present this plan and wait for the user to:

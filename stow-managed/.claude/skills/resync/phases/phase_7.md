@@ -1,37 +1,68 @@
 # Phase 7: Execution
 
-Read `HOME_DIR` and `REPO_DIR` from the `## Confirmed Paths` section of `/tmp/resync-audit.md` and substitute them in all commands below.
+Read `HOME_DIR` and `REPO_DIR` from the `## Confirmed Paths` section of `/tmp/resync-audit.md`.
 
 Work through each approved item in the plan. Do not act on items the user has not approved or asked to skip.
+
+---
 
 ## Before anything: verify guard directories
 
 ```bash
-ls -la $HOME_DIR/.claude/commands $HOME_DIR/.claude/agents $HOME_DIR/.claude/skills
+for d in commands agents skills; do
+  path="$HOME_DIR/.claude/$d"
+  if [ -L "$path" ]; then
+    echo "SYMLINK: $path -> $(readlink "$path")  *** must resolve before stowing ***"
+  elif [ -d "$path" ]; then
+    echo "OK: $path"
+  else
+    echo "MISSING: $path"
+  fi
+done
 ```
 
-If any are missing, create them:
+Create any that are missing:
 ```bash
 mkdir -p $HOME_DIR/.claude/commands $HOME_DIR/.claude/agents $HOME_DIR/.claude/skills
 ```
 
-If any are symlinks — **stop**. A folded symlink means stow previously treated the whole directory as a single unit, and local-only files cannot be added safely. Flag it for the user to resolve manually before proceeding.
+If any are symlinks — **stop**. A folded symlink means stow previously treated the whole directory as a single unit, and local-only files cannot coexist safely inside it. Flag for the user to resolve manually.
 
 ---
 
-## MISSING_LOCALLY and CLEAN_APPLY
+## CLEAN_APPLY — remove local files so stow can place symlinks
 
-Run a dry run first:
+Before removing any file, run `safe_remove.sh`. It validates that each target does not resolve into the repo (guards against deletion through directory symlinks) and aborts the entire operation if any would:
+
 ```bash
-stow -v --simulate -t $HOME_DIR $REPO_DIR/stow-managed/
+bash ${CLAUDE_SKILL_DIR}/scripts/safe_remove.sh $HOME_DIR $REPO_DIR \
+  "rel/path/file1" \
+  "rel/path/file2"
 ```
 
-Review the output. If the dry run looks correct, apply:
+If `safe_remove.sh` reports `ABORT` for any file: the file is already in sync via a directory symlink — reclassify it as `SYMLINKED_VIA_DIR` and do not remove it.
+
+---
+
+## MISSING_LOCALLY and CLEAN_APPLY — apply via stow
+
+Run a dry run first. Note: stow must be invoked from the repo directory with the package name, not a path:
+
 ```bash
-stow -v -t $HOME_DIR $REPO_DIR/stow-managed/
+cd $REPO_DIR && stow -v --simulate -t $HOME_DIR stow-managed
 ```
 
-Note: stow applies the entire package at once. If any items in the plan should be excluded from this run, handle them individually rather than running a full stow.
+Review the output:
+- `LINK: ...` lines show what would be created — verify these match the plan
+- No output (aside from the simulation warning) means the package is already fully in sync — this is correct and expected
+
+If the dry run looks correct, apply:
+
+```bash
+cd $REPO_DIR && stow -v -t $HOME_DIR stow-managed
+```
+
+If stow reports a conflict (non-symlink file in the way that `safe_remove.sh` missed): do not use `--adopt`. On a read-only device, `--adopt` moves the local file into the repo — that is wrong here. Instead, investigate the conflict manually, then re-run.
 
 ---
 
@@ -46,13 +77,13 @@ For each file:
 
 2. Extract machine-specific and sensitive content from the local file into the `.local` file.
 
-3. Check whether the main config file sources its `.local` variant. Most already do — verify with:
+3. Check whether the main config file sources its `.local` variant:
    ```bash
-   grep -n "local" ~/<file> | head -5
+   grep -n "local" $HOME_DIR/<file> | head -5
    ```
    If sourcing is missing, add it before stowing.
 
-4. Apply stow for that file.
+4. Run `safe_remove.sh` for that file, then stow.
 
 ---
 
@@ -64,7 +95,7 @@ Act only on items where the user has recorded a resolution in the approved plan.
 ```bash
 cp $HOME_DIR/<file> $HOME_DIR/<file>.bak   # back up first
 ```
-Verify the backup contains everything from the local version, then stow.
+Verify the backup contains everything from the local version, then run `safe_remove.sh` and stow.
 
 **Take local:**
 Do not stow. Leave the local version in place. If the content looks generic enough to share, note it as a candidate for upstreaming from a primary device — do not modify the repo from this machine.
@@ -84,6 +115,24 @@ Skip. Note the file in `/tmp/resync-audit.md`. Leave both versions untouched.
 
 ---
 
+## COLLAPSIBLE_DIR — collapse fragmented directories
+
+For each directory the user approved to collapse, run:
+
+```bash
+bash ${CLAUDE_SKILL_DIR}/scripts/collapse_dir.sh $HOME_DIR $REPO_DIR "rel/path/to/dir"
+```
+
+The script will:
+1. Abort immediately if any local-only file is found anywhere in the subtree
+2. Remove the real directory
+3. Re-run stow to create the directory symlink
+4. Verify the symlink was created
+
+Run one directory at a time and verify before moving to the next. Collapsing a parent directory automatically handles all its subdirectories — do not run `collapse_dir.sh` on subdirectories separately.
+
+---
+
 ## SENSITIVE_IN_REPO
 
 Do not apply these files. Flag them and leave remediation to the user. The issue must be fixed in the repo before syncing further.
@@ -94,14 +143,12 @@ If any `SENSITIVE_IN_REPO` files exist, report `sensitive_blocked` — do not co
 
 ## After each stow operation
 
-Verify each symlink:
+Verify each new symlink:
 ```bash
 ls -la $HOME_DIR/<file>
 ```
 
 It should point back into `$REPO_DIR/stow-managed/`.
-
-If stow reports a conflict (non-symlink file in the way): do not use `--adopt`. On a read-only device, `--adopt` moves the local file into the repo — that is wrong here. Instead, manually move or rename the conflicting file, then re-run stow.
 
 ---
 

@@ -1,24 +1,23 @@
 # Phase 4: Sensitive Data Audit
 
-Read `REPO_DIR` from the `## Confirmed Paths` section of `/tmp/resync-audit.md` and substitute it in all commands below.
+The `diff_check.sh` script run in Phase 3 already produced a **Sensitive Scan** section at the end of its output. Use that output here — do not re-run the scan.
 
-Scan the contents of `$REPO_DIR/stow-managed/` itself for anything sensitive — independently of what the local machine has:
+Review the sensitive scan results:
 
-```bash
-grep -rn -iE "(api_key|api_token|auth_token|password|secret|credential|private_key)\s*=" \
-  $REPO_DIR/stow-managed/
+- Any `POSSIBLE SECRETS FOUND` entries must be investigated. Check each match:
+  - Is it a real credential value, or just a variable name / example string / comment?
+  - Is it inside a submodule (powerlevel10k, .tmux/plugins) — these are excluded by the script but flag if something was missed
+  - Does it appear in a file that would be applied to another machine?
 
-grep -rn -E "(token\s*=|password\s*=|secret\s*=)" \
-  $REPO_DIR/stow-managed/
-```
+- Also check for:
+  - Private or company-internal paths hard-coded in config files
+  - Anything that would be a problem if this repo were made public or cloned to an untrusted machine
 
-Also look for:
-- Private or company-internal paths
-- Anything that would be a problem if this repo were made public or cloned to another machine
+**This is independent of sync state.** Sensitive data in `stow-managed/` is a problem in its own right — the repo may already be leaking secrets regardless of what this machine has locally.
 
-**This is independent of sync state.** Sensitive data in `stow-managed/` is a problem in its own right — it means the repo may already be leaking secrets. Flag these prominently regardless of what the local machine has.
+Append findings to `/tmp/resync-audit.md` under a `## Sensitive Data in Repo` heading. If nothing actionable is found, note that explicitly.
 
-Append findings to `/tmp/resync-audit.md` under a `## Sensitive Data in Repo` heading. If nothing is found, note that explicitly.
+---
 
 ## Next
 
