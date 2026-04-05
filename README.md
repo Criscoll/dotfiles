@@ -25,10 +25,11 @@ dotfiles/
 │   │   └── redshift.conf
 │   ├── bin/             # Personal binaries (fzf, magick, alacritty)
 │   ├── Scripts/         # Automation scripts (sync, backup, cloud)
+│   ├── .claude/         # Claude Code global config (CLAUDE.md, design docs, settings.json)
 │   └── .local/share/
 │       ├── fonts/       # Nerd Fonts and Powerline fonts
 │       └── nvim/        # Neovim data files
-├── .claude/             # Claude Code config (user-scope CLAUDE.md, design docs)
+├── .claude/             # Machine-local Claude Code overrides (settings.local.json — untracked)
 ├── aider/               # Aider AI pair programmer config
 ├── vscode/              # VS Code settings (copied manually)
 ├── darktable/           # DarkTable photo editor config
@@ -60,6 +61,34 @@ If you already cloned without submodules:
 ```bash
 git submodule update --init --recursive
 ```
+
+---
+
+## How to Resync
+
+### Easy case — clean pull, no local conflicts
+
+Pull the latest and re-apply stow:
+
+```bash
+cd ~/Repos/dotfiles
+git pull --recurse-submodules
+stow -v --simulate -t ~ ~/Repos/dotfiles/stow-managed/  # preview first
+stow -v -t ~ ~/Repos/dotfiles/stow-managed/             # apply
+```
+
+If stow reports no conflicts, you're done.
+
+### Hard case — local files exist that conflict with the repo
+
+Stow will refuse to overwrite a real file with a symlink. When this happens you need to decide, for each conflicting file, whether to:
+
+- **Take the repo version** — back up the local file, delete it, re-run stow
+- **Keep the local version** — don't stow that file; leave it as-is
+- **Merge** — extract any machine-specific content into a `.local` file (e.g. `.zshrc.local`), then stow the main file
+- **Defer** — skip it for now and revisit manually
+
+For a thorough, guided reconciliation — especially on a machine that has drifted significantly — run the Claude Code agent using `resync.md` as the runbook. It will inventory every file, classify conflicts, and produce a plan for your review before touching anything.
 
 ---
 

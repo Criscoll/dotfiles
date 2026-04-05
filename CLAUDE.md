@@ -31,6 +31,22 @@ This makes the repo the single source of truth. Files like `~/.zshrc` and `~/.tm
 stow -v --simulate -t ~ ~/Repos/dotfiles/stow-managed/
 ```
 
+### Guard Directories
+
+Some directories need to hold a mix of **tracked files** (symlinked from this repo) and **local-only files** (untracked, machine-specific). For this to work, those directories must exist as real directories on the target machine before stow runs — if they don't exist, stow folds the whole directory into a single symlink, leaving no room for local-only additions.
+
+Pre-create these on any new machine before running stow:
+```bash
+mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills
+```
+
+With a real directory in place, stow places individual file symlinks inside it. Local-only skills or agents sit alongside them as untracked regular files — the repo never sees them.
+
+Current guard directories:
+- `~/.claude/commands/` — legacy slash commands (tracked in repo) + machine-specific (local only)
+- `~/.claude/agents/` — global agents (tracked in repo) + machine-specific agents (local only)
+- `~/.claude/skills/` — global skills (tracked in repo) + machine-specific skills (local only)
+
 ## What Must Never Be Committed
 
 This repo is version-controlled and potentially synced across machines — **never commit sensitive or runtime-specific data.** Before staging any changes, verify that no file contains:

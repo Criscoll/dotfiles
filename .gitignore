@@ -1,3 +1,9 @@
 # Shell history — never commit
 stow-managed/.zsh_history
 stow-managed/.bash_history
+
+# Machine-specific Claude Code overrides — never commit
+.claude/settings.local.json
+
+# Auto-generated fontconfig UUID — never commit
+stow-managed/.local/share/fonts/.uuid
