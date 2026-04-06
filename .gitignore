@@ -4,6 +4,10 @@ stow-managed/.bash_history
 
 # Machine-specific Claude Code overrides — never commit
 .claude/settings.local.json
+stow-managed/.claude/settings.local.json
+
+# Per-machine stow exclusions — never commit
+stow-managed/.stow-local-ignore
 
 # Auto-generated fontconfig UUID — never commit
 stow-managed/.local/share/fonts/.uuid

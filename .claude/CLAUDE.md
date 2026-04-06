@@ -24,12 +24,21 @@ Everything under `stow-managed/` is symlinked into `~` via:
 stow -v -t ~ ~/Repos/dotfiles/stow-managed/
 ```
 
-This makes the repo the single source of truth. Files like `~/.zshrc` and `~/.tmux.conf` are symlinks back into this repo.
+This makes the repo the shared base. Files like `~/.zshrc` and `~/.tmux.conf` are symlinks back into this repo.
 
 **Always simulate before applying.** Run stow with `--simulate` first to preview what it will do and catch conflicts before they happen:
 ```bash
 stow -v --simulate -t ~ ~/Repos/dotfiles/stow-managed/
 ```
+
+### This Repo Is Not the Exclusive Owner of Config
+
+Some directories on a machine contain a mix of symlinks — some pointing into this repo, others pointing into machine-specific repos or local directories. This is intentional and expected. For example, `~/.claude/skills/` might hold:
+- `resync-dotfiles/` → symlink into this repo (shared)
+- `work-deploy/` → symlink into a separate work repo (machine-specific)
+- `local-helper/` → a plain local file, no repo at all
+
+The inventory script classifies symlinks that point outside this repo as `FOREIGN_SYMLINK`. These should be treated as intentionally managed by something else — never overwrite them.
 
 ### Guard Directories
 
@@ -46,6 +55,39 @@ Current guard directories:
 - `~/.claude/skills/` — global skills (tracked in repo) + machine-specific skills (local only); **preferred mechanism for new additions**
 - `~/.claude/agents/` — global agents (tracked in repo) + machine-specific agents (local only)
 - `~/.claude/commands/` — legacy; skills can be invoked exactly like commands, so prefer `skills/` for anything new
+
+### Per-Machine Exclusions (`.stow-local-ignore`)
+
+Read-only machines that don't need all tools (e.g. a Mac without mail tools) can drop a `.stow-local-ignore` file in `stow-managed/` to exclude paths from being stowed. Stow reads this file automatically and skips matching entries.
+
+Example `stow-managed/.stow-local-ignore`:
+```
+^snap/neomutt
+^\.mbsyncrc
+^\.config/msmtp
+```
+
+This file is gitignored — each machine keeps its own version. It is never committed to the repo.
+
+### Machine-Specific Claude Code Settings (`settings.local.json`)
+
+`stow-managed/.claude/settings.json` stows to `~/.claude/settings.json`, which is **user-level scope** — it applies to all Claude Code projects on the machine, not just this repo. Do not confuse it with the project-level `.claude/settings.json` that would live in a project root.
+
+Settings that vary per machine (e.g. the status bar command) belong in `~/.claude/settings.local.json`, which is never committed.
+
+`settings.local.json` overrides `settings.json` at runtime. Common machine-specific overrides:
+- `statusLine` — custom status bar (only relevant on machines with the script installed)
+- Machine-specific permission rules
+
+Example `~/.claude/settings.local.json`:
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash $HOME/.claude/statusline-command.sh"
+  }
+}
+```
 
 ## What Must Never Be Committed
 
@@ -69,6 +111,8 @@ If in doubt, use a `.local` file (untracked) rather than the shared config. The 
 - **Fuzzy finder**: fzf + ripgrep
 - **Cloud sync**: rclone (Google Drive)
 - **Mail**: mbsync + msmtp + NeoMutt (WIP)
+
+**Target platforms**: Linux (primary) and macOS (read-only pull target). Scripts and shell commands must be portable — avoid GNU-specific flags (`readlink -f`, `realpath` without fallback, `stat -c`, etc.). Use `python3` as a fallback when a portable equivalent is not available.
 
 ## Key Conventions
 

@@ -22,7 +22,7 @@ return {
                 if not vim.fn.isdirectory(cwd) then vim.notify("Selected node is not a directory") return end
                 require('telescope.builtin').find_files({ prompt_title = "Find files in (" .. cwd .. ")", cwd = cwd })
             end, desc = 'Find files in tree dir' },
-            { '<Leader>fe',  function() require('telescope.builtin').find_files({ prompt_title = "Find files in workbench", cwd = "/home/cristian/Documents/Obsidian/02_Workbench" }) end, desc = 'Find workbench note' },
+            { '<Leader>fe',  function() require('telescope.builtin').find_files({ prompt_title = "Find files in workbench", cwd = vim.fn.expand("~") .. "/Documents/Obsidian/02_Workbench" }) end, desc = 'Find workbench note' },
 
             -- Buffer / History Search
             { '<Leader>fb',  '<cmd>Telescope buffers<CR>',                                                                desc = 'Open buffers' },
@@ -70,14 +70,14 @@ return {
                 })
             end, desc = 'Live grep in buffer dir' },
             { '<Leader>fsn', function()
-                local cwd = "/home/cristian/Documents/Obsidian/01_Notes"
+                local cwd = vim.fn.expand("~") .. "/Documents/Obsidian/01_Notes"
                 require('telescope.builtin').live_grep({
                     prompt_title = "Live Grep in (" .. cwd .. ")", cwd = cwd,
                     mappings = { i = { ["<c-f>"] = require('telescope.actions').to_fuzzy_refine } },
                 })
             end, desc = 'Live grep notes' },
             { '<Leader>fse', function()
-                local cwd = "/home/cristian/Documents/Obsidian/02_Workbench"
+                local cwd = vim.fn.expand("~") .. "/Documents/Obsidian/02_Workbench"
                 require('telescope.builtin').live_grep({
                     prompt_title = "Live Grep in (" .. cwd .. ")", cwd = cwd,
                     mappings = { i = { ["<c-f>"] = require('telescope.actions').to_fuzzy_refine } },

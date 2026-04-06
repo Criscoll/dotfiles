@@ -1,6 +1,6 @@
 # Dotfiles
 
-Personal terminal configuration managed with [GNU Stow](https://www.gnu.org/software/stow/). Everything in `stow-managed/` gets symlinked into `~`, making this repo the single source of truth for all dotfiles.
+Personal terminal configuration managed with [GNU Stow](https://www.gnu.org/software/stow/). Everything in `stow-managed/` gets symlinked into `~` via GNU Stow. This repo is the **shared base** for dotfiles — individual machines may additionally have machine-specific repos that own their own config slices, coexisting alongside this one.
 
 ---
 
@@ -52,15 +52,31 @@ sudo apt install stow
 
 ```bash
 git clone --recurse-submodules <repo-url> ~/Repos/dotfiles
-stow -v -t ~ ~/Repos/dotfiles/stow-managed/
 ```
 
-The `--recurse-submodules` flag pulls in Powerlevel10k, TPM, tmux-resurrect, and tmux2k.
-
-If you already cloned without submodules:
+The `--recurse-submodules` flag pulls in Powerlevel10k, TPM, tmux-resurrect, and tmux2k. If you already cloned without submodules:
 ```bash
 git submodule update --init --recursive
 ```
+
+**Pre-create guard directories** before stowing — these must be real directories (not symlinks) so that local-only files can coexist alongside repo-managed symlinks inside them:
+```bash
+mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills
+```
+
+**Optional: per-machine exclusions.** If this machine doesn't use all tools (e.g. no mail tools on macOS), create `stow-managed/.stow-local-ignore` with regex patterns to skip before stowing:
+```
+^snap/neomutt
+^\.mbsyncrc
+```
+
+**Apply:**
+```bash
+stow -v --simulate -t ~ ~/Repos/dotfiles/stow-managed/  # preview first
+stow -v -t ~ ~/Repos/dotfiles/stow-managed/             # apply
+```
+
+**Machine-specific Claude settings.** After stowing, create `~/.claude/settings.local.json` for any per-machine overrides (e.g. statusline). This file is never committed. See `stow-managed/.claude/settings.json` for the base config.
 
 ---
 
@@ -88,7 +104,7 @@ Stow will refuse to overwrite a real file with a symlink. When this happens you 
 - **Merge** — extract any machine-specific content into a `.local` file (e.g. `.zshrc.local`), then stow the main file
 - **Defer** — skip it for now and revisit manually
 
-For a thorough, guided reconciliation — especially on a machine that has drifted significantly — run the Claude Code agent using `resync.md` as the runbook. It will inventory every file, classify conflicts, and produce a plan for your review before touching anything.
+For a thorough, guided reconciliation — especially on a machine that has drifted significantly — run the `/resync-dotfiles` skill in Claude Code. It will inventory every file, classify conflicts (including files managed by other repos), and produce a plan for your review before touching anything.
 
 ---
 
@@ -96,12 +112,14 @@ For a thorough, guided reconciliation — especially on a machine that has drift
 
 | Command | Description |
 |---------|-------------|
+| `stow -v --simulate -t ~ ~/Repos/dotfiles/stow-managed/` | Dry run — preview changes without applying (always run first) |
 | `stow -v -t ~ ~/Repos/dotfiles/stow-managed/` | Apply — create symlinks in `~` |
-| `stow -v -t ~ ~/Repos/dotfiles/stow-managed/ --simulate` | Dry run — preview changes without applying |
 | `stow -v --adopt -t ~ ~/Repos/dotfiles/stow-managed/` | Adopt — move existing `~` files into repo, then symlink |
 | `stow -v --adopt -t ~ ~/Repos/dotfiles/stow-managed/ --simulate` | Dry run for adopt |
 
-> **Note on `--adopt`**: This moves existing files from `~` into the stow package and replaces them with symlinks. Make sure the repo is committed before using this, as it will overwrite files in `stow-managed/`.
+> **Note on `--adopt`**: This moves existing files from `~` into the stow package and replaces them with symlinks. Make sure the repo is committed before using this, as it will overwrite files in `stow-managed/`. **Never use `--adopt` on a read-only machine** — it would attempt to write into the repo.
+
+> **Symlinks from other repos**: Stow will report conflicts if a path is already a symlink (even one pointing into a different repo). These `FOREIGN_SYMLINK` entries are intentional — do not force-overwrite them. Skip those paths manually or use `.stow-local-ignore` to exclude them.
 
 ---
 

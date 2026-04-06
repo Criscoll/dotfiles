@@ -1,5 +1,5 @@
 ---
-name: resync
+name: resync-dotfiles
 description: Reconcile this machine's dotfiles with the repo — inventory, diff, classify, plan, and apply changes one phase at a time
 disable-model-invocation: true
 allowed-tools: Bash Read Write Glob Grep Edit

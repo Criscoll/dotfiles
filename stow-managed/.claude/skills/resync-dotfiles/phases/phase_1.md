@@ -27,6 +27,63 @@ done
 
 ---
 
+## Check per-machine exclusions
+
+Check whether this machine has a `.stow-local-ignore` file, which controls which paths stow will skip when linking:
+
+```bash
+if [ -f "$REPO_DIR/stow-managed/.stow-local-ignore" ]; then
+  echo "Found .stow-local-ignore:"
+  cat "$REPO_DIR/stow-managed/.stow-local-ignore"
+else
+  echo "No .stow-local-ignore found."
+fi
+```
+
+**Ask the user:** Are there tools or config sections that are not relevant for this machine (e.g. mail tools on a Mac, work-specific integrations on a personal machine)? If so, they can be excluded by creating `stow-managed/.stow-local-ignore` with one regex pattern per line. This file is gitignored — each machine keeps its own.
+
+Example content:
+```
+^snap/neomutt
+^\.mbsyncrc
+^\.config/msmtp
+```
+
+If the user wants to add exclusions, help them create or update the file before running the inventory script. The inventory results will then reflect only what stow would actually link.
+
+---
+
+## Check machine-specific Claude settings
+
+Check whether this machine has a `settings.local.json` for Claude Code:
+
+```bash
+if [ -f "$HOME_DIR/.claude/settings.local.json" ]; then
+  echo "Found settings.local.json:"
+  cat "$HOME_DIR/.claude/settings.local.json"
+else
+  echo "No settings.local.json found."
+fi
+```
+
+`settings.local.json` overrides `settings.json` on a per-machine basis. Common uses:
+- `statusLine` — custom status bar command (only relevant on machines with the script)
+- Machine-specific permission rules
+
+If the user has a statusline script at `$HOME/.claude/statusline-command.sh`, suggest creating or updating `settings.local.json`:
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash $HOME/.claude/statusline-command.sh"
+  }
+}
+```
+
+Note that `$HOME` in the command string is expanded by the shell at runtime.
+
+---
+
 ## Walk the repo
 
 Run the inventory script:
@@ -41,7 +98,8 @@ The script outputs two sections.
 
 | Classification | Meaning |
 |---|---|
-| `SYMLINKED` | Target is a symlink pointing into the repo — already in sync |
+| `SYMLINKED` | Target is a symlink pointing into this repo — already in sync |
+| `FOREIGN_SYMLINK` | Target is a symlink pointing outside this repo (e.g. managed by a machine-specific repo) — treat as intentional, do not overwrite |
 | `SYMLINKED_VIA_DIR` | A parent directory is a symlink into the repo; the leaf file appears real but is already in sync — **do not treat as local** |
 | `EXISTS_LOCALLY` | Target is a genuinely local real file — needs comparison in later phases |
 | `MISSING_LOCALLY` | Target does not exist on this machine |
@@ -59,7 +117,7 @@ The script also writes:
 - `/tmp/resync-missing-locally.txt` — `MISSING_LOCALLY` paths
 - `/tmp/resync-collapsible-dirs.txt` — `COLLAPSIBLE_DIR` paths, consumed by phase 7
 
-Write a summary of counts per classification to `/tmp/resync-audit.md`. List `EXISTS_LOCALLY`, `MISSING_LOCALLY`, and `COLLAPSIBLE_DIR` entries individually; the others can be summarised by count.
+Write a summary of counts per classification to `/tmp/resync-audit.md`. List `EXISTS_LOCALLY`, `MISSING_LOCALLY`, and `COLLAPSIBLE_DIR` entries individually; the others can be summarised by count. `FOREIGN_SYMLINK` entries should be listed individually so the user can confirm they are expected.
 
 ---
 

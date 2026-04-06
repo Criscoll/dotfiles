@@ -7,7 +7,9 @@
 # Output (stdout): TSV with two columns:  CLASSIFICATION  REL_PATH
 #
 # Classifications:
-#   SYMLINKED          — target is a symlink pointing into the repo (direct)
+#   SYMLINKED          — target is a symlink whose resolved path is inside REPO_DIR
+#   FOREIGN_SYMLINK    — target is a symlink pointing outside REPO_DIR (e.g. managed
+#                        by a machine-specific repo); treat as intentional, do not overwrite
 #   SYMLINKED_VIA_DIR  — a parent directory is a symlink into the repo;
 #                        the file is effectively in sync but shows as a real file
 #   EXISTS_LOCALLY     — target exists as a real file; needs diff/timeline analysis
@@ -55,6 +57,16 @@ is_stow_excluded() {
   return 1
 }
 
+# Portable realpath: resolves symlinks and returns an absolute path.
+# 'realpath' is not available on stock macOS; falls back to python3.
+portable_realpath() {
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$1"
+  else
+    python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1"
+  fi
+}
+
 # Walk up the directory tree from target to HOME_DIR; return 0 if any
 # ancestor directory is itself a symlink pointing inside REPO_DIR.
 is_under_repo_symlink() {
@@ -64,7 +76,7 @@ is_under_repo_symlink() {
   while [[ "$check" != "/" && "$check" != "$HOME_DIR" ]]; do
     if [[ -L "$check" ]]; then
       local resolved
-      resolved="$(realpath "$check")"
+      resolved="$(portable_realpath "$check")"
       if [[ "$resolved" == "$REPO_DIR"* ]]; then
         return 0
       fi
@@ -91,7 +103,12 @@ find "$STOW_DIR" -type f \
     if is_stow_excluded "$rel"; then
       printf 'STOW_EXCLUDED\t%s\n' "$rel"
     elif [[ -L "$target" ]]; then
-      printf 'SYMLINKED\t%s\n' "$rel"
+      resolved="$(portable_realpath "$target" 2>/dev/null || true)"
+      if [[ -n "$resolved" && "$resolved" == "$REPO_DIR"* ]]; then
+        printf 'SYMLINKED\t%s\n' "$rel"
+      else
+        printf 'FOREIGN_SYMLINK\t%s\n' "$rel"
+      fi
     elif is_under_repo_symlink "$target"; then
       printf 'SYMLINKED_VIA_DIR\t%s\n' "$rel"
     elif [[ -e "$target" ]]; then
@@ -136,12 +153,12 @@ while IFS= read -r src_dir; do
   # Skip directories that have direct child directory-symlinks pointing into the repo.
   # These are "mixed containers" — intentionally kept real to allow local-only entries
   # alongside repo-managed subdirectories (e.g. ~/.claude/skills/ holding both the
-  # tracked resync/ dir-symlink and future local-only skills). Collapsing them would
+  # tracked resync-dotfiles/ dir-symlink and future local-only skills). Collapsing them would
   # eliminate that flexibility.
   is_mixed_container=false
   while IFS= read -r entry; do
     if [[ -L "$entry" && -d "$entry" ]]; then
-      resolved="$(realpath "$entry" 2>/dev/null || true)"
+      resolved="$(portable_realpath "$entry" 2>/dev/null || true)"
       if [[ -n "$resolved" && "$resolved" == "$REPO_DIR"* ]]; then
         is_mixed_container=true
         break
@@ -154,7 +171,7 @@ while IFS= read -r src_dir; do
   local_only=0
   while IFS= read -r f; do
     if [[ -L "$f" ]]; then
-      resolved="$(realpath "$f" 2>/dev/null || true)"
+      resolved="$(portable_realpath "$f" 2>/dev/null || true)"
       if [[ -z "$resolved" || "$resolved" != "$REPO_DIR"* ]]; then
         local_only=$((local_only + 1))
       fi

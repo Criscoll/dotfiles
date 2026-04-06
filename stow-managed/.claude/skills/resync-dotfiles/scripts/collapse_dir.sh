@@ -25,6 +25,16 @@ HOME_DIR="${1:?Usage: collapse_dir.sh HOME_DIR REPO_DIR rel/path/to/dir}"
 REPO_DIR="${2:?Usage: collapse_dir.sh HOME_DIR REPO_DIR rel/path/to/dir}"
 REL_DIR="${3:?Usage: collapse_dir.sh HOME_DIR REPO_DIR rel/path/to/dir}"
 
+# Portable realpath: resolves symlinks and returns an absolute path.
+# 'realpath' is not available on stock macOS; falls back to python3.
+portable_realpath() {
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$1"
+  else
+    python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1"
+  fi
+}
+
 target="$HOME_DIR/$REL_DIR"
 repo_dir="$REPO_DIR/stow-managed/$REL_DIR"
 
@@ -32,7 +42,7 @@ repo_dir="$REPO_DIR/stow-managed/$REL_DIR"
 
 if [[ -L "$target" ]]; then
   echo "Already a symlink: $target"
-  echo "$(readlink -f "$target")"
+  echo "$(portable_realpath "$target")"
   exit 0
 fi
 
@@ -53,7 +63,7 @@ echo "Scanning $target for local-only files..."
 local_only=0
 while IFS= read -r f; do
   if [[ -L "$f" ]]; then
-    resolved="$(realpath "$f")"
+    resolved="$(portable_realpath "$f")"
     if [[ "$resolved" != "$REPO_DIR"* ]]; then
       echo "  LOCAL-ONLY (external symlink): $f -> $resolved" >&2
       local_only=$((local_only + 1))
