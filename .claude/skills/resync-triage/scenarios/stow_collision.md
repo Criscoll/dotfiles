@@ -2,6 +2,10 @@
 
 Stow refuses to create a symlink because a real (non-symlink) file already exists at the target path.
 
+> **Many collisions at once?** If the collision count is high (more than ~5) or the machine
+> has never been stowed, stop here and load `scenarios/cold_start.md` instead. That scenario
+> covers batch triage — handling collisions one-by-one at scale is error-prone.
+
 ```
 WARNING! stowing stow-managed would cause conflicts:
   * existing target is neither a link nor empty dir: .zshrc

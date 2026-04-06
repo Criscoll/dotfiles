@@ -48,7 +48,8 @@ This machine is pull-only — do not commit or push regardless of outcome.
 # Merge conflicts in the repo?
 git -C $REPO_DIR diff --name-only --diff-filter=U 2>/dev/null
 
-# Stow warnings or collisions?
+# Stow warnings or collisions? (count first, then list)
+cd $REPO_DIR && stow --simulate -t $HOME_DIR stow-managed 2>&1 | grep "existing target" | wc -l
 cd $REPO_DIR && stow --simulate -t $HOME_DIR stow-managed 2>&1 | grep -iE 'conflict|warning|error|existing target'
 
 # Guard directory problems?
@@ -57,7 +58,15 @@ for d in commands agents skills; do
   [ -L "$p" ] && echo "SYMLINK_GUARD: $d -> $(readlink "$p")"
   [ ! -e "$p" ] && echo "MISSING_GUARD: $d"
 done
+
+# Is this machine unstowed? (no symlinks back into the repo at all)
+find $HOME_DIR -maxdepth 4 -type l 2>/dev/null \
+  | xargs -I{} readlink {} 2>/dev/null \
+  | grep -c "$REPO_DIR" || echo "0 symlinks found into repo — likely unstowed"
 ```
+
+If the collision count is high or zero symlinks point back into the repo, load
+`scenarios/cold_start.md` before any other scenario.
 
 Match what you see to the table, then load the file(s) that apply.
 
@@ -65,6 +74,7 @@ Match what you see to the table, then load the file(s) that apply.
 
 | Symptom | Load |
 |---|---|
+| Machine has no stow symlinks or high collision count (fresh/unstowed machine) | `scenarios/cold_start.md` |
 | Conflict markers in tracked files after `git pull` | `scenarios/merge_conflicts.md` |
 | Stow "existing target is neither a link nor empty dir" | `scenarios/stow_collision.md` |
 | Guard dir (`.claude/skills`, `.claude/agents`, etc.) is a symlink | `scenarios/guard_directory.md` |
