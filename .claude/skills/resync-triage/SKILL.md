@@ -72,6 +72,7 @@ Match what you see to the table, then load the file(s) that apply.
 | Tracked config file has machine-specific or sensitive content | `scenarios/local_bleed.md` |
 | File appears local but its parent directory is a repo symlink | `scenarios/symlinked_via_dir.md` |
 | `settings.local.json` missing or stale after a fresh stow | `scenarios/settings_drift.md` |
+| `lazy-lock.json` shows as modified or has conflict markers | `scenarios/lazy_lockfile.md` |
 
 ```bash
 # Example: load only what applies
@@ -89,3 +90,69 @@ Handle scenarios in the order listed if multiple apply (git state before stow st
 - Machine-specific content belongs in `.local` files — not in tracked config.
 - Do not commit from this machine unless push access is confirmed.
 - Use `[ -L "$path" ]` to test for symlinks — not `ls -la "$path/"` (trailing slash follows the link).
+
+## Emergency rollback — restore to pre-pull state
+
+If the sync went wrong and you want to get back to exactly where things were before pulling:
+
+### Step R1: Find the pre-pull commit
+
+```bash
+# The reflog records HEAD before the pull — find the entry just before "pull"
+git -C $REPO_DIR reflog | head -20
+```
+
+Look for the entry immediately before `pull` (will read something like `HEAD@{1}: pull: Fast-forward`).
+Note the SHA on that line — call it `PRE_PULL_SHA`.
+
+### Step R2: Reset the repo
+
+```bash
+# Hard reset back to pre-pull state
+git -C $REPO_DIR reset --hard $PRE_PULL_SHA
+
+# Confirm you are back
+git -C $REPO_DIR log --oneline -5
+```
+
+### Step R3: Restore stashed local changes (if Step 2 created a stash)
+
+```bash
+# List stashes — look for the pre-pull stash created in Step 2
+git -C $REPO_DIR stash list
+
+# Pop it (adjust the index if there are multiple stashes)
+git -C $REPO_DIR stash pop stash@{0}
+```
+
+If the pop produces conflicts, the local changes conflict with the pre-pull repo state — treat
+them as a merge conflict and load `scenarios/merge_conflicts.md`.
+
+If you do not want the stashed changes at all (they were noise, not intentional edits):
+
+```bash
+git -C $REPO_DIR stash drop stash@{0}
+```
+
+### Step R4: Verify stow is clean
+
+```bash
+stow --simulate -v -t $HOME_DIR $REPO_DIR/stow-managed 2>&1
+```
+
+If stow simulation is clean, you are back to the pre-pull state. No further stow run is needed
+if the symlinks were already in place before the pull — the repo files they point to are now
+restored to their pre-pull content.
+
+### Step R5: Confirm the environment is healthy
+
+```bash
+# Spot-check a few key symlinks
+ls -la $HOME_DIR/.zshrc $HOME_DIR/.tmux.conf $HOME_DIR/.config/nvim/init.lua
+
+# Open a new shell to verify .zshrc loads cleanly
+zsh -i -c "echo shell ok"
+```
+
+If anything still looks wrong after the rollback, stop and describe the symptom — do not
+apply further fixes blindly.

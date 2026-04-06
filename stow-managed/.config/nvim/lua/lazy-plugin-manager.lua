@@ -33,7 +33,13 @@ vim.opt.rtp:prepend(lazypath)
 -- print("Lua C search path: ", package.cpath)
 
 
-require('lazy').setup('plugins')
+-- lockfile is written to stdpath("data") (~/.local/share/nvim/lazy-lock.json) to keep
+-- runtime state out of the stow-managed tree. The repo copy (lazy-lock.json next to this
+-- config) is a committed snapshot for reproducible installs — copy it there to bootstrap
+-- a new machine: cp ~/.config/nvim/lazy-lock.json ~/.local/share/nvim/lazy-lock.json
+require('lazy').setup('plugins', {
+  lockfile = vim.fn.stdpath("data") .. "/lazy-lock.json",
+})
 
 
 
