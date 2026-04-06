@@ -2,6 +2,10 @@
 
 Read `HOME_DIR` and `REPO_DIR` from the `## Confirmed Paths` section of `/tmp/resync-audit.md`.
 
+Read the approved plan from `/tmp/resync-plan.md`. This is the authoritative source — the
+user may have edited it directly to fill in conflict resolutions or add notes. Do not rely on
+the in-conversation version of the plan.
+
 Work through each approved item in the plan. Do not act on items the user has not approved or asked to skip.
 
 ---

@@ -58,8 +58,20 @@ Format in the plan:
 
 ---
 
-**Stop here.** Present this plan and wait for the user to:
-1. Review and annotate each item
+Write the complete plan to `/tmp/resync-plan.md` using the same format above, then tell the
+user the file is ready to review:
+
+```
+Plan written to /tmp/resync-plan.md — open it, fill in any conflict resolutions, then say
+"approved" to proceed or "revise" to adjust classifications.
+```
+
+The file serves as the authoritative record for Phase 7. If the user edits it directly
+(filling in conflict resolutions, adding notes), re-read it before executing Phase 7 — do not
+rely on the in-conversation version.
+
+**Stop here.** Wait for the user to:
+1. Review `/tmp/resync-plan.md`
 2. Fill in a resolution for every conflict (`take repo` / `take local` / `merge` / `defer`)
 3. Explicitly say "approved" or request revisions
 
