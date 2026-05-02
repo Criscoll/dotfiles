@@ -36,7 +36,7 @@ require("lazy-plugin-manager")
 require("snippets")
 
 -- Set default colorscheme
-vim.cmd("colorscheme catppuccin")
+vim.cmd("colorscheme terafox")
 
 -- Enabel gx url opening for unix
 if vim.fn.has("unix") == 1 then
