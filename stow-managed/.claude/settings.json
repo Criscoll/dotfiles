@@ -1,10 +1,4 @@
 {
-  "alwaysThinkingEnabled": true,
-  "effortLevel": "high",
-  "statusLine": {
-    "type": "command",
-    "command": "bash $HOME/.claude/statusline-command.sh"
-  },
   "permissions": {
     "allow": [
       "Bash(ls *)",
@@ -27,9 +21,20 @@
           {
             "type": "command",
             "command": "bash $HOME/.claude/hook-pre-tool-use.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hook-stupid-commands.sh"
           }
         ]
       }
     ]
-  }
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash $HOME/.claude/statusline-command.sh"
+  },
+  "alwaysThinkingEnabled": true,
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true
 }
