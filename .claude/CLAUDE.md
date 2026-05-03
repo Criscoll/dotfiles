@@ -21,15 +21,17 @@ When adding config, ask: "Is this generic enough to share across all devices?" I
 
 Everything under `stow-managed/` is symlinked into `~` via:
 ```bash
-stow -v -t ~ ~/Repos/dotfiles/stow-managed/
+cd ~/Repos/dotfiles && stow -v -t ~ stow-managed
 ```
 
 This makes the repo the shared base. Files like `~/.zshrc` and `~/.tmux.conf` are symlinks back into this repo.
 
 **Always simulate before applying.** Run stow with `--simulate` first to preview what it will do and catch conflicts before they happen:
 ```bash
-stow -v --simulate -t ~ ~/Repos/dotfiles/stow-managed/
+cd ~/Repos/dotfiles && stow -v --simulate -t ~ stow-managed
 ```
+
+Note: stow must be invoked from the repo root with the bare package name (`stow-managed`). Passing a full path (e.g. `~/Repos/dotfiles/stow-managed/`) causes a "Slashes are not permitted in package names" error.
 
 ### This Repo Is Not the Exclusive Owner of Config
 
@@ -68,6 +70,16 @@ Example `stow-managed/.stow-local-ignore`:
 ```
 
 This file is gitignored — each machine keeps its own version. It is never committed to the repo.
+
+### Bootstrap Conflict: `~/.claude/settings.json`
+
+On a fresh Claude Code install, `~/.claude/settings.json` already exists as a plain file (default content: `{"theme":"dark"}`). Stow cannot replace a regular file with a symlink and will abort with a conflict error. Before running stow on a new machine, remove or back it up:
+
+```bash
+mv ~/.claude/settings.json ~/.claude/settings.json.bak
+```
+
+Then stow will create the symlink pointing to the repo version.
 
 ### Machine-Specific Claude Code Settings (`settings.local.json`)
 
