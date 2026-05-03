@@ -279,10 +279,10 @@ function ,pdfcompress_higherquality() {
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 source <(fzf --zsh)
-export FZF_DEFAULT_COMMAND='rg --files'
+export FZF_DEFAULT_COMMAND='rg -uu --files'
 
 function fzf_rg_select() {
-    local file file=$(rg --files | fzf)
+    local file file=$(rg -uu --files | fzf)
     if [[ -n $file ]]; then
         BUFFER+="$file"
         CURSOR=$#BUFFER
