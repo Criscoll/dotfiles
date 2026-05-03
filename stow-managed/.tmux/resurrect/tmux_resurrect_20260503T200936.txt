@@ -1,0 +1,28 @@
+pane	CLI	1	0	:~-	1	:/home/cristian	1	zsh	45280	:
+pane	CLI	1	0	:~-	2	✳ Google Workspace MCP Gmail integration	:/home/cristian	0	claude	:claude
+pane	CLI	2	0	:~	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	CLI	3	1	:*	1	pop-os	:/home/cristian/.ssh	1	ssh	:ssh cristian@134.199.169.64
+pane	CLI	4	0	:~	1	pop-os	:/home/cristian/Documents/Notes	1	zsh	:
+pane	CLI	5	0	:~	1	pop-os	:/home/cristian	1	zsh	:
+pane	claude-MISC	1	0	:~-	1	pop-os	:/home/cristian/Repos/01_Projects/google_workspace_mcp	1	zsh	:
+pane	claude-MISC	2	0	:~	1	:/home/cristian/Repos/dotfiles	1	zsh	45429	:
+pane	claude-MISC	3	1	:~*	1	✳ Change git remote from GitHub to GitLab	:/home/cristian/Repos	1	claude	:claude
+pane	claude-MISC	4	0	:~	1	✳ Create comprehensive gitignore for repo cleanup	:/home/cristian/Documents/Notes	1	zsh	:
+pane	claude-TASKS	1	1	:~*	1	:/home/cristian	1	ssh	45547	:
+pane	nvim	1	1	:~*	1	pop-os	:/home/cristian/Documents/Notes	1	nvim	:nvim .
+pane	nvim	2	0	:~-	1	pop-os	:/home/cristian	1	zsh	:
+pane	nvim	3	0	:~	1	pop-os	:/home/cristian	1	zsh	:
+window	CLI	1	:quick	0	:~-	58a8,319x74,0,0{159x74,0,0,1,159x74,160,0,2}	off
+window	CLI	2	:config	0	:~	62f8,319x74,0,0,19	off
+window	CLI	3	:VPS	1	:*	62f6,319x74,0,0,17	off
+window	CLI	4	:notes	0	:~	c581,319x74,0,0,4	off
+window	CLI	5	:zsh	0	:~	c582,319x74,0,0,5	:
+window	claude-MISC	1	:quick	0	:~-	c585,319x74,0,0,8	off
+window	claude-MISC	2	:config	0	:~	c584,319x74,0,0,7	off
+window	claude-MISC	3	:questions	1	:~*	c583,319x74,0,0,6	off
+window	claude-MISC	4	:admin	0	:~	c586,319x74,0,0,9	off
+window	claude-TASKS	1	:google-workspace	1	:~*	62ef,319x74,0,0,10	off
+window	nvim	1	:notes	1	:~*	62f1,319x74,0,0,12	off
+window	nvim	2	:zsh	0	:~-	62f2,319x74,0,0,13	:
+window	nvim	3	:zsh	0	:~	62f3,319x74,0,0,14	:
+state	CLI	claude-MISC

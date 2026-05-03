@@ -1,0 +1,29 @@
+pane	CLI	1	0	:~	1	pop-os	:/home/cristian/Documents/Notes/06_Boxes/Stash/Reactions/00_ALL	1	zsh	:zsh
+pane	CLI	1	0	:~	2	pop-os	:/home/cristian/.ssh	0	zsh	:
+pane	CLI	2	0	:~-	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	CLI	3	1	:~*Z	1	:/home/cristian	1	ssh	45318	:
+pane	CLI	3	1	:~*Z	2	pop-os	:/home/cristian/.ssh	0	zsh	:
+pane	CLI	4	0	:~	1	pop-os	:/home/cristian/Documents/Notes	1	zsh	:
+pane	CLI	5	0	:~	1	pop-os	:/home/cristian	1	zsh	:
+pane	claude-MISC	1	0	:~	1	pop-os	:/home/cristian/Repos/01_Projects/google_workspace_mcp	1	zsh	:
+pane	claude-MISC	2	1	:*	1	⠐ Configure fzf to search all files including gitignored	:/home/cristian/Repos/dotfiles	1	claude	:claude --dangerously-skip-permissions
+pane	claude-MISC	3	0	:~-	1	✳ Resolve workspace trust error in Claude CLI	:/home/cristian	1	claude	:claude
+pane	claude-MISC	4	0	:~	1	✳ Create comprehensive gitignore for repo cleanup	:/home/cristian/Documents/Notes	1	zsh	:
+pane	claude-TASKS	1	1	:*	1	⠐ Fix Claude Code workspace trust issue	:/home/cristian	1	ssh	:ssh cristian@134.199.169.64
+pane	nvim	1	1	:~*	1	pop-os	:/home/cristian/Documents/Notes	1	nvim	:nvim .
+pane	nvim	2	0	:~-	1	pop-os	:/home/cristian	1	zsh	:
+pane	nvim	3	0	:~	1	pop-os	:/home/cristian	1	zsh	:
+window	CLI	1	:quick	0	:~	58a8,319x74,0,0{159x74,0,0,1,159x74,160,0,2}	off
+window	CLI	2	:config	0	:~-	62f8,319x74,0,0,19	off
+window	CLI	3	:VPS	1	:~*Z	47b6,319x74,0,0[319x37,0,0,3,319x36,0,38,17]	off
+window	CLI	4	:notes	0	:~	c581,319x74,0,0,4	off
+window	CLI	5	:zsh	0	:~	c582,319x74,0,0,5	:
+window	claude-MISC	1	:quick	0	:~	c585,319x74,0,0,8	off
+window	claude-MISC	2	:config	1	:*	c584,319x74,0,0,7	off
+window	claude-MISC	3	:questions	0	:~-	c583,319x74,0,0,6	off
+window	claude-MISC	4	:admin	0	:~	c586,319x74,0,0,9	off
+window	claude-TASKS	1	:google-workspace	1	:*	62ef,319x74,0,0,10	off
+window	nvim	1	:notes	1	:~*	62f1,319x74,0,0,12	off
+window	nvim	2	:zsh	0	:~-	62f2,319x74,0,0,13	:
+window	nvim	3	:zsh	0	:~	62f3,319x74,0,0,14	:
+state	claude-TASKS	claude-MISC
