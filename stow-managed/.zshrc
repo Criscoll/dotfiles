@@ -90,6 +90,7 @@ alias egrep="egrep --color=auto"
 # Tools
 alias fd="fdfind"
 alias py="python3"
+alias ta="tmux attach"
 alias apts="apt search --names-only"
 alias update_all="snap refresh && flatpak update && sudo apt update"
 alias gcalcli_activate="source ~/Repos/gcalcli/venv/bin/activate"
@@ -119,6 +120,7 @@ alias gp="git pull --rebase"
 alias gpl="git pull --rebase"
 alias gs="git status"
 alias ga="git add ."
+alias gaa="git add ."
 alias gcm="git commit -m"
 alias gca="git commit --amend"
 alias gcae="git commit --amend --no-edit"
@@ -139,6 +141,12 @@ alias glhf="git show --name-only HEAD"
 alias glhs="git show --stat -p -U30 HEAD | delta --line-numbers --side-by-side"
 alias glhsnl="git show --stat -p -U30 HEAD | delta --side-by-side"
 alias glhnl="git show --stat -p -U30 HEAD"
+
+function glhff() {
+    git show --stat --format="" HEAD | tail -n +2
+    echo
+    git show --name-status --format="" HEAD | tail -n +2
+}
 
 alias glinl="git show --color --stat -p -U30"
 alias glif="git show --name-only"

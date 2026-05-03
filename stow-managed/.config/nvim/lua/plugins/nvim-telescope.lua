@@ -121,11 +121,12 @@ return {
                     '--with-filename',
                     '--line-number',
                     '--column',
-                    '--smart-case'
+                    '--smart-case',
+                    '--no-ignore'
                 },
                 pickers = {
                     find_files = {
-                        find_command = { 'rg', '--files', '--glob', '!**/venv/**', '--glob', '!**/node_modules/**' }
+                        find_command = { 'rg', '--files', '--no-ignore', '--glob', '!**/venv/**', '--glob', '!**/node_modules/**' }
                     },
                     live_grep = {
                         file_ignore_patterns = { 'node_modules', '.git', 'venv', 'node_modules' },

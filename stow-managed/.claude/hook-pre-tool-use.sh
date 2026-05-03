@@ -26,12 +26,36 @@ dangerous_patterns=(
     'git[[:space:]]+clean[[:space:]]+-[a-zA-Z]*f'
     # Discard working tree changes
     'git[[:space:]]+(checkout|restore)[[:space:]]+--[[:space:]]'
+    # find -delete / find -exec rm — mass file deletion that bypasses the rm pattern
+    'find[[:space:]].*-delete'
+    'find[[:space:]].*-exec[[:space:]]+(sudo[[:space:]]+)?rm'
+    # Pipe to shell — executes arbitrary remote code
+    '(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh|zsh)([[:space:]]|$)'
+    # Force-delete git branch — no recovery without reflog
+    'git[[:space:]]+branch[[:space:]]+-D'
+    # Git stash destruction — permanently loses stashed work
+    'git[[:space:]]+stash[[:space:]]+(drop|clear)'
+    # History rewriting — destructive, often irreversible on remotes
+    'git[[:space:]]+(filter-branch|filter-repo)([[:space:]]|$)'
+    # Truncate — zeros out file contents without removing the file
+    '(^|&&|\|\||;|\|)[[:space:]]*(sudo[[:space:]]+)?truncate[[:space:]]'
+    # Shred — secure overwrite/delete, harder to recover than rm
+    '(^|&&|\|\||;|\|)[[:space:]]*(sudo[[:space:]]+)?shred[[:space:]]'
+    # Sudo — any privileged command execution
+    '(^|&&|\|\||;|\|)[[:space:]]*sudo[[:space:]]'
+    # Kill — terminate processes
+    '(^|&&|\|\||;|\|)[[:space:]]*(sudo[[:space:]]+)?kill(all)?[[:space:]]'
 )
 
+ask() {
+    jq -n --arg reason "$1" \
+        '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":$reason}}'
+    exit 0
+}
+
 for pattern in "${dangerous_patterns[@]}"; do
-    if echo "$command" | grep -qE "$pattern"; then
-        printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"Dangerous command detected — explicit user approval required before running."}}'
-        exit 0
+    if printf '%s' "$command" | command grep -qE "$pattern"; then
+        ask "Dangerous command detected — explicit user approval required before running: $command"
     fi
 done
 
