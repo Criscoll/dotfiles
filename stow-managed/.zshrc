@@ -35,16 +35,9 @@ HISTFILE=~/.zsh_history
 
 # === Environment & PATH ===
 
-export PATH="$HOME/Repos/tmux:$PATH"
-export PATH="$HOME/Repos/alacritty/target/release:$PATH"
-export PATH="$HOME/Applications/nvim-linux-x86_64/bin:$PATH"
-export PATH="$HOME/Applications/helix:$PATH"
+export PATH="$HOME/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
-export PATH="$HOME/Applications/llama_cpp/build/bin:$PATH"
-export PATH="/usr/local/cuda-12/bin:$PATH"
-export PATH=$PATH:/usr/local/go/bin
-export PATH="$PATH:/home/cristian/.lmstudio/bin"  # Added by LM Studio CLI (lms)
 
 export PNPM_HOME="/home/cristian/.local/share/pnpm"
 [[ ":$PATH:" != *":$PNPM_HOME:"* ]] && export PATH="$PNPM_HOME:$PATH"

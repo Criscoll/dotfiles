@@ -1,1 +1,2 @@
-/home/cristian/Repos/alacritty/target/release/alacritty
+#!/bin/sh
+exec "$HOME/opt/alacritty" "$@"

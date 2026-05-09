@@ -101,6 +101,39 @@ Example `~/.claude/settings.local.json`:
 }
 ```
 
+## Binary & Application Installation
+
+Third-party apps and binaries that are installed per-machine (AppImages, tarballs, compiled binaries) follow a consistent two-part pattern:
+
+- **`~/opt/`** — the actual binary or app directory lives here. Never tracked in this repo. Each machine installs what it needs.
+- **`stow-managed/bin/`** — a thin wrapper script per binary, tracked in this repo. `~/bin/` is a stow-managed symlink to this directory and is in `$PATH` via `.zshrc`.
+
+Example wrapper (`stow-managed/bin/nvim`):
+```sh
+#!/bin/sh
+exec "$HOME/opt/nvim.appimage" "$@"
+```
+
+**Current wrappers and their expected binary paths:**
+
+| Wrapper | Expected binary |
+|---|---|
+| `nvim` | `~/opt/nvim.appimage` |
+| `hx` | `~/opt/helix/hx` |
+| `go` | `~/opt/go/bin/go` |
+| `gofmt` | `~/opt/go/bin/gofmt` |
+| `alacritty` | `~/opt/alacritty` |
+
+**Important for agents:** The paths above are conventions, not guarantees. If a wrapper-backed command fails on a specific machine, verify the binary actually exists at the expected location before assuming the wrapper is wrong:
+```bash
+ls ~/opt/nvim.appimage    # does the binary exist?
+~/bin/nvim --version      # does the wrapper resolve correctly?
+```
+
+If the binary is installed somewhere else on a particular machine, update that machine's `~/.zshrc.local` with a direct PATH entry rather than changing the shared wrapper.
+
+**Do not add per-app PATH entries to `.zshrc`.** Machine-specific PATH additions (custom builds, CUDA, LM Studio, etc.) belong in `~/.zshrc.local`.
+
 ## What Must Never Be Committed
 
 This repo is version-controlled and potentially synced across machines — **never commit sensitive or runtime-specific data.** Before staging any changes, verify that no file contains:
