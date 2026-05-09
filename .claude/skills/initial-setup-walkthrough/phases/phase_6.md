@@ -1,46 +1,59 @@
-# Phase 6: Default Shell and .zshrc.local
+# Phase 6: Cargo and delta
 
-## Set zsh as the default shell
+`delta` is a git diff pager used throughout `.zshrc` (aliases like `gd`, `glh`, `gds`, etc.). It is installed via cargo (Rust's package manager). `~/.cargo/bin` is already in `$PATH` via `.zshrc`.
 
-Check the current default:
-```bash
-echo $SHELL
-```
+## Step 1: Install build tools (Linux only)
 
-If it's not `/bin/zsh` or `/usr/bin/zsh`, change it:
-```bash
-chsh -s $(which zsh)
-```
-
-You'll be prompted for your password. The change takes effect on next login (or when you open a new terminal session).
-
-## Create .zshrc.local
-
-`.zshrc.local` is sourced at the end of `.zshrc` for machine-specific config. It is not tracked in the repo — it lives only on this machine.
+Cargo compiles delta from source and requires a C linker. On macOS the Xcode CLT provides this automatically; on Linux it must be installed explicitly.
 
 ```bash
-if [ ! -f ~/.zshrc.local ]; then
-  cat > ~/.zshrc.local << 'EOF'
-# Machine-specific config — not tracked in the dotfiles repo.
-# Add work aliases, local env vars, machine-specific PATH entries, etc.
-
-# Examples:
-# export WORK_TOKEN="..."
-# alias deploy="cd ~/work && ./deploy.sh"
-# export PATH="$HOME/.local/bin:$PATH"
-EOF
-  echo "Created ~/.zshrc.local"
-else
-  echo "~/.zshrc.local already exists — skipping"
-fi
+sudo apt install -y build-essential
 ```
 
-## Verify zsh starts cleanly
+## Step 2: Install cargo
+
+Check if cargo is already installed (skip if step 1 was needed — cargo won't be there yet):
 ```bash
-zsh -c "echo 'zsh started without errors'"
+{ command -v cargo && cargo --version; } || echo "cargo: NOT INSTALLED"
 ```
 
-No error output means the shell config is clean.
+If missing, install via rustup:
+
+### Linux
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. "$HOME/.cargo/env"
+```
+
+### macOS
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. "$HOME/.cargo/env"
+```
+
+### Confirm
+```bash
+cargo --version
+```
+
+## Step 3: Install delta
+
+### Linux and macOS (via cargo)
+```bash
+cargo install git-delta
+```
+
+### macOS alternative (brew)
+```bash
+brew install git-delta
+```
+
+Note: if installed via brew on macOS, the binary lands in the brew prefix, not `~/.cargo/bin` — both are in PATH so either works.
+
+### Confirm
+```bash
+delta --version
+```
 
 ## Route
 ```bash

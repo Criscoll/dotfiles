@@ -34,7 +34,8 @@ EOF
 - **Phase 3** — Create guard directories; resolve the `settings.json` bootstrap conflict
 - **Phase 4** — Run stow (simulate then apply)
 - **Phase 5** — Install ripgrep, then fzf from source (package manager version is outdated)
-- **Phase 6** — Set zsh as the default shell; create a `.zshrc.local` skeleton
+- **Phase 6** — Install cargo (rustup) and delta (git diff pager used by `.zshrc` aliases)
+- **Phase 7** — Set zsh as the default shell; create a `.zshrc.local` skeleton
 
 Confirm with the user before proceeding.
 

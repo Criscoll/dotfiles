@@ -7,7 +7,8 @@
 | 3 | Created guard directories; resolved settings.json bootstrap conflict |
 | 4 | Ran stow — dotfiles are now symlinked from the repo |
 | 5 | Installed ripgrep and fzf (from source, latest version) |
-| 6 | Set zsh as default shell; created `.zshrc.local` skeleton |
+| 6 | Installed cargo (rustup) and delta (git diff pager) |
+| 7 | Set zsh as default shell; created `.zshrc.local` skeleton |
 
 ## What to do next
 
