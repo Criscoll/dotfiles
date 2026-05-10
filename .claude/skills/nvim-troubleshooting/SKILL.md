@@ -1,6 +1,6 @@
 ---
 name: nvim-troubleshooting
-description: Diagnose and fix Neovim startup errors from plugin API breakages — covers mason-lspconfig, nvim-treesitter, nvim-lspconfig, and llama.vim deprecations that surface after upgrading Neovim or running :Lazy update
+description: Diagnose and fix Neovim startup errors from plugin API breakages and Mason installation failures — covers mason-lspconfig, nvim-treesitter, nvim-lspconfig, llama.vim deprecations, and Mason server install errors (stale lockfiles, missing system deps)
 allowed-tools: Bash Read Grep Edit Write
 ---
 
@@ -45,7 +45,10 @@ Match each error to a row in this table and load the scenario file(s) that apply
 | `WARN Server "X" is not a valid entry in ensure_installed` | `scenarios/server-renamed.md` |
 | `E565: Not allowed to change text or change window` | `scenarios/notify-e565.md` |
 | `endpoint is deprecated, use endpoint_fim instead` | `scenarios/llama-vim.md` |
-| Mason fails to install servers on first launch | Check `:MasonLog` — usually a network or path issue, not a config issue |
+| `[mason-lspconfig.nvim] failed to install X` | `scenarios/mason-install-failures.md` |
+| `Lockfile already exists` in mason.log | `scenarios/mason-install-failures.md` (Case A) |
+| `spawn: python3 failed with exit code 1` in mason.log | `scenarios/mason-install-failures.md` (Case B) |
+| `Could not find executable "npm"` in mason.log | `scenarios/mason-install-failures.md` (Case B) |
 
 ```bash
 # Load the relevant scenario
