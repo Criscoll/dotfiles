@@ -1,0 +1,33 @@
+pane	CLI	1	1	:~*	1	:/home/cristian	:/home/cristian	1	zsh	:
+pane	CLI	1	1	:~*	2	✳ Google Workspace MCP Gmail integration	:/home/cristian	0	ssh	:ssh cristian@134.199.169.64
+pane	CLI	2	0	:~-	1	pop-os	:/home/cristian/Repos/dotfiles	0	zsh	:
+pane	CLI	2	0	:~-	2	pop-os	:/home/cristian	1	ssh	:ssh cristian@134.199.169.64
+pane	CLI	3	0	:~	1	pop-os	:/home/cristian/Documents/Notes	1	zsh	:
+pane	CLI	4	0	:~	1	pop-os	:/home/cristian	1	zsh	:
+pane	claude-MISC	1	0	:~	1	pop-os	:/home/cristian/Repos/01_Projects/google_workspace_mcp	1	zsh	:
+pane	claude-MISC	2	1	:*	1	⠐ Configure Neovim lazy plugin manager	:/home/cristian	0	ssh	:ssh cristian@134.199.169.64
+pane	claude-MISC	2	1	:*	2	pop-os	:/home/cristian/Repos/01_Projects/google_workspace_mcp	1	ssh	:ssh cristian@134.199.169.64
+pane	claude-MISC	3	0	:~-	1	✳ Change git remote from GitHub to GitLab	:/home/cristian/Repos	1	zsh	:
+pane	claude-MISC	4	0	:~	1	✳ Create comprehensive gitignore for repo cleanup	:/home/cristian/Documents/Notes	1	zsh	:
+pane	claude-TASKS	1	0	:~-	1	:/home/cristian	:/home/cristian	1	zsh	:
+pane	claude-TASKS	2	1	:~*	1	pop-os	:/home/cristian	1	zsh	:
+pane	nvim	1	1	:~*	1	pop-os	:/home/cristian	1	ssh	:ssh cristian@134.199.169.64
+pane	nvim	2	0	:~-	1	pop-os	:/home/cristian/Documents/Notes	0	zsh	:
+pane	nvim	2	0	:~-	2	pop-os	:/home/cristian/Documents/Notes	1	ssh	:ssh cristian@134.199.169.64
+pane	nvim	3	0	:~	1	pop-os	:/home/cristian	1	zsh	:
+pane	nvim	4	0	:~	1	pop-os	:/home/cristian/Documents/Notes	1	zsh	:
+window	CLI	1	:quick	1	:~*	58a8,319x74,0,0{159x74,0,0,1,159x74,160,0,2}	off
+window	CLI	2	:config	0	:~-	68ae,319x74,0,0{159x74,0,0,3,159x74,160,0,16}	off
+window	CLI	3	:notes	0	:~	c582,319x74,0,0,5	off
+window	CLI	4	:zsh	0	:~	c583,319x74,0,0,6	:
+window	claude-MISC	1	:quick	0	:~	c584,319x74,0,0,7	off
+window	claude-MISC	2	:config	1	:*	6cb2,319x74,0,0{159x74,0,0,8,159x74,160,0,19}	off
+window	claude-MISC	3	:questions	0	:~-	c586,319x74,0,0,9	off
+window	claude-MISC	4	:admin	0	:~	62ef,319x74,0,0,10	off
+window	claude-TASKS	1	:google-workspace	0	:~-	62f0,319x74,0,0,11	off
+window	claude-TASKS	2	:zsh	1	:~*	62f4,319x74,0,0,15	:
+window	nvim	1	:quick	1	:~*	62f3,319x74,0,0,14	off
+window	nvim	2	:notes	0	:~-	0f8d,319x74,0,0{159x74,0,0,12,159x74,160,0,17}	off
+window	nvim	3	:zsh	0	:~	62f2,319x74,0,0,13	:
+window	nvim	4	:zsh	0	:~	62f7,319x74,0,0,18	:
+state	claude-MISC	nvim
