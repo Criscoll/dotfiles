@@ -33,6 +33,8 @@ Stop and ask when:
 
 The cost of pausing is always lower than the cost of a wrong path.
 
+When there are multiple unknowns to resolve before proceeding, use the `AskUserQuestion` tool to present all choices at once as a structured form — up to 4 questions per call, each with 2–4 labeled options. This is far more efficient than asking one question at a time in plain text. Batch related decisions into a single call whenever possible.
+
 ## Testing
 
 Run one test, watch it pass, then move to the next. Don't batch untested changes.
