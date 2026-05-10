@@ -1,6 +1,6 @@
 ---
 name: nvim-troubleshooting
-description: Diagnose and fix Neovim startup errors from plugin API breakages and Mason installation failures — covers mason-lspconfig, nvim-treesitter, nvim-lspconfig, llama.vim deprecations, and Mason server install errors (stale lockfiles, missing system deps)
+description: Diagnose and fix Neovim startup errors from plugin API breakages, Mason installation failures, and lazy plugin corruption — covers mason-lspconfig, nvim-treesitter, nvim-lspconfig, llama.vim deprecations, Mason server install errors (stale lockfiles, missing system deps), and stale submodule checkouts blocking lazy updates
 allowed-tools: Bash Read Grep Edit Write
 ---
 
@@ -49,6 +49,7 @@ Match each error to a row in this table and load the scenario file(s) that apply
 | `Lockfile already exists` in mason.log | `scenarios/mason-install-failures.md` (Case A) |
 | `spawn: python3 failed with exit code 1` in mason.log | `scenarios/mason-install-failures.md` (Case B) |
 | `Could not find executable "npm"` in mason.log | `scenarios/mason-install-failures.md` (Case B) |
+| `You have local changes` + `fatal: not a git repository: .../jsregexpXXX` | `scenarios/lazy-plugin-corruption.md` |
 
 ```bash
 # Load the relevant scenario
