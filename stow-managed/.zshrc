@@ -70,6 +70,8 @@ bindkey '^e' select_comma_command
 
 alias open="xdg-open"
 
+alias cld="claude --dangerously-skip-permissions"
+
 # Color
 alias ls="ls --color=auto"
 alias lsr="ls -1tr"
