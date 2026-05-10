@@ -149,10 +149,12 @@ return {
 
             require('telescope').load_extension('fzf')
 
-            vim.notify({ "nvim-telescope has been configured" }, "INFO", {
-              title = 'Plugin Ready | nvim-telescope',
-              timeout = 2000,
-            })
+            vim.defer_fn(function()
+                vim.notify("nvim-telescope has been configured", vim.log.levels.INFO, {
+                    title = 'Plugin Ready | nvim-telescope',
+                    timeout = 2000,
+                })
+            end, 0)
         end
     }
 }

@@ -38,10 +38,12 @@ Match each error to a row in this table and load the scenario file(s) that apply
 | Error message | Scenario file |
 |---|---|
 | `attempt to call field 'setup_handlers' (a nil value)` | `scenarios/mason-lspconfig-v2.md` |
-| `module 'nvim-treesitter.configs' not found` | `scenarios/nvim-treesitter-new-api.md` |
-| `attempt to call a table value` in treesitter config | `scenarios/nvim-treesitter-new-api.md` |
+| `attempt to call field 'install' (a nil value)` in treesitter | `scenarios/nvim-treesitter-new-api.md` (Case A) |
+| `module 'nvim-treesitter.configs' not found` | `scenarios/nvim-treesitter-new-api.md` (Case B) |
+| `attempt to call a table value` in treesitter config | `scenarios/nvim-treesitter-new-api.md` (Case B) |
 | `WARN The require('lspconfig') "framework" is deprecated` | `scenarios/lspconfig-deprecated.md` |
-| `WARN Server "tsserver" is not a valid entry in ensure_installed` | `scenarios/server-renamed.md` |
+| `WARN Server "X" is not a valid entry in ensure_installed` | `scenarios/server-renamed.md` |
+| `E565: Not allowed to change text or change window` | `scenarios/notify-e565.md` |
 | `endpoint is deprecated, use endpoint_fim instead` | `scenarios/llama-vim.md` |
 | Mason fails to install servers on first launch | Check `:MasonLog` — usually a network or path issue, not a config issue |
 

@@ -1,53 +1,45 @@
-# Scenario: nvim-treesitter.configs not found / attempt to call a table value
+# Scenario: nvim-treesitter API mismatch
 
-The `nvim-treesitter.configs` module was removed in the version that requires nvim 0.12+.
-Any config using `require('nvim-treesitter.configs').setup({...})` will crash on startup.
+Two opposite mismatches are possible. Always confirm which one before fixing.
 
-A secondary error — `attempt to call a table value` — occurs when calling
-`require('nvim-treesitter.install').install({...})()`. The `install` function returns an
-async `Task` table, not a callable.
-
-## Confirm
+## Confirm: which API does the installed plugin actually export?
 
 ```bash
-# configs module does not exist in the new version
 ls ~/.local/share/nvim/lazy/nvim-treesitter/lua/nvim-treesitter/
-# Expected: async.lua config.lua health.lua indent.lua init.lua install.lua log.lua parsers.lua util.lua
-# No configs.lua = new API required
+# configs.lua present → old API (configs.setup) is current
+# configs.lua absent  → new API (no setup, no install function yet)
 
-# What setup() accepts now (only install_dir)
-grep -n "function M.setup\|install_dir" ~/.local/share/nvim/lazy/nvim-treesitter/lua/nvim-treesitter/config.lua | head -5
+grep -n "^M\.\|^function M\." ~/.local/share/nvim/lazy/nvim-treesitter/lua/nvim-treesitter/install.lua | grep -E "ensure_installed|^M\.install\b"
+# M.ensure_installed present, no M.install → old API
+# M.install present               → new API
 ```
 
-## What changed
+---
 
-| Old API (configs module) | New API (nvim 0.12+) |
-|---|---|
-| `require('nvim-treesitter.configs').setup({ highlight = {enable=true}, ... })` | Removed |
-| `highlight = { enable = true }` | Automatic — nvim 0.12 enables treesitter highlighting for any buffer with an installed parser |
-| `indent = { enable = true }` | Handled by `nvim-treesitter.indent` module (set indentexpr per buffer) |
-| `ensure_installed = { ... }` | `require('nvim-treesitter.install').install({ ... })` |
-| `sync_install`, `incremental_selection` | No equivalent in new API |
-| `textobjects = { move = { ... } }` | Configure via `nvim-treesitter-textobjects.move` module directly |
+## Case A — Config calls `install()` but plugin exports `ensure_installed`
 
-## Fix
+**Error:** `attempt to call field 'install' (a nil value)`
 
-Replace the entire config function in the treesitter plugin spec:
+The installed plugin (current master as of 2026-05) still uses the old API. A config that
+was pre-updated for a hypothetical new API will crash because `install()` is not exported.
+
+**Fix:** Revert the config function to `configs.setup()`:
 
 ```lua
 config = function()
-    -- install parsers (idempotent — skips already-installed ones)
-    require('nvim-treesitter.install').install({
-        "json", "javascript", "typescript", "tsx",
-        "yaml", "html", "css", "markdown", "markdown_inline",
-        "svelte", "bash", "lua", "vim", "dockerfile",
-        "gitignore", "query", "vimdoc",
-        "c", "cpp", "java", "scala", "python",
+    require('nvim-treesitter.configs').setup({
+        ensure_installed = {
+            "json", "javascript", "typescript", "tsx",
+            "yaml", "html", "css", "markdown", "markdown_inline",
+            "svelte", "bash", "lua", "vim", "dockerfile",
+            "gitignore", "query", "vimdoc",
+            "c", "cpp", "java", "scala", "python",
+        },
+        highlight = { enable = true },
+        indent = { enable = true },
     })
-    -- note: no trailing () — install() starts an async task and returns a Task table
 
-    -- textobject keymaps via the move module directly
-    local move = require('nvim-treesitter-textobjects.move')
+    local move = require('nvim-treesitter.textobjects.move')
     vim.keymap.set({ 'n', 'x', 'o' }, ']n',    function() move.goto_next_start('@function.outer') end,     { silent = true, desc = 'Next function start' })
     vim.keymap.set({ 'n', 'x', 'o' }, '<C-n>', function() move.goto_next_start('@function.outer') end,     { silent = true, desc = 'Next function start' })
     vim.keymap.set({ 'n', 'x', 'o' }, '[n',    function() move.goto_previous_start('@function.outer') end, { silent = true, desc = 'Prev function start' })
@@ -55,28 +47,43 @@ config = function()
 end,
 ```
 
-## Notes on the async install call
+**Textobjects require path:** `require('nvim-treesitter.textobjects.move')` — the module
+lives under `nvim-treesitter/lua/nvim-treesitter/textobjects/move.lua`, not under a
+top-level `nvim-treesitter-textobjects` module.
 
-`require('nvim-treesitter.install').install({...})` starts an async task (returns a `Task`
-table). Do NOT call it with a trailing `()` — that tries to invoke the returned table as a
-function and crashes with `attempt to call a table value`. The async task runs in the
-background; parser installation messages appear in the status line asynchronously.
+---
 
-`install_lang` checks `vim.list_contains(config.get_installed(), lang)` before doing any
-work, so calling install on startup is idempotent and does not re-download existing parsers.
+## Case B — Config calls `configs.setup()` but `configs.lua` was removed
 
-## nvim-treesitter-textobjects move module API
+**Error:** `module 'nvim-treesitter.configs' not found`
+
+The plugin was updated to a version that removed the `configs` module entirely. At that
+point, `configs.setup()` is gone and highlighting/indent are handled automatically by Neovim.
+
+**Fix:** Migrate to the new API (only valid once `configs.lua` is confirmed absent):
 
 ```lua
-local move = require('nvim-treesitter-textobjects.move')
--- Available functions:
+config = function()
+    require('nvim-treesitter.install').install({
+        "json", "javascript", ...
+    })
+    -- no trailing () — install() returns a Task table, not a callable
+
+    local move = require('nvim-treesitter.textobjects.move')
+    -- same keymaps as above
+end,
+```
+
+---
+
+## nvim-treesitter-textobjects move API
+
+```lua
+local move = require('nvim-treesitter.textobjects.move')
 move.goto_next_start(query_strings, query_group?)
 move.goto_next_end(query_strings, query_group?)
 move.goto_previous_start(query_strings, query_group?)
 move.goto_previous_end(query_strings, query_group?)
-move.goto_next(query_strings, query_group?)
-move.goto_previous(query_strings, query_group?)
 ```
 
-`query_strings` accepts a string (`'@function.outer'`) or a list. `query_group` defaults to
-`'textobjects'`.
+`query_strings` is a string (`'@function.outer'`) or list. `query_group` defaults to `'textobjects'`.

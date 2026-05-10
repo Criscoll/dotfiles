@@ -8,15 +8,19 @@ return {
             "nvim-treesitter/nvim-treesitter-textobjects",
         },
         config = function()
-            require('nvim-treesitter.install').install({
-                "json", "javascript", "typescript", "tsx",
-                "yaml", "html", "css", "markdown", "markdown_inline",
-                "svelte", "bash", "lua", "vim", "dockerfile",
-                "gitignore", "query", "vimdoc",
-                "c", "cpp", "java", "scala", "python",
+            require('nvim-treesitter.configs').setup({
+                ensure_installed = {
+                    "json", "javascript", "typescript", "tsx",
+                    "yaml", "html", "css", "markdown", "markdown_inline",
+                    "svelte", "bash", "lua", "vim", "dockerfile",
+                    "gitignore", "query", "vimdoc",
+                    "c", "cpp", "java", "scala", "python",
+                },
+                highlight = { enable = true },
+                indent = { enable = true },
             })
 
-            local move = require('nvim-treesitter-textobjects.move')
+            local move = require('nvim-treesitter.textobjects.move')
             vim.keymap.set({ 'n', 'x', 'o' }, ']n',    function() move.goto_next_start('@function.outer') end,     { silent = true, desc = 'Next function start' })
             vim.keymap.set({ 'n', 'x', 'o' }, '<C-n>', function() move.goto_next_start('@function.outer') end,     { silent = true, desc = 'Next function start' })
             vim.keymap.set({ 'n', 'x', 'o' }, '[n',    function() move.goto_previous_start('@function.outer') end, { silent = true, desc = 'Prev function start' })

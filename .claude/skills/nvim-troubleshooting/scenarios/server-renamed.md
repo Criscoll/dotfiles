@@ -1,56 +1,59 @@
-# Scenario: Invalid server name in ensure_installed or setup_handlers
+# Scenario: Invalid server name in ensure_installed
 
-mason-lspconfig validates server names against its own registry. If a server was renamed in
-lspconfig, using the old name produces:
+mason-lspconfig validates `ensure_installed` entries against its own registry, which may
+differ from nvim-lspconfig's server names. Either direction can produce this warning:
 
 ```
-WARN Server "tsserver" is not a valid entry in ensure_installed. Make sure to only provide
+WARN Server "X" is not a valid entry in ensure_installed. Make sure to only provide
 lspconfig server names.
 ```
 
-The server will not be installed or configured.
+**Key distinction:** `ensure_installed` uses **mason-lspconfig names**. `vim.lsp.config()`
+and `lspconfig.X.setup()` use **nvim-lspconfig names**. These are sometimes different for
+the same server — always confirm each separately.
 
-## Known renames
+## Known name divergence
 
-| Old name | New name | When |
+| mason-lspconfig name | nvim-lspconfig name | Notes |
 |---|---|---|
-| `tsserver` | `ts_ls` | nvim-lspconfig ~0.2.x |
+| `tsserver` | `ts_ls` | TypeScript — nvim-lspconfig renamed it ~0.2.x; mason-lspconfig kept `tsserver` |
 
 ## Confirm
 
 ```bash
-# Check the mason-lspconfig server map for the correct current name
-grep -r "tsserver\|ts_ls" ~/.local/share/nvim/lazy/mason-lspconfig.nvim/lua/mason-lspconfig/mappings/ 2>/dev/null | head -5
+# What name does mason-lspconfig use?
+rg "tsserver|ts_ls" ~/.local/share/nvim/lazy/mason-lspconfig.nvim/lua/mason-lspconfig/mappings/
 
-# Alternatively, search lspconfig's server configs
+# What name does nvim-lspconfig use?
 ls ~/.local/share/nvim/lazy/nvim-lspconfig/lsp/ | grep -i "ts"
 ```
 
 ## Fix
 
-Update every occurrence: `ensure_installed`, `setup_handlers` (if using v1 API), and any
-`lspconfig.server.setup()` or `vim.lsp.config('server', ...)` calls.
+Use the **mason-lspconfig name** in `ensure_installed`, and the **nvim-lspconfig name** in
+`vim.lsp.config()` — they may differ:
 
 ```lua
--- mason-lspconfig ensure_installed
+-- mason-lspconfig: use its registry name
 ensure_installed = {
-    "ts_ls",   -- was: "tsserver"
+    "tsserver",   -- mason-lspconfig name (even though nvim-lspconfig calls it ts_ls)
     ...
 }
 
--- vim.lsp.config (new API)
+-- vim.lsp.config: use the nvim-lspconfig name
 vim.lsp.config('ts_ls', { capabilities = capabilities })
-
--- lspconfig (old API, if still in use)
-lspconfig.ts_ls.setup({ capabilities = capabilities })
 ```
+
+Do NOT blindly update `vim.lsp.config()` to match `ensure_installed` or vice versa —
+they key off different registries.
 
 ## Finding the correct name for an unfamiliar server
 
 ```bash
-# List all servers known to mason-lspconfig
+# mason-lspconfig registry
 ls ~/.local/share/nvim/lazy/mason-lspconfig.nvim/lua/mason-lspconfig/mappings/
+rg "<keyword>" ~/.local/share/nvim/lazy/mason-lspconfig.nvim/lua/mason-lspconfig/mappings/
 
-# Or search lspconfig's lsp/ directory
+# nvim-lspconfig server list
 ls ~/.local/share/nvim/lazy/nvim-lspconfig/lsp/ | grep -i "<keyword>"
 ```

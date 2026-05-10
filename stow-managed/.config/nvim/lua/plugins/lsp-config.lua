@@ -33,7 +33,7 @@ return {
 					"lua_ls",
 					"pylsp",
 					"clangd",
-					"ts_ls",
+					"tsserver",
 					"html",
 				},
 				-- automatic_enable = true (default): calls vim.lsp.enable() for each installed server
