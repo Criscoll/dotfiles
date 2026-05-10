@@ -1,7 +1,7 @@
 ---
 name: calendar-triage
 description: Review past calendar events missing a ✅ or ❌ outcome annotation and resolve them. Use when user says "triage my calendar", "catch up on calendar", "review unresolved events", "annotate past events", or similar.
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 You are running the calendar triage skill. Surface past events missing a ✅ or ❌ outcome annotation, collect all verdicts from the user in one conversational pass, then apply all calendar updates in a single batch. The goal is minimum friction — the user should not have to wait for API calls between answers.
