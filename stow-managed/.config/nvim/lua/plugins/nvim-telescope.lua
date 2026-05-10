@@ -1,3 +1,32 @@
+local function lga_with_go_up(init_cwd, init_text)
+    local function open(dir, query)
+        require('telescope').extensions.live_grep_args.live_grep_args({
+            cwd = dir,
+            default_text = query,
+            prompt_title = "Live Grep Args in (" .. dir .. ")",
+            mappings = {
+                i = {
+                    ["<c-g>"] = function(prompt_bufnr)
+                        local action_state = require('telescope.actions.state')
+                        local actions = require('telescope.actions')
+                        local picker = action_state.get_current_picker(prompt_bufnr)
+                        local cur_cwd = tostring(picker.cwd or vim.fn.getcwd())
+                        local parent = vim.fn.fnamemodify(cur_cwd, ':h')
+                        if parent == cur_cwd then
+                            vim.notify("Already at filesystem root", vim.log.levels.WARN)
+                            return
+                        end
+                        local cur_query = action_state.get_current_line()
+                        actions.close(prompt_bufnr)
+                        vim.schedule(function() open(parent, cur_query) end)
+                    end,
+                },
+            },
+        })
+    end
+    open(init_cwd or vim.fn.getcwd(), init_text or '')
+end
+
 return {
     {
         'nvim-telescope/telescope-fzf-native.nvim', build = 'make'
@@ -8,6 +37,7 @@ return {
              'nvim-lua/plenary.nvim',
              "nvim-tree/nvim-web-devicons",
              'nvim-telescope/telescope-fzf-native.nvim',
+             'nvim-telescope/telescope-live-grep-args.nvim',
              'rcarriga/nvim-notify',
          },
         keys = {
@@ -46,6 +76,8 @@ return {
                     require('telescope.builtin').grep_string({ prompt_title = "Find String (" .. term .. ")", search = term })
                 end
             end, desc = 'Prompted grep' },
+            { '<Leader>fsu', function() lga_with_go_up(vim.fn.getcwd()) end,                         desc = 'Live grep args (ctrl+g: go up dir)' },
+            { '<Leader>fsw', function() lga_with_go_up(vim.fn.getcwd(), vim.fn.expand('<cword>')) end, desc = 'Live grep args word under cursor (ctrl+g: go up dir)' },
             { '<Leader>fsb', function()
                 require('telescope.builtin').live_grep({
                     prompt_title = "Live Grep in Open Buffers", grep_open_files = true,
@@ -111,7 +143,9 @@ return {
         config = function()
             require('telescope').setup{
                 defaults = {
-                    layout_strategy='vertical',
+                    layout_strategy = 'horizontal',
+                    layout_config = { preview_width = 0.4 },
+                    sorting_strategy = 'ascending',
                     preview = { treesitter = false },
                 },
                 vimgrep_arguments = {
@@ -148,6 +182,7 @@ return {
             }
 
             require('telescope').load_extension('fzf')
+            require('telescope').load_extension('live_grep_args')
 
             vim.defer_fn(function()
                 vim.notify("nvim-telescope has been configured", vim.log.levels.INFO, {
