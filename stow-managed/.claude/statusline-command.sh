@@ -27,12 +27,22 @@ fi
 
 # Context usage
 ctx_info=""
-if [ -n "$used_pct" ] && [ -n "$ctx_size" ]; then
-    used_tokens=$(awk "BEGIN{printf \"%.0f\", $ctx_size * $used_pct / 100}")
-    tok_str=$(awk "BEGIN{printf \"%.0fk\", $used_tokens / 1000}")
-    ctx_info=" ctx:${tok_str} ($(printf '%.0f' "$used_pct")%)"
-elif [ -n "$used_pct" ]; then
-    ctx_info=" ctx:$(printf '%.0f' "$used_pct")%"
+if [ -n "$used_pct" ]; then
+    bar=$(awk "BEGIN{
+        total=10; filled=int($used_pct/100*total+0.5); empty=total-filled
+        b=\"\"; for(i=0;i<filled;i++) b=b\"█\"; for(i=0;i<empty;i++) b=b\"░\"
+        printf \"%s\", b
+    }")
+    if [ -n "$ctx_size" ]; then
+        used_tokens=$(awk "BEGIN{printf \"%.0f\", $ctx_size * $used_pct / 100}")
+        tok_str=$(awk "BEGIN{printf \"%.0fk\", $used_tokens / 1000}")
+        ctx_info=" [${bar}] ${tok_str} ($(printf '%.0f' "$used_pct")%)"
+    else
+        ctx_info=" [${bar}] $(printf '%.0f' "$used_pct")%"
+    fi
 fi
 
-printf "%s%s | %s%s" "$short_cwd" "$git_info" "$model" "$ctx_info"
+blue=$(printf '\033[38;5;153m')
+yellow=$(printf '\033[38;5;228m')
+reset=$(printf '\033[0m')
+printf "${blue}%s${reset}%s | ${yellow}%s${reset}%s" "$short_cwd" "$git_info" "$model" "$ctx_info"
