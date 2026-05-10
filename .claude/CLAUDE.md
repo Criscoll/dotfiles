@@ -111,14 +111,14 @@ Third-party apps and binaries that are installed per-machine (AppImages, tarball
 Example wrapper (`stow-managed/bin/nvim`):
 ```sh
 #!/bin/sh
-exec "$HOME/opt/nvim.appimage" "$@"
+exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
 ```
 
 **Current wrappers and their expected binary paths:**
 
 | Wrapper | Expected binary |
 |---|---|
-| `nvim` | `~/opt/nvim.appimage` |
+| `nvim` | `~/opt/nvim-linux-x86_64.appimage` |
 | `hx` | `~/opt/helix/hx` |
 | `go` | `~/opt/go/bin/go` |
 | `gofmt` | `~/opt/go/bin/gofmt` |
@@ -126,7 +126,7 @@ exec "$HOME/opt/nvim.appimage" "$@"
 
 **Important for agents:** The paths above are conventions, not guarantees. If a wrapper-backed command fails on a specific machine, verify the binary actually exists at the expected location before assuming the wrapper is wrong:
 ```bash
-ls ~/opt/nvim.appimage    # does the binary exist?
+ls ~/opt/nvim-linux-x86_64.appimage    # does the binary exist?
 ~/bin/nvim --version      # does the wrapper resolve correctly?
 ```
 
