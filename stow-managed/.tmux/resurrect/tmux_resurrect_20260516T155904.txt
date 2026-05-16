@@ -1,0 +1,34 @@
+pane	CLI	1	1	:~*	1	:/home/cristian	:/home/cristian/Repos/scribbles	0	zsh	:
+pane	CLI	1	1	:~*	2	✳ Google Workspace MCP Gmail integration	:/home/cristian	1	zsh	:
+pane	CLI	2	0	:~-	1	pop-os	:/home/cristian/Repos/dotfiles	0	zsh	:
+pane	CLI	2	0	:~-	2	pop-os	:/home/cristian	1	zsh	:
+pane	CLI	3	0	:~	1	pop-os	:/home/cristian/Documents/Notes	1	zsh	:
+pane	CLI	4	0	:~	1	pop-os	:/home/cristian	1	zsh	:
+pane	claude-MISC	1	0	:~-	1	pop-os	:/home/cristian/Repos/scribbles	1	zsh	:
+pane	claude-MISC	2	1	:~*	1	⠂ Add zsh aliases for directory navigation	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	claude-MISC	2	1	:~*	2	⠂ Investigate recent code changes and additions	:/home/cristian	0	zsh	:
+pane	claude-MISC	3	0	:~	1	:/home/cristian/Repos	:/home/cristian	1	zsh	:
+pane	claude-MISC	4	0	:~	1	✳ Create comprehensive gitignore for repo cleanup	:/home/cristian/Documents/Notes	1	zsh	:
+pane	claude-TASKS	1	0	:~-	1	:/home/cristian	:/home/cristian	1	zsh	:
+pane	claude-TASKS	2	1	:*	1	✳ Review financial spreadsheets project outline	:/home/cristian/Repos/spreadsheets	1	zsh	:
+pane	nvim	1	0	:~	1	pop-os	:/home/cristian/Repos/dotfiles	0	zsh	:
+pane	nvim	1	0	:~	2	pop-os	:/home/cristian/Repos	1	zsh	:
+pane	nvim	2	0	:-Z	1	pop-os	:/home/cristian/Repos/scribbles	1	zsh	:
+pane	nvim	2	0	:-Z	2	pop-os	:/home/cristian/Documents/Notes	0	zsh	:
+pane	nvim	3	1	:*	1	pop-os	:/home/cristian/Repos/spreadsheets	1	zsh	:
+pane	nvim	4	0	:~	1	pop-os	:/home/cristian	1	zsh	:
+window	CLI	1	:quick	1	:~*	cf07,239x54,0,0{119x54,0,0,1,119x54,120,0,2}	off
+window	CLI	2	:config	0	:~-	cf0a,239x54,0,0{119x54,0,0,3,119x54,120,0,4}	off
+window	CLI	3	:notes	0	:~	c1e2,239x54,0,0,5	off
+window	CLI	4	:zsh	0	:~	c1e3,239x54,0,0,6	:
+window	claude-MISC	1	:quick	0	:~-	c1e6,239x54,0,0,9	off
+window	claude-MISC	2	:config	1	:~*	ebe0,239x54,0,0{120x54,0,0,10,118x54,121,0,11}	off
+window	claude-MISC	3	:questions	0	:~	6121,239x54,0,0,12	off
+window	claude-MISC	4	:admin	0	:~	6122,239x54,0,0,13	off
+window	claude-TASKS	1	:google-workspace	0	:~-	6123,239x54,0,0,14	off
+window	claude-TASKS	2	:spreadsheets	1	:*	6124,239x54,0,0,15	off
+window	nvim	1	:quick	0	:~	e8fe,239x54,0,0{119x54,0,0,16,119x54,120,0,17}	off
+window	nvim	2	:notes	0	:-Z	e900,239x54,0,0{119x54,0,0,18,119x54,120,0,19}	off
+window	nvim	3	:spreadsheets	1	:*	e11f,239x54,0,0,20	off
+window	nvim	4	:zsh	0	:~	e120,239x54,0,0,21	:
+state	claude-TASKS	
