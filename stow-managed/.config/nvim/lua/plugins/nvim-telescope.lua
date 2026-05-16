@@ -144,7 +144,7 @@ return {
             require('telescope').setup{
                 defaults = {
                     layout_strategy = 'horizontal',
-                    layout_config = { preview_width = 0.4 },
+                    layout_config = { preview_width = 0.4, prompt_position = 'top' },
                     sorting_strategy = 'ascending',
                     preview = { treesitter = false },
                 },
