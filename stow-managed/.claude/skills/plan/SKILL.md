@@ -1,6 +1,8 @@
 ---
 name: plan
-description: Research and formalize a structured plan for a problem or feature. Use when the user says "plan X", "help me plan", "let's plan out", "create a plan for", or "think through" a problem. Produces a structured document with open questions, edge cases, and decision options — not a final solution.
+description: Research and formalize a structured plan for a problem or feature. Use when the user says "plan X", "help
+me plan", "let's plan out", "create a plan for", or "think through" a problem. Produces a structured document with open
+questions, edge cases, and decision options — not a final solution.
 disable-model-invocation: false
 ---
 
@@ -23,8 +25,23 @@ The text after `/plan` is the problem or feature to plan. If it is vague, interp
 ```
 # Plan: <problem title>
 
-## Problem Statement
-One paragraph. What is the problem, why does it matter, what is the scope?
+## Goals
+One or two sentences. What are we trying to achieve, and why does it matter now?
+This is the anchor — everything else in the plan should serve these goals.
+
+## Ins and Outs
+Treat the solution as a black box. What goes in, what comes out?
+
+**In:** the raw inputs, triggers, or conditions that enter the box
+  (data, events, user actions, system state, problem scenario)
+
+**Box:** the solution / component / process being designed — named, not described yet
+
+**Out:** what emerges that resolves the problem
+  (transformed data, side effects, user-facing results, resolved state)
+
+Repeat this block for each major sub-box if the solution composes multiple stages.
+This section is intentionally abstract — save the internals for later sections.
 
 ## What We Know
 Bullet list of confirmed facts from the codebase, docs, or context.
@@ -55,3 +72,4 @@ Explicitly list what this plan does NOT address.
 - Do not skip the Edge Cases section. If you cannot think of any, say so explicitly.
 - If the problem is well-understood and has no open questions, say that plainly rather than inventing uncertainty.
 - Keep the plan honest: a shorter accurate plan beats a longer speculative one.
+- Keep Ins and Outs abstract. The box label names the thing; the internals belong in later sections. If you find yourself describing *how* the box works, move it to Proposed Steps or Key Decisions.
