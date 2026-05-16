@@ -29,7 +29,15 @@ vim.api.nvim_create_user_command('RestoreSession', function()
 end, {})
 
 vim.api.nvim_create_user_command('PWD', function()
-  vim.cmd('!echo %')
+  local path = vim.fn.expand('%')
+  vim.fn.setreg('+', path)
+  vim.cmd('!echo ' .. vim.fn.shellescape(path))
+end, {})
+
+vim.api.nvim_create_user_command('PR', function()
+  local path = vim.fn.resolve(vim.fn.expand('%:p'))
+  vim.fn.setreg('+', path)
+  vim.cmd('!echo ' .. vim.fn.shellescape(path))
 end, {})
 
 -- Define :ClearMarks command
@@ -169,6 +177,9 @@ vim.api.nvim_create_user_command(
 
 -- Split Tab
 vim.keymap.set('n', '<C-w>z', ':tab split<CR>', { silent = true })
+
+-- Toggle spell checking
+vim.keymap.set('n', '<leader>sp', ':set spell!<CR>', { silent = true })
 
 
 -- Example usage:
