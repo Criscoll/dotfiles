@@ -1,2 +1,2 @@
 #!/bin/sh
-exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
+exec "$HOME/opt/nvim" "$@"
