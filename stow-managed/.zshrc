@@ -95,6 +95,8 @@ alias notes="type notes; cd /home/cristian/Documents/Obsidian"
 alias workbench="type workbench; cd /home/cristian/Documents/Obsidian/02_Workbench/"
 alias tasks="type tasks; cd /home/cristian/Documents/Obsidian/02_Workbench/02_Tasks"
 alias projects="type projects; cd /home/cristian/Repos/01_Projects"
+alias scr="type scr; cd /home/cristian/Repos/scribbles"
+alias dot="type dot; cd /home/cristian/Repos/dotfiles"
 
 # Maven
 alias mvn_build='mvn clean install -T 1C'
