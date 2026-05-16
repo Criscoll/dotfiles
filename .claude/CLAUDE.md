@@ -58,6 +58,11 @@ Current guard directories:
 - `~/.claude/agents/` — global agents (tracked in repo) + machine-specific agents (local only)
 - `~/.claude/commands/` — legacy; skills can be invoked exactly like commands, so prefer `skills/` for anything new
 
+### Apps That Don't Follow Symlinks
+
+Some apps refuse to read config files that are symlinks (returning EACCES). Known cases:
+- **redshift** — `~/.config/redshift.conf` must be a real file. Add it to `.stow-local-ignore` and keep a copy at that path directly.
+
 ### Per-Machine Exclusions (`.stow-local-ignore`)
 
 Read-only machines that don't need all tools (e.g. a Mac without mail tools) can drop a `.stow-local-ignore` file in `stow-managed/` to exclude paths from being stowed. Stow reads this file automatically and skips matching entries.
@@ -118,7 +123,7 @@ exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
 
 | Wrapper | Expected binary |
 |---|---|
-| `nvim` | `~/opt/nvim-linux-x86_64.appimage` |
+| `nvim` | `~/opt/nvim` |
 | `hx` | `~/opt/helix/hx` |
 | `go` | `~/opt/go/bin/go` |
 | `gofmt` | `~/opt/go/bin/gofmt` |
