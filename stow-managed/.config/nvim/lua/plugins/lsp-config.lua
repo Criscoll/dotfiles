@@ -36,7 +36,6 @@ return {
 					"ts_ls",
 					"html",
 				},
-				-- automatic_enable = true (default): calls vim.lsp.enable() for each installed server
 			})
 		end,
 	},
@@ -113,8 +112,7 @@ return {
 			vim.lsp.config('html', { capabilities = capabilities })
 			vim.lsp.config('svelte', { capabilities = capabilities })
 
-			-- svelte is not mason-managed so automatic_enable won't cover it
-			vim.lsp.enable('svelte')
+			vim.lsp.enable({ 'lua_ls', 'pylsp', 'clangd', 'ts_ls', 'html', 'svelte' })
 		end,
 	},
 }

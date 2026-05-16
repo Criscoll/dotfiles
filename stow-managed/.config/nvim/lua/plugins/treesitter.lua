@@ -29,6 +29,7 @@ return {
     },
     {
         'nvim-treesitter/nvim-treesitter-context',
+        enabled = false, -- async parse API incompatibility with nvim 0.12.1; re-enable when upstream fixes it
         dependencies = { 'nvim-treesitter/nvim-treesitter' },
         event = { 'BufReadPre', 'BufNewFile' },
         opts = {
