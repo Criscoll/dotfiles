@@ -1,16 +1,21 @@
 #!/bin/bash
 
 notify_minutes="${1:-}"
+notify_message="${2:-}"
 notify_seconds=0
 notify_sent=false
 
 if [[ -n "$notify_minutes" ]]; then
     if ! [[ "$notify_minutes" =~ ^[0-9]+$ ]]; then
-        echo "Usage: ,timer [minutes]" >&2
+        echo "Usage: ,timer [minutes] [message]" >&2
         exit 1
     fi
     notify_seconds=$((notify_minutes * 60))
-    echo "Timer started. Notification set for ${notify_minutes}m."
+    if [[ -n "$notify_message" ]]; then
+        echo "Timer started. Notification set for ${notify_minutes}m: \"${notify_message}\""
+    else
+        echo "Timer started. Notification set for ${notify_minutes}m."
+    fi
 else
     echo "Timer started."
 fi
@@ -102,7 +107,9 @@ while true; do
 
         if [[ -n "$notify_minutes" ]] && ! $notify_sent && (( elapsed_seconds >= notify_seconds )); then
             notify_sent=true
-            send_notify "${notify_minutes}m elapsed"
+            local msg="${notify_minutes}m elapsed"
+            [[ -n "$notify_message" ]] && msg="${msg}: ${notify_message}"
+            send_notify "$msg"
             printf "\r%-40s\rElapsed time: %s" "" "$formatted_time"
         fi
     fi
