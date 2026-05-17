@@ -1,0 +1,38 @@
+pane	claude-MISC	1	1	:*	1	✳ Add nvim keybinding for fsl with hidden files	:/home/cristian/Repos/dotfiles	1	claude	:claude --dangerously-skip-permissions
+pane	claude-MISC	1	1	:*	2	✳ Clarify MCP crawl request	:/home/cristian/Repos	0	claude	:zsh
+pane	claude-MISC	1	1	:*	3	pop-os	:/home/cristian	0	ssh	:ssh -L 11235:localhost:11235 -N cristian@134.199.169.64
+pane	claude-MISC	1	1	:*	4	pop-os	:/home/cristian/Repos/scribbles	0	zsh	:
+pane	claude-MISC	1	1	:*	5	✳ Review crawl4ai repository features	:/home/cristian/Repos/dotfiles	0	claude	:claude --dangerously-skip-permissions
+pane	claude-MISC	2	0	:~	1	:/home/cristian/Repos	:/home/cristian	1	zsh	:
+pane	claude-MISC	3	0	:~-	1	✳ Create comprehensive gitignore for repo cleanup	:/home/cristian/Documents/Notes	1	zsh	:
+pane	claude-TASKS	1	0	:~	1	:/home/cristian	:/home/cristian	1	zsh	:
+pane	claude-TASKS	2	1	:*	1	⠐ Summarize financial spreadsheets project status	:/home/cristian/Repos/spreadsheets	1	claude	:zsh
+pane	claude-TASKS	3	0	:~-	1	✳ Find shower mold removal and resealing service	:/home/cristian/Repos/scribbles	1	claude	:claude --dangerously-skip-permissions
+pane	cli	1	0	:~-	1	:/home/cristian	:/home/cristian/Repos/scribbles	1	ssh	:ssh cristian@134.199.169.64
+pane	cli	1	0	:~-	2	✳ Google Workspace MCP Gmail integration	:/home/cristian/Repos/crawl4ai	0	zsh	:
+pane	cli	1	0	:~-	3	✳ Claude Code	:/home/cristian/Repos/spreadsheets	0	ssh	:ssh cristian@134.199.169.64
+pane	cli	2	0	:~	1	pop-os	:/home/cristian/Repos/dotfiles	1	zsh	:
+pane	cli	2	0	:~	2	pop-os	:/home/cristian	0	zsh	:
+pane	cli	3	0	:	1	pop-os	:/home/cristian	1	bash	:/bin/bash /home/cristian/bin/,timer 30 take a break
+pane	cli	4	1	:~*	1	pop-os	:/home/cristian/Repos/spreadsheets	1	zsh	:
+pane	nvim	1	0	:~-	1	pop-os	:/home/cristian/Repos/dotfiles	0	zsh	:
+pane	nvim	1	0	:~-	2	pop-os	:/tmp	1	zsh	:
+pane	nvim	2	0	:~Z	1	pop-os	:/home/cristian/Repos/scribbles	1	nvim	:/tmp/.mount_nvimgDCBei/usr/bin/nvim .
+pane	nvim	2	0	:~Z	2	pop-os	:/home/cristian/Documents/Notes	0	zsh	:
+pane	nvim	3	1	:~*	1	pop-os	:/home/cristian/Repos/spreadsheets	1	nvim	:/tmp/.mount_nvimOeJCij/usr/bin/nvim .
+pane	nvim	4	0	:~	1	pop-os	:/home/cristian	1	zsh	:
+window	claude-MISC	1	:config	1	:*	d95e,319x74,0,0{160x74,0,0[160x37,0,0,9,160x36,0,38{80x36,0,38,22,79x36,81,38[79x18,81,38,23,79x17,81,57,24]}],158x74,161,0,8}	off
+window	claude-MISC	2	:questions	0	:~	62ef,319x74,0,0,10	off
+window	claude-MISC	3	:admin	0	:~-	62f0,319x74,0,0,11	off
+window	claude-TASKS	1	:google-workspace	0	:~	62f1,319x74,0,0,12	off
+window	claude-TASKS	2	:spreadsheets	1	:*	62f2,319x74,0,0,13	off
+window	claude-TASKS	3	:home-renovation	0	:~-	e2ef,319x74,0,0,20	off
+window	cli	1	:quick	0	:~-	b23d,319x74,0,0{159x74,0,0,1,159x74,160,0[159x37,160,0,2,159x36,160,38,21]}	off
+window	cli	2	:config	0	:~	50ab,319x74,0,0{159x74,0,0,3,159x74,160,0,4}	off
+window	cli	3	:timer	0	:	c583,319x74,0,0,6	off
+window	cli	4	:spreadsheets	1	:~*	e2f4,319x74,0,0,25	off
+window	nvim	1	:quick	0	:~-	0f8d,319x74,0,0{159x74,0,0,14,159x74,160,0,15}	off
+window	nvim	2	:notes	0	:~Z	0f8f,319x74,0,0{159x74,0,0,16,159x74,160,0,17}	off
+window	nvim	3	:spreadsheets	1	:~*	62f7,319x74,0,0,18	off
+window	nvim	4	:zsh	0	:~	62f8,319x74,0,0,19	:
+state	claude-TASKS	claude-MISC
