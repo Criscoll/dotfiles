@@ -51,6 +51,23 @@ Every ~10 actions, re-read the original goal. Long threads drift. Re-derive from
 - Use `file:line` references when pointing to code
 - Prefer editing existing files over creating new ones
 
+## MCP Servers
+
+MCP servers are registered via `claude mcp add` and stored in `~/.claude.json` (not in `settings.json`). Never manually add `mcpServers` to `settings.json` — always use `claude mcp add`. This file is not tracked in dotfiles — re-run the relevant commands on each new machine after setting up any required prerequisites (e.g. SSH tunnels).
+
+**Current user-scoped MCPs:**
+
+| Name | Transport | URL / Command | Prerequisites |
+|---|---|---|---|
+| `c4ai-sse` | SSE | `http://localhost:11235/mcp/sse` | SSH tunnel to VPS: `ssh -L 11235:localhost:11235 -N cristian@134.199.169.64` |
+
+To re-register on a new machine:
+```bash
+claude mcp add --transport sse --scope user c4ai-sse http://localhost:11235/mcp/sse
+```
+
+---
+
 ## What Not to Do
 
 - Don't add features, refactors, or improvements beyond what was asked
