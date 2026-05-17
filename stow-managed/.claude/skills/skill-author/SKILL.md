@@ -10,9 +10,11 @@ You are running the skill-author skill. Your job is to create or update a skill 
 
 ## Conventions to follow
 
-**Location:** `stow-managed/.claude/skills/<skill-name>/SKILL.md`
+**Location:** `stow-managed/.claude/skills/<skill-name>/SKILL.md` for global skills shared across all projects.
 
-Skills are stowed to `~/.claude/skills/` and picked up by Claude Code automatically. Supporting files (reference data, templates) can live alongside `SKILL.md` in the same directory — reference them at runtime via `$CLAUDE_SKILL_DIR`.
+For skills that reference a specific repo (paths, project conventions, domain knowledge tied to one codebase), place them in `<repo>/.claude/skills/<skill-name>/SKILL.md` instead — they load automatically in that project and don't pollute the global skill list. If it's unclear whether a skill is global or project-specific, ask the user.
+
+Skills are stowed (or placed directly) into `~/.claude/skills/` and picked up by Claude Code automatically. Supporting files (reference data, templates) can live alongside `SKILL.md` in the same directory — reference them at runtime via `$CLAUDE_SKILL_DIR`.
 
 **Frontmatter (required):**
 ```markdown
