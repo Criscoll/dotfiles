@@ -1,6 +1,19 @@
 #!/bin/bash
 
-echo "Timer started."
+notify_minutes="${1:-}"
+notify_seconds=0
+notify_sent=false
+
+if [[ -n "$notify_minutes" ]]; then
+    if ! [[ "$notify_minutes" =~ ^[0-9]+$ ]]; then
+        echo "Usage: ,timer [minutes]" >&2
+        exit 1
+    fi
+    notify_seconds=$((notify_minutes * 60))
+    echo "Timer started. Notification set for ${notify_minutes}m."
+else
+    echo "Timer started."
+fi
 echo "Press 'p' to pause/resume, Ctrl+C to stop."
 echo ""
 
@@ -54,6 +67,16 @@ stty cbreak
 trap cleanup INT
 trap 'stty echo; exit' TERM
 
+# Function to send a desktop notification
+send_notify() {
+    local msg="$1"
+    if command -v notify-send &>/dev/null; then
+        notify-send "Timer" "$msg"
+    elif command -v osascript &>/dev/null; then
+        osascript -e "display notification \"$msg\" with title \"Timer\""
+    fi
+}
+
 # Function to check for user input
 check_input() {
     if read -t 0.1 -n 1 key; then
@@ -76,6 +99,12 @@ while true; do
         formatted_time=$(format_time $elapsed_seconds)
         # Display time
         printf "\rElapsed time: %s" "$formatted_time"
+
+        if [[ -n "$notify_minutes" ]] && ! $notify_sent && (( elapsed_seconds >= notify_seconds )); then
+            notify_sent=true
+            send_notify "${notify_minutes}m elapsed"
+            printf "\r%-40s\rElapsed time: %s" "" "$formatted_time"
+        fi
     fi
     
     sleep 0.1
