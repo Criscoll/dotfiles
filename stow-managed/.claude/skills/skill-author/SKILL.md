@@ -25,12 +25,64 @@ disable-model-invocation: false
 
 The `description` field is used by Claude to decide when to invoke the skill — make it specific and include example trigger phrases.
 
+## Writing a good description field
+
+The description is the only thing Claude reads to decide whether to invoke the skill. A weak description means the skill silently never fires.
+
+**Structure it in three parts:**
+
+1. **What the skill does** — one clause, plain language: `"Apply Python best practices…"`
+2. **When to auto-invoke** — explicit pre-condition with "Auto-invoke BEFORE…": `"Auto-invoke BEFORE writing or running any Python code, reading/editing any .py file…"`
+3. **Trigger phrases** — a comma-separated list of exact words/phrases the user or context might contain: `"Trigger phrases: 'python', 'uv', '.py file', 'pip install'"`
+
+**Rules:**
+- Use "Auto-invoke BEFORE" (not "trigger on" or "use when") — imperative phrasing fires more reliably than passive descriptions
+- List surface-level artifacts (file extensions, command names, keywords) not just intent — Claude matches on what it observes, not what it infers
+- Keep it one sentence so it fits in the system-reminder index without truncation
+- If the skill should only fire on explicit user request (not automatically), omit the auto-invoke clause and use only "Use when the user says…" phrasing
+
+**Examples:**
+
+Weak (passive, no pre-condition):
+> Apply Python best practices. Trigger phrases: "python", "uv".
+
+Strong (imperative, explicit pre-condition, observable triggers):
+> Apply Python best practices — covers build toolchain and package management. Auto-invoke BEFORE writing or running any Python code, reading/editing any .py file, or executing any uv/pip/poetry command. Trigger phrases: "python", "pip install", "virtualenv", "pyproject.toml", ".py file", "uv", "poetry".
+
 **`$ARGUMENTS`:** anything the user typed after the skill name. Parse it generously; skills should degrade gracefully when arguments are absent.
 
 **`$CLAUDE_SKILL_DIR`:** absolute path to the skill's directory at runtime. Use it to reference sibling files:
 ```bash
-cat "$CLAUDE_SKILL_DIR/reference.md"
+cat "$CLAUDE_SKILL_DIR/references/pandas.md"
 ```
+
+## Progressive Disclosure — Reference Files
+
+For skills that cover multiple distinct sub-topics, keep `SKILL.md` lean and offload detail into a `references/` subdirectory. `SKILL.md` always loads; reference files are read on demand via the Bash tool only when the relevant context is active.
+
+**Directory layout:**
+```
+my-skill/
+├── SKILL.md              # always loaded — core rules + conditional load instructions
+└── references/
+    ├── topic-a.md
+    └── topic-b.md
+```
+
+**In `SKILL.md`, add a load-on-demand section:**
+```markdown
+## Load Reference Files When Relevant
+
+Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do not guess their contents — read them.
+
+- **references/topic-a.md** — load when: <condition>
+- **references/topic-b.md** — load when: <condition>
+```
+
+**Rules:**
+- Use a `references/` directory — never flatten with a `ref-` filename prefix
+- Each reference file should cover exactly one sub-topic
+- Load conditions should be concrete and observable (tool name, file type, error keyword), not vague intent
 
 ## Authoring approach
 
