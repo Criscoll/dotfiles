@@ -74,3 +74,30 @@ Active: `terafox` (from nightfox.nvim). Other installed themes: kanagawa, catppu
 ## Completion Stack
 
 nvim-cmp with sources (in priority order): LSP → LuaSnip → buffer → ripgrep (keyword ≥ 3 chars) → path. `<Tab>`/`<S-Tab>` cycle completions and also jump LuaSnip nodes. `<CR>` only confirms an explicitly selected item (does not auto-select first).
+
+## Debugging Neovim Internals
+
+### Reading AppImage runtime files
+
+The nvim binary is an AppImage. Error paths like `...im-lCMkIja/usr/share/nvim/runtime/...` are ephemeral squashfs mount points that disappear after Neovim exits — you cannot `ls` them after the fact.
+
+To read a specific runtime file at a known path, extract it while headless:
+
+```bash
+nvim --headless -c '
+  lua vim.fn.writefile(
+    vim.fn.readfile(vim.fn.expand("$VIMRUNTIME") .. "/lua/vim/treesitter/languagetree.lua"),
+    "/tmp/nvim_lt.lua"
+  )
+' -c 'q'
+```
+
+Substitute the path after `$VIMRUNTIME` for any runtime module. Use this when an error message contains a line number inside a Neovim built-in file.
+
+### Coroutine-truncated stack traces
+
+Treesitter parsing is async (`coroutine.wrap`). When the traceback ends at `[C]: in function 'f'` with no further Lua frames, the real error is inside the coroutine — inner frames are invisible. Extract the relevant runtime files and read the actual source at the line numbers mentioned in the error message to find the true call site.
+
+### Ground-truth principle
+
+Neovim's own built-in implementations of a function are the authoritative reference for what the current API expects. When a plugin's handler is crashing, read the equivalent built-in handler in `$VIMRUNTIME` to see the correct call signature — do not rely on plugin docs or prior knowledge of the API.
