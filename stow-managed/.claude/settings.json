@@ -14,17 +14,28 @@
     ]
   },
   "hooks": {
+    "Notification": [
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/notify-ready.sh"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "bash $HOME/.claude/hook-pre-tool-use.sh"
+            "command": "bash $HOME/.claude/hooks/catch-dangerous-commands.sh"
           },
           {
             "type": "command",
-            "command": "bash $HOME/.claude/hook-stupid-commands.sh"
+            "command": "bash $HOME/.claude/hooks/catch-stupid-commands.sh"
           }
         ]
       }
