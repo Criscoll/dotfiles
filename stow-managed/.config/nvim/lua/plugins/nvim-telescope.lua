@@ -70,6 +70,7 @@ return {
             { '<Leader>fsc', '<cmd>Telescope current_buffer_fuzzy_find<CR>',                                              desc = 'Fuzzy find in buffer' },
             { '<Leader>fss', '<cmd>Telescope grep_string<CR>',                                                            desc = 'Grep word under cursor' },
             { '<Leader>fsl', '<cmd>Telescope live_grep<CR>',                                                              desc = 'Live grep' },
+            { '<Leader>fsz', function() require('telescope.builtin').live_grep({ prompt_title = "Live Grep (Hidden Included)", additional_args = { '--hidden' }, mappings = { i = { ["<c-f>"] = require('telescope.actions').to_fuzzy_refine } } }) end, desc = 'Live grep (hidden)' },
             { '<Leader>fsp', function()
                 local term = vim.fn.input("Search for: ")
                 if term ~= "" then
