@@ -48,7 +48,7 @@ Some directories need to hold a mix of **tracked files** (symlinked from this re
 
 Pre-create these on any new machine before running stow:
 ```bash
-mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills
+mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills ~/.claude/hooks
 ```
 
 With a real directory in place, stow places individual file symlinks inside it. Local-only skills or agents sit alongside them as untracked regular files — the repo never sees them.
@@ -57,6 +57,7 @@ Current guard directories:
 - `~/.claude/skills/` — global skills (tracked in repo) + machine-specific skills (local only); **preferred mechanism for new additions**
 - `~/.claude/agents/` — global agents (tracked in repo) + machine-specific agents (local only)
 - `~/.claude/commands/` — legacy; skills can be invoked exactly like commands, so prefer `skills/` for anything new
+- `~/.claude/hooks/` — PreToolUse/Notification hook scripts (tracked in repo); no local-only additions expected but must be a real dir so stow links individual files
 
 ### Apps That Don't Follow Symlinks
 
