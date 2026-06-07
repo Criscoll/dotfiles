@@ -28,7 +28,7 @@ vim.api.nvim_create_user_command('RestoreSession', function()
   vim.cmd('source ~/.config/nvim/session.vim')
 end, {})
 
-vim.api.nvim_create_user_command('PWD', function()
+vim.api.nvim_create_user_command('PW', function()
   local path = vim.fn.expand('%')
   vim.fn.setreg('+', path)
   vim.notify(path, vim.log.levels.INFO, { title = "Copied (relative)" })
