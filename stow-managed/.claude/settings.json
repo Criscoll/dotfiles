@@ -13,6 +13,7 @@
       "Bash(cat >> /tmp/*)"
     ]
   },
+  "model": "sonnet[1m]",
   "hooks": {
     "Notification": [
       {
@@ -47,6 +48,5 @@
   },
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
-  "skipDangerousModePermissionPrompt": true,
-  "model": "opus"
+  "skipDangerousModePermissionPrompt": true
 }
