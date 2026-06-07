@@ -31,13 +31,19 @@ end, {})
 vim.api.nvim_create_user_command('PWD', function()
   local path = vim.fn.expand('%')
   vim.fn.setreg('+', path)
-  vim.cmd('!echo ' .. vim.fn.shellescape(path))
+  vim.notify(path, vim.log.levels.INFO, { title = "Copied (relative)" })
 end, {})
 
 vim.api.nvim_create_user_command('PR', function()
   local path = vim.fn.resolve(vim.fn.expand('%:p'))
   vim.fn.setreg('+', path)
-  vim.cmd('!echo ' .. vim.fn.shellescape(path))
+  vim.notify(path, vim.log.levels.INFO, { title = "Copied (absolute)" })
+end, {})
+
+vim.api.nvim_create_user_command('PF', function()
+  local path = vim.fn.expand('%:t')
+  vim.fn.setreg('+', path)
+  vim.notify(path, vim.log.levels.INFO, { title = "Copied (filename)" })
 end, {})
 
 -- Define :ClearMarks command
