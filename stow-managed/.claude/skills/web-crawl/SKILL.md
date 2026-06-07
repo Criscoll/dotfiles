@@ -22,6 +22,40 @@ When fetching or extracting content from any web URL, use the available MCP craw
 
 **Default tool:** use `md` unless the task specifically requires structured HTML, JS execution, or multi-page crawling.
 
+## When to Use crawl4ai
+
+Use `c4ai-sse` when you need:
+- **Clean readable content** from a web page (articles, docs, blog posts)
+- **JS-rendered pages** where the content isn't in the raw HTML (SPAs, dynamic dashboards)
+- **Anti-bot evasion** — crawl4ai handles common bot detection; raw `curl`/WebFetch will get blocked
+- **Structured extraction** from pages with consistent layouts (product listings, changelogs, release notes)
+- **Multi-page site crawls** — BFS/DFS traversal with the `crawl` tool
+
+Do NOT use crawl4ai for:
+- Raw JSON API calls (no added value — use `curl` or the relevant SDK)
+- File downloads (PDFs, ZIPs, binaries — just `curl`)
+- Pages where you need mouse interaction, login flows, or form submission (use Playwright instead)
+
+## Web Search + Crawl Tandem Pattern
+
+For research tasks, combine WebSearch with crawl4ai:
+
+1. **Search first** with `WebSearch` to discover relevant URLs and get a quick answer summary
+2. **Crawl second** with `c4ai-sse md` to fetch the full content of the most relevant pages
+
+This is more reliable than searching alone (summaries are shallow) and more targeted than crawling blind (you don't know which URLs matter yet).
+
+Example flow:
+```
+WebSearch("python asyncio cancel task best practices")
+  → identifies 3 useful URLs from the results
+
+c4ai-sse md("https://docs.python.org/3/library/asyncio-task.html#task-cancellation")
+  → fetches full authoritative content
+```
+
+When the user asks you to research a topic thoroughly, this two-step pattern is almost always the right approach.
+
 ## Prerequisite — SSH Tunnel
 
 The MCP server is only reachable when the SSH tunnel is open. If MCP tools are unavailable or timing out, tell the user:
