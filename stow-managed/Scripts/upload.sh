@@ -1,6 +1,6 @@
 #!/bin/sh
 
-rclone sync ~/Documents/Obsidian googledrive:Notes \
+rclone sync ~/Repos/scribbles googledrive:Notes \
 	--update --use-server-modtime \
 	--ignore-checksum \
 	--delete-during \
