@@ -4,5 +4,14 @@
   ],
   "enableInstallTelemetry": false,
   "lastChangelogVersion": "0.79.1",
-  "hideThinkingBlock": true
+  "hideThinkingBlock": true,
+  "defaultProvider": "openrouter",
+  "defaultModel": "deepseek/deepseek-v4-pro",
+  "defaultThinkingLevel": "medium",
+  "enabledModels": [
+    "openrouter/deepseek/deepseek-v4-flash",
+    "openrouter/deepseek/deepseek-v4-pro",
+    "openrouter/moonshotai/kimi-k2.6",
+    "openrouter/qwen/qwen3-235b-a22b"
+  ]
 }
