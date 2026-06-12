@@ -77,15 +77,22 @@ Example `stow-managed/.stow-local-ignore`:
 
 This file is gitignored — each machine keeps its own version. It is never committed to the repo.
 
-### Bootstrap Conflict: `~/.claude/settings.json`
+### Bootstrap Conflicts
 
-On a fresh Claude Code install, `~/.claude/settings.json` already exists as a plain file (default content: `{"theme":"dark"}`). Stow cannot replace a regular file with a symlink and will abort with a conflict error. Before running stow on a new machine, remove or back it up:
+Some tools create plain files before stow runs. Stow cannot replace a regular file with a symlink and will abort with a conflict error. Back them up before running stow on a new machine:
 
 ```bash
-mv ~/.claude/settings.json ~/.claude/settings.json.bak
+mv ~/.claude/settings.json ~/.claude/settings.json.bak   # Claude Code default: {"theme":"dark"}
+mv ~/.pi/agent/settings.json ~/.pi/agent/settings.json.bak  # Pi default: {"lastChangelogVersion":"..."}
 ```
 
-Then stow will create the symlink pointing to the repo version.
+Then stow will create the symlinks pointing to the repo versions.
+
+**Pi guard directories** — `~/.pi/` and `~/.pi/agent/` are created by pi on first run, so they'll usually exist before stow runs. If setting up stow before ever running pi, pre-create them:
+
+```bash
+mkdir -p ~/.pi/agent
+```
 
 ### Machine-Specific Claude Code Settings (`settings.local.json`)
 
@@ -129,6 +136,7 @@ exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
 | `go` | `~/opt/go/bin/go` |
 | `gofmt` | `~/opt/go/bin/gofmt` |
 | `alacritty` | `~/opt/alacritty` |
+| `pi` | `~/opt/pi/pi` |
 
 **Important for agents:** The paths above are conventions, not guarantees. If a wrapper-backed command fails on a specific machine, verify the binary actually exists at the expected location before assuming the wrapper is wrong:
 ```bash
@@ -162,6 +170,13 @@ If in doubt, use a `.local` file (untracked) rather than the shared config. The 
 - **Fuzzy finder**: fzf + ripgrep
 - **Cloud sync**: rclone (Google Drive)
 - **Mail**: mbsync + msmtp + NeoMutt (WIP)
+- **Agentic harnesses**: Claude Code (primary), pi (`~/opt/pi/`)
+
+### Pi Documentation
+
+Pi's full documentation lives at `~/opt/pi/docs/`. If any task involves pi configuration, settings, skills, extensions, or providers, read the relevant docs from there rather than relying on training data.
+
+If `~/opt/pi/docs/` does not exist on this machine, alert the user before proceeding — pi may not be installed or may be at a different path.
 
 **Target platforms**: Linux (primary) and macOS (read-only pull target). Scripts and shell commands must be portable — avoid GNU-specific flags (`readlink -f`, `realpath` without fallback, `stat -c`, etc.). Use `python3` as a fallback when a portable equivalent is not available.
 
