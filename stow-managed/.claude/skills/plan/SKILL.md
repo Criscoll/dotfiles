@@ -1,8 +1,9 @@
 ---
 name: plan
-description: Research and formalize a structured plan for a problem or feature. Use when the user says "plan X", "help
-me plan", "let's plan out", "create a plan for", or "think through" a problem. Produces a structured document with open
-questions, edge cases, and decision options — not a final solution.
+description: >-
+  Research and formalize a structured plan for a problem or feature. Use when the user says "plan X", "help
+  me plan", "let's plan out", "create a plan for", or "think through" a problem. Produces a structured document with open
+  questions, edge cases, and decision options — not a final solution.
 disable-model-invocation: false
 ---
 

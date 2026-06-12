@@ -1,6 +1,7 @@
 ---
 name: playwright
-description: Use the Playwright MCP for browser automation, UI testing, and interacting with web apps — covers available tools, when to use vs crawl4ai, and the relay chain required to reach a local dev server from inside Docker. Trigger phrases: "playwright", "browser automation", "click on", "fill in the form", "take a screenshot of the app", "test the UI", "navigate to the app", "interact with the page", "check if the button works".
+description: >-
+  Use the Playwright MCP for browser automation, UI testing, and interacting with web apps — covers available tools, when to use vs crawl4ai, and the relay chain required to reach a local dev server from inside Docker. Trigger phrases: "playwright", "browser automation", "click on", "fill in the form", "take a screenshot of the app", "test the UI", "navigate to the app", "interact with the page", "check if the button works".
 disable-model-invocation: false
 ---
 

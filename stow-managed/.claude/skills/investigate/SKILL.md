@@ -1,6 +1,7 @@
 ---
 name: investigate
-description: Prime the investigative mindset and structured sequence for any debugging, root-cause analysis, reverse-engineering, or conceptual spelunking task. Auto-invoke BEFORE attempting any fix or diagnosis. Trigger phrases: "debug this", "why is this happening", "figure out why", "trace this error", "something's wrong with", "investigate", "reverse engineer", "root cause", "I'm seeing a weird issue", "what's going on with", "it's broken", "this doesn't work".
+description: >-
+  Prime the investigative mindset and structured sequence for any debugging, root-cause analysis, reverse-engineering, or conceptual spelunking task. Auto-invoke BEFORE attempting any fix or diagnosis. Trigger phrases: "debug this", "why is this happening", "figure out why", "trace this error", "something's wrong with", "investigate", "reverse engineer", "root cause", "I'm seeing a weird issue", "what's going on with", "it's broken", "this doesn't work".
 disable-model-invocation: false
 ---
 

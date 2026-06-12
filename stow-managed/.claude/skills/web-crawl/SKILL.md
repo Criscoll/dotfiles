@@ -1,6 +1,7 @@
 ---
 name: web-crawl
-description: Direct all web page fetching through MCP crawling tools instead of WebFetch or curl — provides JS rendering, anti-bot evasion, and structured extraction. Auto-invoke BEFORE fetching any URL, using WebFetch, scraping a page, or extracting web content. Trigger phrases: "crawl", "scrape", "fetch this URL", "get content from", "read this page", "web crawl", "extract from website", "visit this URL".
+description: >-
+  Direct all web page fetching through MCP crawling tools instead of WebFetch or curl — provides JS rendering, anti-bot evasion, and structured extraction. Auto-invoke BEFORE fetching any URL, using WebFetch, scraping a page, or extracting web content. Trigger phrases: "crawl", "scrape", "fetch this URL", "get content from", "read this page", "web crawl", "extract from website", "visit this URL".
 disable-model-invocation: false
 ---
 

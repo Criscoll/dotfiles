@@ -1,6 +1,7 @@
 ---
 name: python-knowledge
-description: Apply Python best practices when reading, writing, debugging, or understanding Python code — covers build toolchain, package management, and environment setup. Auto-invoke BEFORE writing or running any Python code, reading/editing any .py or .pyi file, or executing any uv/pip/poetry/virtualenv command. Trigger phrases: "python", "pip install", "virtualenv", "pyproject.toml", "requirements.txt", ".py file", ".pyi", "uv", "uv run", "poetry", "fastapi", "django", "flask", "pydantic", "pytest", "ruff", "mypy".
+description: >-
+  Apply Python best practices when reading, writing, debugging, or understanding Python code — covers build toolchain, package management, and environment setup. Auto-invoke BEFORE writing or running any Python code, reading/editing any .py or .pyi file, or executing any uv/pip/poetry/virtualenv command. Trigger phrases: "python", "pip install", "virtualenv", "pyproject.toml", "requirements.txt", ".py file", ".pyi", "uv", "uv run", "poetry", "fastapi", "django", "flask", "pydantic", "pytest", "ruff", "mypy".
 disable-model-invocation: false
 ---
 
