@@ -7,7 +7,7 @@
   "hideThinkingBlock": true,
   "defaultProvider": "openrouter",
   "defaultModel": "deepseek/deepseek-v4-pro",
-  "defaultThinkingLevel": "medium",
+  "defaultThinkingLevel": "high",
   "enabledModels": [
     "openrouter/deepseek/deepseek-v4-flash",
     "openrouter/deepseek/deepseek-v4-pro",
