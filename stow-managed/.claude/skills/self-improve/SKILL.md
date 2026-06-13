@@ -6,19 +6,34 @@ disable-model-invocation: false
 
 You are running the self-improve skill. Your job is to audit this session and produce concrete, actionable improvements to the tooling and instructions that govern future sessions. You are not implementing anything — you are identifying what should change and why.
 
-## What the user gave you
+## Determine scope
 
-`$ARGUMENTS` may name a specific area to focus on (e.g. "skills", "hooks", "CLAUDE.md"). If absent, audit everything.
+**Before scanning the session, ask the user what to focus on.** Self-improvement is broad — not every session needs a full audit. Let the user narrow the scope to what matters right now.
+
+Present these areas as a **multi-select** (users can pick one or more). Use the `recommended` flag on the areas most likely to yield value from a typical session:
+
+| Area | Question to ask yourself |
+|---|---|
+| **Skill gaps** | Of the skills we invoked in this session, how did they fall short? Were any missing steps, edge cases, or conventions? |
+| **Missed skill triggers** | Were there moments where a skill existed but wasn't invoked, and we did the work manually instead? |
+| **New skills needed** | Was there a pattern of behavior that could be encapsulated as a skill — something that would help us solve a similar class of problems in future? |
+| **Doc issues (CLAUDE.md / AGENTS.md)** | Did any CLAUDE.md or AGENTS.md file give us incorrect information? Or is there information that's missing but would be relevant for future sessions (gotchas, commands, conventions)? |
+| **Hook / automation opportunities** | Were there repetitive checks or actions we did manually that a hook or script could automate? |
+| **Full audit** | All of the above. |
+
+`$ARGUMENTS` may also pre-select an area (e.g. "skills", "hooks", "CLAUDE.md"). If present, use it as the default selection but still confirm with the user.
 
 ## Steps
 
-1. **Scan the session.** Review the full conversation: what tasks were attempted, what tools were called, what friction arose, what workarounds were needed, what decisions had to be re-explained.
+1. **Determine scope** (see above). Ask the user what areas to focus on. Do not proceed until they've answered.
 
-2. **Assess each improvement area** (see below). For each, note findings only if there is a real signal — do not manufacture suggestions.
+2. **Scan the session through the selected lenses.** Review the full conversation: what tasks were attempted, what tools were called, what friction arose, what workarounds were needed, what decisions had to be re-explained. Focus your attention on the areas the user chose — skip areas they didn't select.
 
-3. **Produce the report** inline in your response. Do not create files. Do not apply changes. Summarize each finding as a proposed action the user can approve.
+3. **Assess each selected improvement area** (see below). For each, note findings only if there is a real signal — do not manufacture suggestions. Skip areas the user didn't select.
 
-4. **Offer to act.** After the report, ask the user which items to implement now (e.g. "I can create the skill, update the CLAUDE.md, or draft the hook — which should I do?").
+4. **Produce the report** inline in your response. Do not create files. Do not apply changes. Summarize each finding as a proposed action the user can approve.
+
+5. **Offer to act.** After the report, ask the user which items to implement now (e.g. "I can create the skill, update the CLAUDE.md, or draft the hook — which should I do?").
 
 ## Improvement areas
 
