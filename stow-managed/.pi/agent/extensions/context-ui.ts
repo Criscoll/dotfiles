@@ -2,11 +2,11 @@
  * Context UI Footer
  *
  * Custom footer with three sections separated by |:
- *   ~/Repos/dotfiles (main) | Sonnet 4.6 (200k) [████░░░] 40k (20%) | ↑12.3k ↓4.5k $0.042
+ *   ~/Repos/dotfiles (main) | Sonnet 4.6 $3/$15/M (200k) [████░░░] 40k (20%) | ↑12.3k ↓4.5k Σ$0.042
  *
  * Section 1 (left) — working directory + git branch
- * Section 2 (middle) — model name, context window size, usage bar, token count, percentage
- * Section 3 (right) — input/output tokens and session cost
+ * Section 2 (middle) — model name, per-million pricing rates, context window size, usage bar, token count, percentage
+ * Section 3 (right) — input/output tokens, per-prompt cost (Δ), and session total (Σ)
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -21,10 +21,31 @@ function fmtNum(n: number): string {
 	return `${n}`;
 }
 
+function fmtPricing(rate: number): string {
+	if (rate === 0) return "$0";
+	if (rate >= 1) return `$${rate.toFixed(2)}`;
+	if (rate >= 0.01) return `$${rate.toFixed(2)}`;
+	return `$${rate.toPrecision(2)}`;
+}
+
 export default function (pi: ExtensionAPI) {
 	let requestRender: (() => void) | undefined;
+	let lastInput = 0;
+	let lastOutput = 0;
+	let lastCost = 0;
 
 	pi.on("session_start", async (_event, ctx) => {
+		lastInput = 0;
+		lastOutput = 0;
+		lastCost = 0;
+
+		// Reset delta on each user prompt so it shows running cost between prompts
+		pi.on("before_agent_start", async () => {
+			lastInput = 0;
+			lastOutput = 0;
+			lastCost = 0;
+			requestRender?.();
+		});
 		ctx.ui.setFooter((tui, theme, footerData) => {
 			requestRender = () => tui.requestRender();
 			const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
@@ -55,6 +76,7 @@ export default function (pi: ExtensionAPI) {
 					const dim = (s: string) => theme.fg("dim", s);
 					const pastelBlue = (s: string) => `\x1b[38;5;153m${s}\x1b[0m`;
 					const pastelYellow = (s: string) => `\x1b[38;5;228m${s}\x1b[0m`;
+					const pastelOrange = (s: string) => `\x1b[38;5;216m${s}\x1b[0m`;
 					const pastelGreen = (s: string) => `\x1b[38;5;157m${s}\x1b[0m`;
 
 					// ---- Section 1: directory + branch ----
@@ -62,7 +84,7 @@ export default function (pi: ExtensionAPI) {
 					const branch = footerData.getGitBranch();
 					const dirStr = branch ? `${shortCwd} (${branch})` : shortCwd;
 
-					// ---- Section 2: model + context window + bar + usage ----
+					// ---- Section 2: model + pricing + context window + bar + usage ----
 					const modelLabel = ctx.model?.name ?? ctx.model?.id ?? "no-model";
 					const ctxLabel = fmtNum(contextWindow);
 					const tokensLabel = fmtNum(currentTokens);
@@ -85,10 +107,19 @@ export default function (pi: ExtensionAPI) {
 								? theme.fg("warning", `${pct}%`)
 								: dim(`${pct}%`);
 
-					const middleStr = `${pastelYellow(modelLabel)} (${ctxLabel}) [${bar}] ${tokensLabel} ${pctColored}`;
+					// Model pricing rates ($ / 1M tokens)
+					const pricing = ctx.model?.cost;
+					const hasPricing = pricing && (pricing.input > 0 || pricing.output > 0);
+					const pricingStr = hasPricing
+						? dim(`${fmtPricing(pricing.input)}/${fmtPricing(pricing.output)}/M`)
+						: "";
+					const modelDisplay = pricingStr
+						? `${pastelYellow(modelLabel)} ${pricingStr}`
+						: pastelYellow(modelLabel);
+					const middleStr = `${modelDisplay} (${ctxLabel}) [${bar}] ${tokensLabel} ${pctColored}`;
 
-					// ---- Section 3: tokens + cost ----
-					const rightStr = `↑${fmtNum(input)} ↓${fmtNum(output)} ${pastelGreen(`$${cost.toFixed(3)}`)}`;
+					// ---- Section 3: tokens + session cost (Σ = accumulated) ----
+					const rightStr = `↑${fmtNum(input)} ↓${fmtNum(output)} ${pastelOrange(`Δ$${lastCost.toFixed(3)}`)} ${pastelGreen(`Σ$${cost.toFixed(3)}`)}`;
 
 					// ---- Assemble with separators ----
 					const sep = dim(" | ");
@@ -99,7 +130,13 @@ export default function (pi: ExtensionAPI) {
 		});
 	});
 
-	pi.on("turn_end", async () => requestRender?.());
+	pi.on("turn_end", async (event) => {
+		// Accumulate across all turns within one user prompt
+		lastInput += event.message.usage?.input ?? 0;
+		lastOutput += event.message.usage?.output ?? 0;
+		lastCost += event.message.usage?.cost?.total ?? 0;
+		requestRender?.();
+	});
 	pi.on("message_end", async () => requestRender?.());
 	pi.on("model_select", async () => requestRender?.());
 }
