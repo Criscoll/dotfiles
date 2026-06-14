@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+import asyncio
+import argparse
+import json
+import sys
+
+
+def get_markdown(result, prefer_filtered=True):
+    md = result.markdown
+    if hasattr(md, "fit_markdown") and prefer_filtered and md.fit_markdown:
+        return md.fit_markdown
+    if hasattr(md, "raw_markdown"):
+        return md.raw_markdown
+    return str(md)
+
+
+async def crawl(url, include_links=False, output_json=False, query=None):
+    from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+    from crawl4ai.content_filter_strategy import PruningContentFilter, BM25ContentFilter
+    from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+
+    if query:
+        content_filter = BM25ContentFilter(user_query=query, bm25_threshold=1.0)
+    else:
+        content_filter = PruningContentFilter(threshold=0.48, threshold_type="fixed")
+
+    config = CrawlerRunConfig(
+        markdown_generator=DefaultMarkdownGenerator(content_filter=content_filter)
+    )
+
+    async with AsyncWebCrawler(verbose=False) as crawler:
+        result = await crawler.arun(url=url, config=config)
+
+    if not result.success:
+        print(f"Error: failed to crawl {url}", file=sys.stderr)
+        sys.exit(1)
+
+    content = get_markdown(result)
+    links = result.links or {}
+
+    if output_json:
+        out = {"url": url, "content": content}
+        if include_links:
+            out["links"] = {
+                "internal": [{"href": l["href"], "text": l.get("text", "").strip()} for l in links.get("internal", [])],
+                "external": [{"href": l["href"], "text": l.get("text", "").strip()} for l in links.get("external", [])],
+            }
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print(content)
+        if include_links:
+            internal = links.get("internal", [])
+            external = links.get("external", [])
+            if internal or external:
+                print("\n---\n## Links\n")
+                for l in internal:
+                    text = l.get("text", "").strip()
+                    print(f"- [internal] {text}  {l['href']}" if text else f"- [internal] {l['href']}")
+                for l in external:
+                    text = l.get("text", "").strip()
+                    print(f"- [external] {text}  {l['href']}" if text else f"- [external] {l['href']}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Extract web content from a URL using crawl4ai (Playwright-backed).\n"
+            "Renders the full page including JavaScript, strips boilerplate (ads, nav,\n"
+            "footers), and returns clean content. Useful for giving an agent the readable\n"
+            "text of a page plus the links needed to navigate further."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+output formats:
+  default (no --json)
+    Prints clean markdown to stdout. If --links is given, a '## Links' section
+    is appended listing internal and external links as '- [type] text  href'.
+
+  --json
+    Prints a JSON object:
+      {
+        "url": "https://...",
+        "content": "<markdown string>",
+        "links": {                     (only present when --links is also given)
+          "internal": [{"href": "...", "text": "..."}],
+          "external": [{"href": "...", "text": "..."}]
+        }
+      }
+
+content filtering:
+  By default, PruningContentFilter removes low-value blocks (nav, footers, ads)
+  using statistical analysis — no query needed.
+
+  With --filter QUERY, BM25ContentFilter is used instead: it scores each content
+  block against the query and drops blocks with low relevance. Use this when you
+  only want the portion of a page relevant to a specific topic.
+
+agent usage pattern:
+  1. Call with --json --links to get content + navigation options in one shot.
+  2. Read 'content' for context. Read 'links.internal' to decide where to go next.
+  3. Follow a link by calling webcrawl again with the chosen href.
+  4. Repeat until the agent has sufficient context.
+
+examples:
+  webcrawl https://example.com                          clean markdown
+  webcrawl https://example.com --links                  markdown + all links
+  webcrawl https://example.com --json                   JSON for agents
+  webcrawl https://example.com --json --links           JSON with content + links
+  webcrawl https://example.com --filter "authentication" topic-focused content
+""",
+    )
+    parser.add_argument("url", help="URL to fetch and extract content from")
+    parser.add_argument("--links", action="store_true", help="Include internal and external links in output")
+    parser.add_argument("--json", action="store_true", dest="output_json", help="Emit a JSON object instead of plain markdown")
+    parser.add_argument("--filter", metavar="QUERY", dest="query", help="Keep only content blocks relevant to QUERY (BM25 scoring)")
+    args = parser.parse_args()
+
+    asyncio.run(crawl(args.url, include_links=args.links, output_json=args.output_json, query=args.query))
+
+
+if __name__ == "__main__":
+    main()
