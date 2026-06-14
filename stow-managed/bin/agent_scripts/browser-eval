@@ -1,0 +1,49 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0"]
+# ///
+"""Evaluate JavaScript in the active browser tab."""
+
+import argparse
+import sys
+
+from playwright.sync_api import sync_playwright
+
+
+def format_result(result):
+    if isinstance(result, list):
+        parts = []
+        for item in result:
+            if isinstance(item, dict):
+                parts.append("\n".join(f"{k}: {v}" for k, v in item.items()))
+            else:
+                parts.append(str(item))
+        print("\n\n".join(parts))
+    elif isinstance(result, dict):
+        print("\n".join(f"{k}: {v}" for k, v in result.items()))
+    elif result is not None:
+        print(result)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("code", nargs="+", help="JavaScript expression to evaluate")
+    parser.add_argument("--port", type=int, default=9222)
+    args = parser.parse_args()
+
+    code = " ".join(args.code)
+
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(f"http://localhost:{args.port}")
+        ctx = browser.contexts[0]
+        if not ctx.pages:
+            print("✗ No active tab", file=sys.stderr)
+            sys.exit(1)
+        page = ctx.pages[-1]
+        result = page.evaluate(f"async () => {{ return ({code}) }}")
+        format_result(result)
+
+
+if __name__ == "__main__":
+    main()

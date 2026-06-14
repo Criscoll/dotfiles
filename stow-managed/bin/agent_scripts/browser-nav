@@ -1,0 +1,35 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0"]
+# ///
+"""Navigate the active browser tab to a URL."""
+
+import argparse
+import sys
+
+from playwright.sync_api import sync_playwright
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("url")
+    parser.add_argument("--new", action="store_true", help="Open in new tab")
+    parser.add_argument("--port", type=int, default=9222)
+    args = parser.parse_args()
+
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(f"http://localhost:{args.port}")
+        ctx = browser.contexts[0]
+        if args.new:
+            page = ctx.new_page()
+        else:
+            page = ctx.pages[-1] if ctx.pages else ctx.new_page()
+        page.goto(args.url, wait_until="domcontentloaded")
+        action = "Opened" if args.new else "Navigated to"
+        print(f"✓ {action}: {args.url}")
+        # Exiting the context manager disconnects without closing the browser.
+
+
+if __name__ == "__main__":
+    main()

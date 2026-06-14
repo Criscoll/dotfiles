@@ -1,0 +1,38 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0"]
+# ///
+"""Take a screenshot of the active browser tab. Prints the file path."""
+
+import argparse
+import os
+import sys
+import tempfile
+from datetime import datetime
+
+from playwright.sync_api import sync_playwright
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", type=int, default=9222)
+    args = parser.parse_args()
+
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    path = os.path.join(tempfile.gettempdir(), f"screenshot-{ts}.png")
+
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(f"http://localhost:{args.port}")
+        ctx = browser.contexts[0]
+        if not ctx.pages:
+            print("✗ No active tab", file=sys.stderr)
+            sys.exit(1)
+        page = ctx.pages[-1]
+        page.screenshot(path=path)
+
+    print(path)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,156 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0"]
+# ///
+"""Interactive DOM element picker. Shows overlay in browser — user clicks to select.
+
+Ctrl+click for multi-select, Enter to confirm selection, Esc to cancel.
+Prints tag, id, class, text, outerHTML, and parent chain for each selected element.
+
+NOTE: Requires user interaction — the browser window must be visible.
+"""
+
+import argparse
+import sys
+
+from playwright.sync_api import sync_playwright
+
+_PICKER_JS = """
+async (message) => {
+    if (!window.__browserPick) {
+        window.__browserPick = async (msg) => {
+            return new Promise((resolve) => {
+                const selections = [];
+                const selected = new Set();
+
+                const overlay = document.createElement("div");
+                overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483647;pointer-events:none";
+
+                const hl = document.createElement("div");
+                hl.style.cssText = "position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);transition:all 0.1s";
+                overlay.appendChild(hl);
+
+                const banner = document.createElement("div");
+                banner.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;color:white;padding:12px 24px;border-radius:8px;font:14px sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.3);pointer-events:auto;z-index:2147483647";
+
+                const updateBanner = () => {
+                    banner.textContent = `${msg} (${selections.length} selected — Ctrl+click to add, Enter to finish, Esc to cancel)`;
+                };
+                updateBanner();
+                document.body.append(banner, overlay);
+
+                const cleanup = () => {
+                    document.removeEventListener("mousemove", onMove, true);
+                    document.removeEventListener("click", onClick, true);
+                    document.removeEventListener("keydown", onKey, true);
+                    overlay.remove();
+                    banner.remove();
+                    selected.forEach(el => el.style.outline = "");
+                };
+
+                const elementInfo = (el) => {
+                    const parents = [];
+                    let cur = el.parentElement;
+                    while (cur && cur !== document.body) {
+                        const tag = cur.tagName.toLowerCase();
+                        const id = cur.id ? "#" + cur.id : "";
+                        const cls = cur.className ? "." + cur.className.trim().split(/\s+/).join(".") : "";
+                        parents.push(tag + id + cls);
+                        cur = cur.parentElement;
+                    }
+                    return {
+                        tag: el.tagName.toLowerCase(),
+                        id: el.id || null,
+                        class: el.className || null,
+                        text: (el.textContent || "").trim().slice(0, 200) || null,
+                        html: el.outerHTML.slice(0, 500),
+                        parents: parents.join(" > "),
+                    };
+                };
+
+                const onMove = (e) => {
+                    const el = document.elementFromPoint(e.clientX, e.clientY);
+                    if (!el || overlay.contains(el) || banner.contains(el)) return;
+                    const r = el.getBoundingClientRect();
+                    hl.style.cssText = `position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);top:${r.top}px;left:${r.left}px;width:${r.width}px;height:${r.height}px`;
+                };
+
+                const onClick = (e) => {
+                    if (banner.contains(e.target)) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const el = document.elementFromPoint(e.clientX, e.clientY);
+                    if (!el || overlay.contains(el) || banner.contains(el)) return;
+                    if (e.ctrlKey || e.metaKey) {
+                        if (!selected.has(el)) {
+                            selected.add(el);
+                            el.style.outline = "3px solid #10b981";
+                            selections.push(elementInfo(el));
+                            updateBanner();
+                        }
+                    } else {
+                        cleanup();
+                        resolve(selections.length ? selections : elementInfo(el));
+                    }
+                };
+
+                const onKey = (e) => {
+                    if (e.key === "Escape") {
+                        e.preventDefault();
+                        cleanup();
+                        resolve(null);
+                    } else if (e.key === "Enter" && selections.length) {
+                        e.preventDefault();
+                        cleanup();
+                        resolve(selections);
+                    }
+                };
+
+                document.addEventListener("mousemove", onMove, true);
+                document.addEventListener("click", onClick, true);
+                document.addEventListener("keydown", onKey, true);
+            });
+        };
+    }
+    return window.__browserPick(message);
+}
+"""
+
+
+def format_result(result):
+    if result is None:
+        print("(cancelled)")
+        return
+    items = result if isinstance(result, list) else [result]
+    for i, item in enumerate(items):
+        if i:
+            print()
+        for k, v in item.items():
+            if v is not None:
+                print(f"{k}: {v}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("message", nargs="+",
+                        help="Instruction shown to the user in the picker overlay")
+    parser.add_argument("--port", type=int, default=9222)
+    args = parser.parse_args()
+
+    message = " ".join(args.message)
+
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(f"http://localhost:{args.port}")
+        ctx = browser.contexts[0]
+        if not ctx.pages:
+            print("✗ No active tab", file=sys.stderr)
+            sys.exit(1)
+        page = ctx.pages[-1]
+        # Long timeout — user needs time to click
+        result = page.evaluate(_PICKER_JS, message, timeout=120_000)
+        format_result(result)
+
+
+if __name__ == "__main__":
+    main()

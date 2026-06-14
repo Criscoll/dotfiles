@@ -1,0 +1,125 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["requests==2.32.5"]
+# ///
+"""Launch a browser with remote debugging on port 9222."""
+
+import argparse
+import glob
+import os
+import shutil
+import subprocess
+import sys
+import time
+
+import requests
+
+
+def find_profile(browser):
+    if browser == "firefox":
+        base = os.path.expanduser("~/.mozilla/firefox/")
+        for pattern in ("*.default-release", "*.default"):
+            matches = sorted(glob.glob(os.path.join(base, pattern)))
+            if matches:
+                return matches[0]
+    else:
+        for path in [
+            os.path.expanduser("~/.config/google-chrome"),
+            os.path.expanduser("~/.config/chromium"),
+        ]:
+            if os.path.exists(path):
+                return path
+    return None
+
+
+def find_chromium():
+    """Locate a Chromium/Chrome binary. Prefer a system install; otherwise fall
+    back to Playwright's bundled download (~/.cache/ms-playwright) — the same
+    browser crawl4ai/webcrawl uses, so if webcrawl works this will too."""
+    binary = (
+        shutil.which("chromium-browser")
+        or shutil.which("chromium")
+        or shutil.which("google-chrome")
+    )
+    if binary:
+        return binary
+    cache = os.path.expanduser("~/.cache/ms-playwright")
+    matches = sorted(glob.glob(os.path.join(cache, "chromium-*/chrome-linux*/chrome")))
+    return matches[-1] if matches else None
+
+
+def wait_for_cdp(port, timeout=30):
+    for _ in range(timeout * 2):
+        try:
+            if requests.get(f"http://localhost:{port}/json/version", timeout=1).ok:
+                return True
+        except Exception:
+            pass
+        time.sleep(0.5)
+    return False
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", action="store_true",
+                        help="Copy your browser profile (cookies, logins)")
+    parser.add_argument("--browser", choices=["firefox", "chromium"], default="chromium")
+    parser.add_argument("--port", type=int, default=9222)
+    args = parser.parse_args()
+
+    if args.browser == "firefox":
+        # These tools drive the browser over CDP (Chrome DevTools Protocol).
+        # Firefox removed CDP (BiDi-only since FF 129+), so a launched Firefox never
+        # exposes the CDP endpoint these scripts connect to — it would just hang.
+        # TODO: add real Firefox support via Playwright-native Firefox (WebDriver BiDi).
+        print(
+            "✗ Firefox is not supported. These tools use CDP, which Firefox no longer\n"
+            "  implements (BiDi-only since FF 129+). Use Chromium (the default).\n"
+            "  Firefox support is a TODO via Playwright-native Firefox.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    subprocess.run(
+        ["pkill", "-f", f"remote-debugging-port={args.port}"],
+        capture_output=True,
+    )
+    time.sleep(1)
+
+    cache = os.path.expanduser(f"~/.cache/browser-scraping/{args.browser}")
+
+    if args.profile:
+        src = find_profile(args.browser)
+        if not src:
+            print(f"✗ Could not find {args.browser} profile", file=sys.stderr)
+            sys.exit(1)
+        if os.path.exists(cache):
+            shutil.rmtree(cache)
+        shutil.copytree(src, cache, symlinks=True, ignore_dangling_symlinks=True)
+    else:
+        os.makedirs(cache, exist_ok=True)
+
+    binary = find_chromium()
+    if not binary:
+        print(
+            "✗ No Chromium/Chrome binary found. Install one of:\n"
+            "    - a system browser (chromium / google-chrome), or\n"
+            "    - Playwright's bundled Chromium:  python3 -m playwright install chromium",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    cmd = [binary, f"--remote-debugging-port={args.port}", f"--user-data-dir={cache}"]
+
+    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    if wait_for_cdp(args.port):
+        suffix = " with your profile" if args.profile else ""
+        print(f"✓ {args.browser} started on :{args.port}{suffix}")
+    else:
+        print(f"✗ Failed to connect to {args.browser} on :{args.port}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

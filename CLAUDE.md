@@ -148,7 +148,48 @@ If the binary is installed somewhere else on a particular machine, update that m
 
 **Do not add per-app PATH entries to `.zshrc`.** Machine-specific PATH additions (custom builds, CUDA, LM Studio, etc.) belong in `~/.zshrc.local`.
 
-## What Must Never Be Committed
+### Agent-Only Scripts (`stow-managed/bin/agent_scripts/`)
+
+Scripts intended for use **only by an agent** (not by the user directly in a shell) live in `stow-managed/bin/agent_scripts/`. Because `~/bin/` is a directory symlink to `stow-managed/bin/`, this subdirectory is automatically accessible as `~/bin/agent_scripts/` without re-running stow — no `$PATH` entry needed or wanted.
+
+Agent skill READMEs reference these scripts by full path (`~/bin/agent_scripts/script-name`) to keep them out of the user's tab-complete while still being unambiguously callable by an agent.
+
+The distinction from `stow-managed/bin/` (user-facing wrappers): scripts in `agent_scripts/` may require agent context to be useful, block on user interaction mid-run, or produce output formatted for agent consumption rather than human reading.
+
+## Script Dependency Management
+
+Unlike system tools (documented in the wrappers table above), scripts tracked in this repo may have their own library dependencies. The rule: **dependencies must be declared in the repo itself**, not assumed to be globally installed. This lets a new machine onboard by reading the repo rather than tribal knowledge.
+
+### Python scripts — PEP 723 inline metadata (`uv run`)
+
+Python scripts use [PEP 723](https://peps.python.org/pep-0723/) inline dependency blocks and run via `uv`:
+
+```python
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0"]
+# ///
+```
+
+`uv` reads this block, installs dependencies into an isolated cache (`~/.cache/uv`), and runs the script — no venv, no global pip install, no manual setup step needed on a new machine. First run is slightly slower; subsequent runs use the cache.
+
+**Always pin to an exact version (`==`) — never use `>=`, `~=`, or unpinned ranges.** Loose bounds allow a future compromised release to be pulled in silently on a new machine or after a cache eviction. When intentionally upgrading a dependency, update the pinned version in every script that uses it and test before committing.
+
+**Prerequisite:** `uv` itself must be installed. Install it once per machine:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+All Python scripts under `stow-managed/bin/` and `stow-managed/bin/agent_scripts/` should follow this pattern. Exception: `webcrawl` predates this convention and uses a global `crawl4ai` install — leave it as-is unless revisiting it specifically.
+
+### Node scripts — `package.json` in the script directory
+
+Node scripts that live in a dedicated directory should declare dependencies via a `package.json` in that directory. Commit both `package.json` (with exact versions in the `dependencies` field — no `^` or `~` prefixes) and `package-lock.json`. The agent (or user) runs `npm ci` (not `npm install`) on a new machine — `ci` enforces the lockfile exactly rather than resolving fresh.
+
+For one-off Node scripts without a natural home directory, inline dependencies are not yet standardised in Node — prefer adding a `package.json` alongside the script or converting it to Python.
+
+### What Must Never Be Committed
 
 This repo is version-controlled and potentially synced across machines — **never commit sensitive or runtime-specific data.** Before staging any changes, verify that no file contains:
 
