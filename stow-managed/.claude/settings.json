@@ -13,7 +13,7 @@
       "Bash(cat >> /tmp/*)"
     ]
   },
-  "model": "opus",
+  "model": "sonnet[1m]",
   "hooks": {
     "Notification": [
       {
