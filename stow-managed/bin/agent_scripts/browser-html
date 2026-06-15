@@ -1,0 +1,73 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0", "requests==2.32.5"]
+# ///
+"""Dump the rendered outerHTML of the active tab (or one element).
+
+With no selector, prints the whole document's outerHTML. Pass a CSS selector to
+scope the dump to one subtree — the fast way to find the markup behind a control
+(tabs, buttons) without hunting through eval. Use --max to cap output length.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+STATE = os.path.expanduser("~/.cache/browser-scraping/active")
+
+
+def read_state():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return {"browser": "chromium", "cdp_url": "http://localhost:9222"}
+
+
+def build_expr(selector):
+    if selector:
+        sel = json.dumps(selector)
+        return f"(document.querySelector({sel}) || {{outerHTML: '✗ no element matches ' + {sel}}}).outerHTML"
+    return "document.documentElement.outerHTML"
+
+
+def eval_firefox(state, expr):
+    import requests
+    base = f"{state['driver_url']}/session/{state['session']}"
+    r = requests.post(f"{base}/execute/sync", json={"script": f"return ({expr})", "args": []})
+    if r.status_code != 200:
+        print(f"✗ {r.json().get('value', {}).get('message', r.text)}", file=sys.stderr)
+        sys.exit(1)
+    return r.json()["value"]
+
+
+def eval_chromium(state, expr):
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(state["cdp_url"])
+        ctx = browser.contexts[0]
+        if not ctx.pages:
+            print("✗ No active tab", file=sys.stderr)
+            sys.exit(1)
+        return ctx.pages[-1].evaluate(f"() => ({expr})")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("selector", nargs="?", help="CSS selector to scope the dump")
+    parser.add_argument("--max", type=int, default=0,
+                        help="Truncate output to this many characters (0 = no limit)")
+    args = parser.parse_args()
+
+    expr = build_expr(args.selector)
+    state = read_state()
+    html = eval_firefox(state, expr) if state["browser"] == "firefox" else eval_chromium(state, expr)
+    html = html or ""
+    if args.max and len(html) > args.max:
+        html = html[: args.max] + f"\n… [truncated, {len(html)} chars total]"
+    print(html)
+
+
+if __name__ == "__main__":
+    main()

@@ -38,8 +38,27 @@ def format_result(result):
 def eval_firefox(state, code):
     import requests
     base = f"{state['driver_url']}/session/{state['session']}"
-    r = requests.post(f"{base}/execute/sync", json={"script": f"return ({code})", "args": []})
-    return r.json()["value"]
+
+    def run(script):
+        r = requests.post(f"{base}/execute/sync", json={"script": script, "args": []})
+        if r.status_code == 200:
+            return True, r.json()["value"]
+        return False, r.json().get("value", {}).get("message", r.text)
+
+    # First try as an expression (works for `document.title`, IIFEs, etc.). A
+    # SyntaxError here means statements (let/const/multi-line) — and because the
+    # parse failed nothing executed, so re-running raw cannot double any side
+    # effect. Statement blocks must include their own explicit `return`.
+    ok, val = run(f"return ({code})")
+    if ok:
+        return val
+    if "SyntaxError" in str(val):
+        ok, val2 = run(code)
+        if ok:
+            return val2
+        val = val2
+    print(f"✗ JS error: {val}", file=sys.stderr)
+    sys.exit(1)
 
 
 def eval_chromium(state, code):
@@ -51,7 +70,14 @@ def eval_chromium(state, code):
             print("✗ No active tab", file=sys.stderr)
             sys.exit(1)
         page = ctx.pages[-1]
-        return page.evaluate(f"async () => {{ return ({code}) }}")
+        # Mirror the Firefox contract: expression first, then fall back to a raw
+        # function body (statements ending in an explicit `return`) on SyntaxError.
+        try:
+            return page.evaluate(f"async () => {{ return ({code}) }}")
+        except Exception as e:
+            if "SyntaxError" not in str(e):
+                raise
+            return page.evaluate(f"async () => {{ {code} }}")
 
 
 def main():

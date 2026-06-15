@@ -1,0 +1,68 @@
+#!/bin/sh
+set -e
+
+MODEL="openrouter/moonshotai/kimi-k2.6"
+THINKING="off"
+
+usage() {
+  echo "Usage: vision-read [--model <pattern>] [--thinking <level>] <image-file> [context...]"
+  echo ""
+  echo "Have a vision-capable model read and describe an image in detail."
+  echo "For browser screenshots, compose with browser-screenshot:"
+  echo ""
+  echo "  SCREENSHOT=\$(~/bin/agent_scripts/browser-screenshot)"
+  echo "  ~/bin/agent_scripts/vision-read \"\$SCREENSHOT\" 'inspecting for visual bugs'"
+  echo ""
+  echo "Options:"
+  echo "  --model <pattern>     Pi model pattern (default: openrouter/moonshotai/kimi-k2.6)"
+  echo "  --thinking <level>    Thinking level: off, minimal, low, medium, high, xhigh (default: off)"
+  echo ""
+  echo "Context shapes what the model looks for:"
+  echo ""
+  echo "  vision-read screenshot.png"
+  echo "      → Thorough description of everything visible"
+  echo ""
+  echo "  vision-read screenshot.png 'Inspecting for visual bugs — misalignment, overlap, broken images'"
+  echo "      → Primed to spot layout/styling problems"
+  echo ""
+  echo "  vision-read chart.png 'Extract all data points and values'"
+  echo "      → Focused on extracting structured data"
+  echo ""
+  echo "  vision-read diagram.png --model opus 'Explain the architecture shown'"
+  echo "      → With a specific model for higher-quality analysis"
+  exit 0
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --model)    MODEL="$2"; shift 2 ;;
+    --thinking) THINKING="$2"; shift 2 ;;
+    --help|-h)  usage ;;
+    --)         shift; break ;;
+    -*)         echo "Unknown flag: $1" >&2; exit 1 ;;
+    *)          break ;;
+  esac
+done
+
+if [ $# -eq 0 ]; then
+  echo "Error: <image-file> required" >&2
+  usage
+  exit 1
+fi
+
+IMAGE="$1"
+shift
+CONTEXT="$*"
+
+if [ ! -f "$IMAGE" ]; then
+  echo "Error: file not found: $IMAGE" >&2
+  exit 1
+fi
+
+if [ -z "$CONTEXT" ]; then
+  PROMPT="Describe this image in thorough detail. Cover layout, elements, text content, colors, data shown, and anything visually notable. Be specific and comprehensive — include actual text and numbers where visible."
+else
+  PROMPT="Analyze this image carefully. Context: $CONTEXT. Describe what you see in thorough detail, focusing especially on aspects relevant to the context provided. Be specific and comprehensive."
+fi
+
+exec pi -p --model "$MODEL" --thinking "$THINKING" "@$IMAGE" "$PROMPT"

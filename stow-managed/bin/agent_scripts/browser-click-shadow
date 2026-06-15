@@ -1,0 +1,98 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0", "requests==2.32.5"]
+# ///
+"""Click an element inside a custom element's Shadow DOM.
+
+browser-click (and Firefox's XPath / WebDriver locators) cannot see into the
+shadow tree of a Web Component (<marimo-tabs>, Radix, Lit, Shoelace, etc.).
+This finds the host element by tag name, searches its shadowRoot for a clickable
+match, and fires the full focus + click + MouseEvent sequence that SPA framework
+event handlers expect (a bare .click() is often ignored).
+
+    browser-click-shadow MARIMO-TABS Spending          # click "Spending" tab
+    browser-click-shadow MARIMO-TABS "Net Worth"       # multi-word label
+    browser-click-shadow --selector "button[role=tab]" MARIMO-TABS "Net Worth"
+"""
+
+import argparse
+import json
+import os
+import sys
+
+STATE = os.path.expanduser("~/.cache/browser-scraping/active")
+W3C_ELEMENT = "element-6066-11e4-a52e-4f735466cecf"
+
+# Assumes `tag`, `label`, `selector` are in scope. Returns {ok, text} or {ok, err}.
+BODY = """
+const host = document.querySelector(tag);
+if (!host) return {ok:false, err:"no element matching tag " + tag};
+if (!host.shadowRoot) return {ok:false, err:tag + " has no shadowRoot (not a shadow host?)"};
+const sel = selector || "[role=tab], [role=button], button, a";
+const cands = Array.from(host.shadowRoot.querySelectorAll(sel));
+const el = label
+  ? cands.find(e => (e.textContent || "").includes(label))
+  : cands[0];
+if (!el) return {ok:false, err:"no clickable element" + (label ? " matching " + JSON.stringify(label) : "") + " in " + tag + " shadowRoot"};
+el.focus();
+el.click();
+el.dispatchEvent(new MouseEvent("click", {bubbles:true, cancelable:true}));
+return {ok:true, text:(el.textContent || "").trim().slice(0,80)};
+"""
+
+
+def read_state():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return {"browser": "chromium", "cdp_url": "http://localhost:9222"}
+
+
+def click_firefox(state, tag, label, selector):
+    import requests
+    base = f"{state['driver_url']}/session/{state['session']}"
+    script = "const [tag, label, selector] = arguments;" + BODY
+    r = requests.post(f"{base}/execute/sync",
+                      json={"script": script, "args": [tag, label, selector]})
+    if r.status_code != 200:
+        print(f"✗ JS error: {r.json().get('value', {}).get('message', r.text)}", file=sys.stderr)
+        sys.exit(1)
+    return r.json()["value"]
+
+
+def click_chromium(state, tag, label, selector):
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(state["cdp_url"])
+        ctx = browser.contexts[0]
+        if not ctx.pages:
+            print("✗ No active tab", file=sys.stderr)
+            sys.exit(1)
+        page = ctx.pages[-1]
+        fn = "(a) => { const [tag, label, selector] = a;" + BODY + " }"
+        return page.evaluate(fn, [tag, label, selector])
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("tag", help="Custom element tag name hosting the shadow root (e.g. MARIMO-TABS)")
+    parser.add_argument("text", nargs="?", help="Visible text of the element to click inside the shadow root")
+    parser.add_argument("--selector", help="CSS selector for candidates inside the shadow root "
+                                           "(default: tabs/buttons/links)")
+    args = parser.parse_args()
+
+    state = read_state()
+    fn = click_firefox if state["browser"] == "firefox" else click_chromium
+    result = fn(state, args.tag, args.text, args.selector)
+
+    if not result or not result.get("ok"):
+        err = (result or {}).get("err", "unknown error")
+        print(f"✗ {err}", file=sys.stderr)
+        sys.exit(1)
+    print(f"✓ Clicked: {result.get('text') or args.text or args.tag}")
+
+
+if __name__ == "__main__":
+    main()

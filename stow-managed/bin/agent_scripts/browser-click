@@ -1,0 +1,90 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0", "requests==2.32.5"]
+# ///
+"""Click an element in the active tab by visible text or CSS selector.
+
+Uses the browser's native click (real pointer events), so it works on custom
+controls — framework tabs, role=button divs — that a raw JS .click() misses.
+Prefer --text for things a human would click by label (e.g. a "Spending" tab).
+
+    browser-click --text "Spending"
+    browser-click --selector "button.export"
+"""
+
+import argparse
+import json
+import os
+import sys
+
+STATE = os.path.expanduser("~/.cache/browser-scraping/active")
+W3C_ELEMENT = "element-6066-11e4-a52e-4f735466cecf"
+
+
+def read_state():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return {"browser": "chromium", "cdp_url": "http://localhost:9222"}
+
+
+def xpath_literal(s):
+    """Quote a string for use as an XPath literal (handles embedded quotes)."""
+    if '"' not in s:
+        return f'"{s}"'
+    if "'" not in s:
+        return f"'{s}'"
+    return "concat(" + ", '\"', ".join(f'"{p}"' for p in s.split('"')) + ")"
+
+
+def click_firefox(state, text, selector):
+    import requests
+    base = f"{state['driver_url']}/session/{state['session']}"
+    if selector:
+        locator = {"using": "css selector", "value": selector}
+    else:
+        lit = xpath_literal(text)
+        # Deepest element whose text contains the label (skip wrapping ancestors).
+        xpath = (f"(//*[contains(normalize-space(.), {lit})]"
+                 f"[not(.//*[contains(normalize-space(.), {lit})])])[1]")
+        locator = {"using": "xpath", "value": xpath}
+    r = requests.post(f"{base}/element", json=locator)
+    if r.status_code != 200:
+        print(f"✗ No element found for {text or selector!r}", file=sys.stderr)
+        sys.exit(1)
+    eid = r.json()["value"][W3C_ELEMENT]
+    c = requests.post(f"{base}/element/{eid}/click", json={})
+    if c.status_code != 200:
+        print(f"✗ Click failed: {c.json().get('value', {}).get('message', c.text)}", file=sys.stderr)
+        sys.exit(1)
+
+
+def click_chromium(state, text, selector):
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(state["cdp_url"])
+        ctx = browser.contexts[0]
+        if not ctx.pages:
+            print("✗ No active tab", file=sys.stderr)
+            sys.exit(1)
+        page = ctx.pages[-1]
+        loc = page.get_by_text(text).first if text else page.locator(selector).first
+        loc.click(timeout=10_000)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--text", help="Visible text of the element to click")
+    group.add_argument("--selector", help="CSS selector of the element to click")
+    args = parser.parse_args()
+
+    state = read_state()
+    fn = click_firefox if state["browser"] == "firefox" else click_chromium
+    fn(state, args.text, args.selector)
+    print(f"✓ Clicked: {args.text or args.selector}")
+
+
+if __name__ == "__main__":
+    main()

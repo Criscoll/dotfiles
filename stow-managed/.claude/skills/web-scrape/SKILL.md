@@ -50,9 +50,10 @@ curl -sSL https://github.com/mozilla/geckodriver/releases/download/v0.36.0/gecko
 > cross-browser visual bug comparing Gecko vs Blink). "Visual bugs", "see how it looks",
 > or "take a screenshot" do NOT imply Firefox — use Chromium (the default). Only switch to
 > `--browser firefox` when the user or task explicitly names Firefox or Gecko.
-> One caveat: `browser-eval` runs Firefox JS synchronously (`return (expr)`) — top-level
-> `await` works on Chromium but not Firefox; wrap async work in a self-calling promise if
-> you need it under Firefox.
+> One caveat: `browser-eval` runs Firefox JS synchronously — top-level `await` works on
+> Chromium but not Firefox; wrap async work in a self-calling promise if you need it under
+> Firefox. Multi-statement and `let`/`const` blocks **do** work on both (see Evaluate
+> JavaScript below).
 
 ## Launching a Local Dev Server
 
@@ -109,31 +110,137 @@ of flailing.
 ~/bin/agent_scripts/browser-eval 'document.title'
 ~/bin/agent_scripts/browser-eval 'document.querySelectorAll("a").length'
 ~/bin/agent_scripts/browser-eval 'Array.from(document.querySelectorAll(".item")).map(el => ({ text: el.textContent.trim(), href: el.href }))'
+# Multi-statement block — end with an explicit `return` (works on both browsers):
+~/bin/agent_scripts/browser-eval 'let t = document.querySelector(".total"); return t ? t.textContent.trim() : null;'
 ```
 
-Runs in the active tab's page context. Full DOM API available. Async is supported —
-wrap in `async () =>` if needed, or use top-level await expressions.
+Runs in the active tab's page context. Full DOM API available. Pass **either** a single
+expression **or** a statement block ending in an explicit `return` — `let`/`const` and
+multi-line code both work on Chromium and Firefox. (Internally an expression is tried
+first; on a `SyntaxError` it's re-run as a function body, so a statement block needs its
+own `return`.) Async: wrap in `async () =>` on Chromium; under Firefox use a self-calling
+promise. Don't reach for `browser-html`/`browser-click`/`browser-scroll` reflexively when a
+one-line eval does the job — but those exist for the cases below.
 
 ## Screenshot
 
 ```bash
 ~/bin/agent_scripts/browser-screenshot
+~/bin/agent_scripts/browser-screenshot --full-page   # whole document (Chromium only)
 ```
 
 Captures the active tab's viewport. Prints a temp file path — use the Read tool to view the image.
 
-## Vision capability check — HARD STOP if images are unreadable
+`--full-page` captures the entire scrollable document in one image (Chromium only). It
+measures the **document's** scroll height, so it does **not** capture apps that scroll an
+inner container (Marimo, chat UIs, dashboards with a fixed shell). For those, use
+`browser-scroll` between viewport screenshots — see below.
 
-After `browser-screenshot` returns a path, read it with the Read tool. If the image does not render as visual content — you receive an error, empty output, raw binary noise, or any response other than actual image pixels you can interpret — **stop immediately** and report to the user:
+## Vision capability check — delegate if images are unreadable
 
-> This model cannot read image files. Screenshot-based tasks require a vision-capable model (e.g. Claude Sonnet, Claude Opus). Please switch models and retry.
+After `browser-screenshot` returns a path, read it with the Read tool. If the image does not render as visual content — you receive an error, empty output, raw binary noise, or any response other than actual image pixels you can interpret — **delegate to a vision-capable model via `vision-read`:**
+
+```bash
+SCREENSHOT=$(~/bin/agent_scripts/browser-screenshot)
+~/bin/agent_scripts/vision-read "$SCREENSHOT" 'context for what to look for'
+```
+
+`vision-read` sends the screenshot to pi running a vision-capable model (Kimi K2.6 by default), which returns a detailed text description. Use the description to continue the task.
+
+Provide context to prime the model for what matters:
+
+```bash
+~/bin/agent_scripts/vision-read "$SCREENSHOT" 'Inspecting for visual bugs — misalignment, overlapping elements, broken images, color inconsistencies'
+~/bin/agent_scripts/vision-read "$SCREENSHOT" 'Extract all data values and numbers shown in the charts and tables'
+~/bin/agent_scripts/vision-read "$SCREENSHOT" 'Describe the page layout and UI structure'
+```
+
+Override the model or thinking level if needed:
+
+```bash
+~/bin/agent_scripts/vision-read --model opus --thinking medium "$SCREENSHOT" 'Analyze design quality'
+```
 
 Do **NOT** attempt to work around this by:
 - Extracting page content via `browser-eval` as a substitute for visual inspection
 - Describing the page from DOM/HTML text
 - Proceeding with any assumption about the visual state
 
-A vision-capable model is a hard prerequisite for any task that requires seeing a rendered page. Surface the blocker immediately — do not spend turns improvising a text-only substitute.
+## Inspect the DOM
+
+```bash
+~/bin/agent_scripts/browser-html               # whole document outerHTML
+~/bin/agent_scripts/browser-html ".tabbar"     # scope to one subtree
+~/bin/agent_scripts/browser-html "#app" --max 4000   # cap output length
+```
+
+Dumps the **rendered** `outerHTML` of the active tab (or one CSS-selected subtree). Reach
+for this when a control isn't a standard element and you can't guess its selector — read
+the real markup instead of hunting blind through `browser-eval`. Scope with a selector
+(and `--max`) to avoid dumping a huge SPA tree.
+
+## Click an Element
+
+```bash
+~/bin/agent_scripts/browser-click --text "Spending"        # by visible label
+~/bin/agent_scripts/browser-click --selector "button.export"  # by CSS selector
+```
+
+Native click (real pointer events), so it works on custom controls — framework tabs,
+`role=button` divs — that a raw JS `.click()` misses. Prefer `--text` for anything a human
+would click by its label (tabs, buttons). This is the autonomous way to drive tabs/menus —
+don't fall back to `browser-pick` (which needs the user to physically click) unless the
+text/selector approach genuinely can't target the element.
+
+Does **not** penetrate Shadow DOM — if `browser-click` reports `✗ No element found` for a
+control you can clearly see (especially under Firefox), the element likely lives inside a
+custom element's shadow tree. See "Click inside Shadow DOM" below.
+
+## Click inside Shadow DOM / Web Components
+
+```bash
+~/bin/agent_scripts/browser-click-shadow MARIMO-TABS Spending        # click "Spending" tab
+~/bin/agent_scripts/browser-click-shadow MARIMO-TABS "Net Worth"     # multi-word label
+~/bin/agent_scripts/browser-click-shadow --selector "button[role=tab]" MARIMO-TABS "Net Worth"
+```
+
+`browser-click` can't reach elements inside the shadow root of a custom element
+(`<marimo-tabs>`, Radix, Lit, Shoelace — any modern design system). `browser-click-shadow`
+takes the host tag name plus a visible label: it finds the host, searches its `shadowRoot`
+for a tab/button/link matching the text (override the candidate set with `--selector`), and
+fires the full `focus()` + `click()` + `MouseEvent` sequence that SPA frameworks need (a
+bare `.click()` is often ignored). Works on both Chromium and Firefox.
+
+If you're unsure of the host tag, dump the markup with `browser-html` and look for an
+unfamiliar custom element (a tag with a hyphen) wrapping the control.
+
+## Reactive / server-side apps
+
+In marimo, Streamlit, Shiny, and similar apps, a click triggers a backend recomputation —
+the DOM won't update instantly (it arrives over a websocket after a Python roundtrip).
+After any click or form interaction, wait 2–4 seconds before the next screenshot or eval:
+
+```bash
+~/bin/agent_scripts/browser-click-shadow MARIMO-TABS "Spending"
+sleep 3
+~/bin/agent_scripts/browser-screenshot
+```
+
+## Scroll (incl. inner containers)
+
+```bash
+~/bin/agent_scripts/browser-scroll                 # down ~one viewport
+~/bin/agent_scripts/browser-scroll --to bottom      # jump to the end
+~/bin/agent_scripts/browser-scroll --to top         # back to the start
+~/bin/agent_scripts/browser-scroll --by 1200        # down N pixels
+~/bin/agent_scripts/browser-scroll --selector "#main"  # a specific container
+```
+
+`window.scrollTo` does nothing in many apps (Marimo, chat UIs, dashboards) because the
+content scrolls an **inner** element, not the window. `browser-scroll` finds the deepest
+scrollable container and scrolls *that*, and reports the new position (`scrollTop/max`, and
+`(at bottom)` when you've reached the end). To inspect a long page visually, loop:
+`browser-scroll` → `browser-screenshot` → Read, until it reports `(at bottom)`.
 
 ## Pick Elements (requires user interaction)
 
@@ -159,10 +266,19 @@ Use this when you need the user to point out DOM elements instead of hunting thr
 # 3. Screenshot to see current state
 ~/bin/agent_scripts/browser-screenshot   # → /tmp/screenshot-20250614-143022.png
 
-# 4. Extract data via JS
+# 4. Switch a tab / drive the UI, then re-screenshot
+~/bin/agent_scripts/browser-click --text "Spending"
+~/bin/agent_scripts/browser-screenshot
+
+# 5. Inspect content below the fold (inner-scroller apps)
+~/bin/agent_scripts/browser-scroll --by 800
+~/bin/agent_scripts/browser-screenshot
+
+# 6. Extract data via JS
 ~/bin/agent_scripts/browser-eval 'Array.from(document.querySelectorAll(".row")).map(r => r.textContent.trim())'
 
-# 5. Have user identify an element
+# 7. Stuck on an odd control? Read its markup, or have the user point it out
+~/bin/agent_scripts/browser-html ".weird-widget"
 ~/bin/agent_scripts/browser-pick "Click the export button"
 ```
 

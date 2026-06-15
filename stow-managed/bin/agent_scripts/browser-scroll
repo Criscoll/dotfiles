@@ -1,0 +1,112 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0", "requests==2.32.5"]
+# ///
+"""Scroll the active tab, screenshot, repeat — to inspect below-the-fold content.
+
+Many apps (e.g. Marimo, chat UIs) scroll an INNER container, not the window, so
+window.scrollTo does nothing. This finds the deepest scrollable element and
+scrolls it. Pass --selector to target a specific container.
+
+    browser-scroll                 # down ~one viewport
+    browser-scroll --to bottom      # jump to the end
+    browser-scroll --by 1200        # down 1200px
+    browser-scroll --to top         # back to the start
+
+Reports the resulting scroll position so you know when you've hit the bottom.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+STATE = os.path.expanduser("~/.cache/browser-scraping/active")
+
+
+def read_state():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return {"browser": "chromium", "cdp_url": "http://localhost:9222"}
+
+
+def build_expr(selector, mode, by):
+    sel = json.dumps(selector)
+    mode_j = json.dumps(mode)
+    by_j = json.dumps(by)
+    return f"""(() => {{
+  const sel = {sel}, mode = {mode_j}, by = {by_j};
+  let el = sel ? document.querySelector(sel) : null;
+  if (!el) {{
+    el = document.scrollingElement || document.documentElement;
+    let best = el.scrollHeight - el.clientHeight;
+    document.querySelectorAll('*').forEach(e => {{
+      const oy = getComputedStyle(e).overflowY;
+      const room = e.scrollHeight - e.clientHeight;
+      if ((oy === 'auto' || oy === 'scroll') && room > best + 1) {{ best = room; el = e; }}
+    }});
+  }}
+  if (!el) return 'no-scrollable-element';
+  const step = by || Math.floor(el.clientHeight * 0.9);
+  if (mode === 'bottom') el.scrollTop = el.scrollHeight;
+  else if (mode === 'top') el.scrollTop = 0;
+  else el.scrollTop = el.scrollTop + step;
+  return JSON.stringify({{
+    target: el.tagName.toLowerCase() + (el.id ? '#' + el.id : ''),
+    scrollTop: Math.round(el.scrollTop),
+    scrollHeight: el.scrollHeight,
+    clientHeight: el.clientHeight,
+    atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 2,
+  }});
+}})()"""
+
+
+def eval_firefox(state, expr):
+    import requests
+    base = f"{state['driver_url']}/session/{state['session']}"
+    r = requests.post(f"{base}/execute/sync", json={"script": f"return ({expr})", "args": []})
+    if r.status_code != 200:
+        print(f"✗ {r.json().get('value', {}).get('message', r.text)}", file=sys.stderr)
+        sys.exit(1)
+    return r.json()["value"]
+
+
+def eval_chromium(state, expr):
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(state["cdp_url"])
+        ctx = browser.contexts[0]
+        if not ctx.pages:
+            print("✗ No active tab", file=sys.stderr)
+            sys.exit(1)
+        return ctx.pages[-1].evaluate(f"() => ({expr})")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--selector", help="CSS selector of the container to scroll")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--to", choices=["top", "bottom"], help="Jump to top or bottom")
+    group.add_argument("--by", type=int, help="Scroll down by N pixels")
+    args = parser.parse_args()
+
+    mode = args.to if args.to else "by"
+    by = args.by or 0
+    expr = build_expr(args.selector, mode, by)
+
+    state = read_state()
+    result = eval_firefox(state, expr) if state["browser"] == "firefox" else eval_chromium(state, expr)
+    if result == "no-scrollable-element":
+        print("✗ No scrollable element found", file=sys.stderr)
+        sys.exit(1)
+    info = json.loads(result)
+    pos = f"{info['scrollTop']}/{info['scrollHeight'] - info['clientHeight']}"
+    flag = " (at bottom)" if info["atBottom"] else ""
+    print(f"✓ Scrolled {info['target']} → {pos}px{flag}")
+
+
+if __name__ == "__main__":
+    main()

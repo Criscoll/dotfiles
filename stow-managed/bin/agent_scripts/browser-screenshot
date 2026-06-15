@@ -3,7 +3,13 @@
 # requires-python = ">=3.10"
 # dependencies = ["playwright==1.60.0", "requests==2.32.5"]
 # ///
-"""Take a screenshot of the active browser tab. Prints the file path."""
+"""Take a screenshot of the active browser tab. Prints the file path.
+
+With --full-page (Chromium only) captures the entire scrollable document, not
+just the viewport. Note: this measures the document's own scroll height, so it
+does NOT capture apps that scroll an inner container (Marimo etc.) — for those,
+use browser-scroll between viewport screenshots instead.
+"""
 
 import argparse
 import base64
@@ -23,15 +29,18 @@ def read_state():
         return {"browser": "chromium", "cdp_url": "http://localhost:9222"}
 
 
-def shot_firefox(state, path):
+def shot_firefox(state, path, full_page):
     import requests
     base = f"{state['driver_url']}/session/{state['session']}"
+    if full_page:
+        print("⚠ --full-page is Chromium-only; capturing viewport. "
+              "Use browser-scroll for full-page inspection under Firefox.", file=sys.stderr)
     data = requests.get(f"{base}/screenshot").json()["value"]
     with open(path, "wb") as f:
         f.write(base64.b64decode(data))
 
 
-def shot_chromium(state, path):
+def shot_chromium(state, path, full_page):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.connect_over_cdp(state["cdp_url"])
@@ -40,20 +49,24 @@ def shot_chromium(state, path):
             print("✗ No active tab", file=sys.stderr)
             sys.exit(1)
         page = ctx.pages[-1]
-        page.screenshot(path=path)
+        page.screenshot(path=path, full_page=full_page)
 
 
 def main():
-    argparse.ArgumentParser(description=__doc__).parse_args()
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--full-page", action="store_true",
+                        help="Capture the whole scrollable document (Chromium only)")
+    args = parser.parse_args()
 
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     path = os.path.join(tempfile.gettempdir(), f"screenshot-{ts}.png")
 
     state = read_state()
     if state["browser"] == "firefox":
-        shot_firefox(state, path)
+        shot_firefox(state, path, args.full_page)
     else:
-        shot_chromium(state, path)
+        shot_chromium(state, path, args.full_page)
 
     print(path)
 
