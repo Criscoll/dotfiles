@@ -110,12 +110,20 @@ export default function (pi: ExtensionAPI) {
 					// Model pricing rates ($ / 1M tokens)
 					const pricing = ctx.model?.cost;
 					const hasPricing = pricing && (pricing.input > 0 || pricing.output > 0);
+					const supportsImages = (ctx.model?.input ?? ["text"]).includes("image");
+					const supportsFiles = (ctx.model?.input ?? ["text"]).includes("file");
+					const modalityIcons: string[] = [];
+					if (supportsImages) modalityIcons.push(dim("🖼"));
+					if (supportsFiles) modalityIcons.push(dim("🗎")); // Unicode for 'MIME Document'
+					const modalityIconStr = modalityIcons.join(" ");
+
 					const pricingStr = hasPricing
 						? dim(`${fmtPricing(pricing.input)}/${fmtPricing(pricing.output)}/M`)
 						: "";
+					const iconSuffix = modalityIconStr ? ` ${modalityIconStr}` : "";
 					const modelDisplay = pricingStr
-						? `${pastelYellow(modelLabel)} ${pricingStr}`
-						: pastelYellow(modelLabel);
+						? `${pastelYellow(modelLabel)}${iconSuffix}  ${pricingStr}`
+						: `${pastelYellow(modelLabel)}${iconSuffix}`;
 					const middleStr = `${modelDisplay} (${ctxLabel}) [${bar}] ${tokensLabel} ${pctColored}`;
 
 					// ---- Section 3: tokens + session cost (Σ = accumulated) ----
