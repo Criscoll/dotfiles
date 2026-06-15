@@ -3,10 +3,20 @@
 # requires-python = ">=3.10"
 # dependencies = ["requests==2.32.5"]
 # ///
-"""Launch a browser with remote debugging on port 9222."""
+"""Launch a browser for the scraping tools.
+
+Chromium is driven over CDP (remote debugging on :9222). Firefox is driven over
+the WebDriver protocol via a geckodriver daemon — a persistent WebDriver session
+survives between calls, so the browser stays stateful across the thin browser-*
+scripts the same way the Chromium CDP endpoint does.
+
+Both paths write ~/.cache/browser-scraping/active so the client scripts know which
+transport to use.
+"""
 
 import argparse
 import glob
+import json
 import os
 import shutil
 import subprocess
@@ -14,6 +24,8 @@ import sys
 import time
 
 import requests
+
+STATE = os.path.expanduser("~/.cache/browser-scraping/active")
 
 
 def find_profile(browser):
@@ -49,6 +61,20 @@ def find_chromium():
     return matches[-1] if matches else None
 
 
+def find_geckodriver():
+    return shutil.which("geckodriver") or (
+        os.path.expanduser("~/opt/geckodriver")
+        if os.path.exists(os.path.expanduser("~/opt/geckodriver"))
+        else None
+    )
+
+
+def write_state(state):
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    with open(STATE, "w") as f:
+        json.dump(state, f)
+
+
 def wait_for_cdp(port, timeout=30):
     for _ in range(timeout * 2):
         try:
@@ -60,39 +86,90 @@ def wait_for_cdp(port, timeout=30):
     return False
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", action="store_true",
-                        help="Copy your browser profile (cookies, logins)")
-    parser.add_argument("--browser", choices=["firefox", "chromium"], default="chromium")
-    parser.add_argument("--port", type=int, default=9222)
-    args = parser.parse_args()
+def wait_for_webdriver(url, timeout=30):
+    for _ in range(timeout * 2):
+        try:
+            if requests.get(f"{url}/status", timeout=1).ok:
+                return True
+        except Exception:
+            pass
+        time.sleep(0.5)
+    return False
 
-    if args.browser == "firefox":
-        # These tools drive the browser over CDP (Chrome DevTools Protocol).
-        # Firefox removed CDP (BiDi-only since FF 129+), so a launched Firefox never
-        # exposes the CDP endpoint these scripts connect to — it would just hang.
-        # TODO: add real Firefox support via Playwright-native Firefox (WebDriver BiDi).
+
+def start_firefox(args):
+    driver = find_geckodriver()
+    if not driver:
         print(
-            "✗ Firefox is not supported. These tools use CDP, which Firefox no longer\n"
-            "  implements (BiDi-only since FF 129+). Use Chromium (the default).\n"
-            "  Firefox support is a TODO via Playwright-native Firefox.",
+            "✗ geckodriver not found. Firefox is driven via geckodriver (WebDriver).\n"
+            "  Install it once:\n"
+            "    curl -sSL https://github.com/mozilla/geckodriver/releases/download/"
+            "v0.36.0/geckodriver-v0.36.0-linux64.tar.gz | tar xz -C ~/opt\n"
+            "  (or put a geckodriver binary on PATH). Firefox itself must also be installed.",
             file=sys.stderr,
         )
-        sys.exit(2)
+        sys.exit(1)
 
+    url = f"http://localhost:{args.port}"
+
+    # Tear down a previous managed session/daemon. Only touch *our* geckodriver
+    # (matched by its port) and its WebDriver session — never the user's own Firefox.
+    if os.path.exists(STATE):
+        try:
+            old = json.load(open(STATE))
+            if old.get("browser") == "firefox" and old.get("session"):
+                requests.delete(f"{old['driver_url']}/session/{old['session']}", timeout=5)
+        except Exception:
+            pass
+    subprocess.run(["pkill", "-f", f"geckodriver.*--port {args.port}"], capture_output=True)
+    time.sleep(1)
+
+    ff_args = []
+    if args.profile:
+        src = find_profile("firefox")
+        if not src:
+            print("✗ Could not find firefox profile", file=sys.stderr)
+            sys.exit(1)
+        cache = os.path.expanduser("~/.cache/browser-scraping/firefox")
+        if os.path.exists(cache):
+            shutil.rmtree(cache)
+        shutil.copytree(src, cache, symlinks=True, ignore_dangling_symlinks=True)
+        ff_args = ["-profile", cache]
+
+    subprocess.Popen(
+        [driver, "--port", str(args.port)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    if not wait_for_webdriver(url):
+        print(f"✗ geckodriver did not become ready on :{args.port}", file=sys.stderr)
+        sys.exit(1)
+
+    caps = {"capabilities": {"alwaysMatch": {"moz:firefoxOptions": {"args": ff_args}}}}
+    try:
+        r = requests.post(f"{url}/session", json=caps, timeout=60).json()
+        sid = r["value"]["sessionId"]
+    except Exception as e:
+        print(f"✗ Failed to create Firefox session: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    write_state({"browser": "firefox", "driver_url": url, "session": sid, "port": args.port})
+    suffix = " with your profile" if args.profile else ""
+    print(f"✓ firefox started via geckodriver on :{args.port}{suffix}")
+
+
+def start_chromium(args):
     subprocess.run(
         ["pkill", "-f", f"remote-debugging-port={args.port}"],
         capture_output=True,
     )
     time.sleep(1)
 
-    cache = os.path.expanduser(f"~/.cache/browser-scraping/{args.browser}")
+    cache = os.path.expanduser("~/.cache/browser-scraping/chromium")
 
     if args.profile:
-        src = find_profile(args.browser)
+        src = find_profile("chromium")
         if not src:
-            print(f"✗ Could not find {args.browser} profile", file=sys.stderr)
+            print("✗ Could not find chromium profile", file=sys.stderr)
             sys.exit(1)
         if os.path.exists(cache):
             shutil.rmtree(cache)
@@ -114,11 +191,31 @@ def main():
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     if wait_for_cdp(args.port):
+        write_state({"browser": "chromium", "cdp_url": f"http://localhost:{args.port}"})
         suffix = " with your profile" if args.profile else ""
-        print(f"✓ {args.browser} started on :{args.port}{suffix}")
+        print(f"✓ chromium started on :{args.port}{suffix}")
     else:
-        print(f"✗ Failed to connect to {args.browser} on :{args.port}", file=sys.stderr)
+        print(f"✗ Failed to connect to chromium on :{args.port}", file=sys.stderr)
         sys.exit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", action="store_true",
+                        help="Copy your browser profile (cookies, logins)")
+    parser.add_argument("--browser", choices=["firefox", "chromium"], default="chromium")
+    parser.add_argument("--port", type=int,
+                        help="Debug/driver port (default: 9222 chromium, 4444 firefox)")
+    args = parser.parse_args()
+
+    if args.browser == "firefox":
+        if args.port is None:
+            args.port = 4444
+        start_firefox(args)
+    else:
+        if args.port is None:
+            args.port = 9222
+        start_chromium(args)
 
 
 if __name__ == "__main__":

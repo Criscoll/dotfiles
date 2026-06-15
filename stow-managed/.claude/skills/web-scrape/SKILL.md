@@ -20,23 +20,58 @@ navigation) persists.
 ## Start Browser
 
 ```bash
-~/bin/agent_scripts/browser-start                   # fresh Chromium profile
-~/bin/agent_scripts/browser-start --profile         # copy your Chromium profile (cookies, logins)
+~/bin/agent_scripts/browser-start                       # Chromium (default), fresh profile
+~/bin/agent_scripts/browser-start --profile             # Chromium, copy your profile (cookies, logins)
+~/bin/agent_scripts/browser-start --browser firefox     # Firefox, fresh profile
+~/bin/agent_scripts/browser-start --browser firefox --profile   # Firefox, copy your profile
 ```
 
-> **Chromium only.** These tools drive the browser over CDP (Chrome DevTools Protocol).
-> Firefox removed CDP (BiDi-only since FF 129+), so `--browser firefox` fails fast — it
-> cannot be driven this way. There is **no Firefox support yet**: don't try to launch
-> Firefox manually or screenshot it via other means as a workaround. If a task genuinely
-> needs Firefox-engine rendering (e.g. a cross-browser visual bug), say so and stop —
-> proper Firefox support is a TODO (Playwright-native Firefox over WebDriver BiDi).
+Must be running before using any other tool. `browser-start` writes
+`~/.cache/browser-scraping/active`, recording which browser is live; the other scripts
+read it and auto-pick the right transport — **you never pass `--browser` to them.**
+Profile copies go to `~/.cache/browser-scraping/{browser}/` — your real profile is never
+touched.
 
-Starts the browser on `:9222`. Must be running before using any other tool.
-Profile is copied to `~/.cache/browser-scraping/{browser}/` — your real profile is never modified.
+**Chromium** is driven over CDP on `:9222`. `browser-start` finds a system Chromium/Chrome
+first, then Playwright's bundled Chromium (`~/.cache/ms-playwright/`). If `webcrawl` works
+on this machine, the bundled Chromium is present and will be used.
 
-`browser-start` finds a browser automatically: a system Chromium/Chrome first, then
-Playwright's bundled Chromium (`~/.cache/ms-playwright/`). If `webcrawl` works on this
-machine, the bundled Chromium is present and `browser-start` will use it.
+**Firefox** is driven over the WebDriver protocol via a **geckodriver** daemon on `:4444`
+(a persistent WebDriver session keeps state across calls, just like the Chromium CDP
+endpoint). It drives your **system Firefox** — no patched build needed. Two prerequisites:
+system Firefox installed, and a `geckodriver` binary on `PATH` or at `~/opt/geckodriver`.
+Install geckodriver once per machine:
+
+```bash
+curl -sSL https://github.com/mozilla/geckodriver/releases/download/v0.36.0/geckodriver-v0.36.0-linux64.tar.gz | tar xz -C ~/opt
+```
+
+> Use Firefox only when the task genuinely needs Gecko-engine rendering (e.g. a
+> cross-browser visual bug comparing Gecko vs Blink). "Visual bugs", "see how it looks",
+> or "take a screenshot" do NOT imply Firefox — use Chromium (the default). Only switch to
+> `--browser firefox` when the user or task explicitly names Firefox or Gecko.
+> One caveat: `browser-eval` runs Firefox JS synchronously (`return (expr)`) — top-level
+> `await` works on Chromium but not Firefox; wrap async work in a self-calling promise if
+> you need it under Firefox.
+
+## Launching a Local Dev Server
+
+If the task requires starting a local dev server first (e.g. `just dashboard`, `npm run dev`),
+**use `nohup` and redirect output** — a bare `&` will be killed when the agent's bash
+timeout fires, taking the server with it:
+
+```bash
+nohup just dashboard &>/tmp/devserver.log &
+sleep 2   # give it a moment to bind its port
+~/bin/agent_scripts/browser-nav http://localhost:3000
+~/bin/agent_scripts/browser-screenshot
+```
+
+`nohup` detaches the process from the shell session so it survives the timeout. Without it,
+the server dies mid-task and the browser gets a connection refused.
+
+Never pipe a blocking server command through `head -N` or any other reader — `head` will
+wait for N lines that may never come (the server stays running), causing an infinite hang.
 
 ## When the Browser Won't Start — STOP
 
@@ -45,6 +80,10 @@ If `browser-start` exits non-zero (no browser found, or CDP connection times out
 
 > The browser scraping tools need a Chromium/Chrome browser, which isn't available here.
 > Install one with `python3 -m playwright install chromium` (or a system browser), then retry.
+
+For `--browser firefox`, the prerequisite is a `geckodriver` binary (on `PATH` or at
+`~/opt/geckodriver`) plus system Firefox. If `browser-start --browser firefox` reports
+geckodriver missing, install it (see the Start Browser section) and retry.
 
 Do **NOT** improvise a workaround. In particular, do not:
 
@@ -82,6 +121,19 @@ wrap in `async () =>` if needed, or use top-level await expressions.
 ```
 
 Captures the active tab's viewport. Prints a temp file path — use the Read tool to view the image.
+
+## Vision capability check — HARD STOP if images are unreadable
+
+After `browser-screenshot` returns a path, read it with the Read tool. If the image does not render as visual content — you receive an error, empty output, raw binary noise, or any response other than actual image pixels you can interpret — **stop immediately** and report to the user:
+
+> This model cannot read image files. Screenshot-based tasks require a vision-capable model (e.g. Claude Sonnet, Claude Opus). Please switch models and retry.
+
+Do **NOT** attempt to work around this by:
+- Extracting page content via `browser-eval` as a substitute for visual inspection
+- Describing the page from DOM/HTML text
+- Proceeding with any assumption about the visual state
+
+A vision-capable model is a hard prerequisite for any task that requires seeing a rendered page. Surface the blocker immediately — do not spend turns improvising a text-only substitute.
 
 ## Pick Elements (requires user interaction)
 

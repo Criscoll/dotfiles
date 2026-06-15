@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["playwright==1.60.0"]
+# dependencies = ["playwright==1.60.0", "requests==2.32.5"]
 # ///
 """Interactive DOM element picker. Shows overlay in browser — user clicks to select.
 
@@ -12,110 +12,124 @@ NOTE: Requires user interaction — the browser window must be visible.
 """
 
 import argparse
+import json
+import os
 import sys
 
-from playwright.sync_api import sync_playwright
+STATE = os.path.expanduser("~/.cache/browser-scraping/active")
 
-_PICKER_JS = """
-async (message) => {
-    if (!window.__browserPick) {
-        window.__browserPick = async (msg) => {
-            return new Promise((resolve) => {
-                const selections = [];
-                const selected = new Set();
+# Shared picker definition — installs window.__browserPick once. Returns a Promise
+# resolving to the selected element info (or a list, or null on cancel).
+_PICK_DEF = """
+if (!window.__browserPick) {
+    window.__browserPick = async (msg) => {
+        return new Promise((resolve) => {
+            const selections = [];
+            const selected = new Set();
 
-                const overlay = document.createElement("div");
-                overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483647;pointer-events:none";
+            const overlay = document.createElement("div");
+            overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483647;pointer-events:none";
 
-                const hl = document.createElement("div");
-                hl.style.cssText = "position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);transition:all 0.1s";
-                overlay.appendChild(hl);
+            const hl = document.createElement("div");
+            hl.style.cssText = "position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);transition:all 0.1s";
+            overlay.appendChild(hl);
 
-                const banner = document.createElement("div");
-                banner.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;color:white;padding:12px 24px;border-radius:8px;font:14px sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.3);pointer-events:auto;z-index:2147483647";
+            const banner = document.createElement("div");
+            banner.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;color:white;padding:12px 24px;border-radius:8px;font:14px sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.3);pointer-events:auto;z-index:2147483647";
 
-                const updateBanner = () => {
-                    banner.textContent = `${msg} (${selections.length} selected — Ctrl+click to add, Enter to finish, Esc to cancel)`;
+            const updateBanner = () => {
+                banner.textContent = `${msg} (${selections.length} selected — Ctrl+click to add, Enter to finish, Esc to cancel)`;
+            };
+            updateBanner();
+            document.body.append(banner, overlay);
+
+            const cleanup = () => {
+                document.removeEventListener("mousemove", onMove, true);
+                document.removeEventListener("click", onClick, true);
+                document.removeEventListener("keydown", onKey, true);
+                overlay.remove();
+                banner.remove();
+                selected.forEach(el => el.style.outline = "");
+            };
+
+            const elementInfo = (el) => {
+                const parents = [];
+                let cur = el.parentElement;
+                while (cur && cur !== document.body) {
+                    const tag = cur.tagName.toLowerCase();
+                    const id = cur.id ? "#" + cur.id : "";
+                    const cls = cur.className ? "." + cur.className.trim().split(/\\s+/).join(".") : "";
+                    parents.push(tag + id + cls);
+                    cur = cur.parentElement;
+                }
+                return {
+                    tag: el.tagName.toLowerCase(),
+                    id: el.id || null,
+                    class: el.className || null,
+                    text: (el.textContent || "").trim().slice(0, 200) || null,
+                    html: el.outerHTML.slice(0, 500),
+                    parents: parents.join(" > "),
                 };
-                updateBanner();
-                document.body.append(banner, overlay);
+            };
 
-                const cleanup = () => {
-                    document.removeEventListener("mousemove", onMove, true);
-                    document.removeEventListener("click", onClick, true);
-                    document.removeEventListener("keydown", onKey, true);
-                    overlay.remove();
-                    banner.remove();
-                    selected.forEach(el => el.style.outline = "");
-                };
+            const onMove = (e) => {
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                if (!el || overlay.contains(el) || banner.contains(el)) return;
+                const r = el.getBoundingClientRect();
+                hl.style.cssText = `position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);top:${r.top}px;left:${r.left}px;width:${r.width}px;height:${r.height}px`;
+            };
 
-                const elementInfo = (el) => {
-                    const parents = [];
-                    let cur = el.parentElement;
-                    while (cur && cur !== document.body) {
-                        const tag = cur.tagName.toLowerCase();
-                        const id = cur.id ? "#" + cur.id : "";
-                        const cls = cur.className ? "." + cur.className.trim().split(/\s+/).join(".") : "";
-                        parents.push(tag + id + cls);
-                        cur = cur.parentElement;
+            const onClick = (e) => {
+                if (banner.contains(e.target)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                if (!el || overlay.contains(el) || banner.contains(el)) return;
+                if (e.ctrlKey || e.metaKey) {
+                    if (!selected.has(el)) {
+                        selected.add(el);
+                        el.style.outline = "3px solid #10b981";
+                        selections.push(elementInfo(el));
+                        updateBanner();
                     }
-                    return {
-                        tag: el.tagName.toLowerCase(),
-                        id: el.id || null,
-                        class: el.className || null,
-                        text: (el.textContent || "").trim().slice(0, 200) || null,
-                        html: el.outerHTML.slice(0, 500),
-                        parents: parents.join(" > "),
-                    };
-                };
+                } else {
+                    cleanup();
+                    resolve(selections.length ? selections : elementInfo(el));
+                }
+            };
 
-                const onMove = (e) => {
-                    const el = document.elementFromPoint(e.clientX, e.clientY);
-                    if (!el || overlay.contains(el) || banner.contains(el)) return;
-                    const r = el.getBoundingClientRect();
-                    hl.style.cssText = `position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);top:${r.top}px;left:${r.left}px;width:${r.width}px;height:${r.height}px`;
-                };
-
-                const onClick = (e) => {
-                    if (banner.contains(e.target)) return;
+            const onKey = (e) => {
+                if (e.key === "Escape") {
                     e.preventDefault();
-                    e.stopPropagation();
-                    const el = document.elementFromPoint(e.clientX, e.clientY);
-                    if (!el || overlay.contains(el) || banner.contains(el)) return;
-                    if (e.ctrlKey || e.metaKey) {
-                        if (!selected.has(el)) {
-                            selected.add(el);
-                            el.style.outline = "3px solid #10b981";
-                            selections.push(elementInfo(el));
-                            updateBanner();
-                        }
-                    } else {
-                        cleanup();
-                        resolve(selections.length ? selections : elementInfo(el));
-                    }
-                };
+                    cleanup();
+                    resolve(null);
+                } else if (e.key === "Enter" && selections.length) {
+                    e.preventDefault();
+                    cleanup();
+                    resolve(selections);
+                }
+            };
 
-                const onKey = (e) => {
-                    if (e.key === "Escape") {
-                        e.preventDefault();
-                        cleanup();
-                        resolve(null);
-                    } else if (e.key === "Enter" && selections.length) {
-                        e.preventDefault();
-                        cleanup();
-                        resolve(selections);
-                    }
-                };
-
-                document.addEventListener("mousemove", onMove, true);
-                document.addEventListener("click", onClick, true);
-                document.addEventListener("keydown", onKey, true);
-            });
-        };
-    }
-    return window.__browserPick(message);
+            document.addEventListener("mousemove", onMove, true);
+            document.addEventListener("click", onClick, true);
+            document.addEventListener("keydown", onKey, true);
+        });
+    };
 }
 """
+
+# Chromium: Playwright page.evaluate form (single arg, returns a Promise).
+_PICKER_JS_CHROMIUM = f"async (message) => {{ {_PICK_DEF} return window.__browserPick(message); }}"
+
+# Firefox: WebDriver execute/async form — last arg is the resolve callback.
+_PICKER_JS_FIREFOX = f"const message = arguments[0]; const cb = arguments[arguments.length - 1]; {_PICK_DEF} window.__browserPick(message).then(cb);"
+
+
+def read_state():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return {"browser": "chromium", "cdp_url": "http://localhost:9222"}
 
 
 def format_result(result):
@@ -131,25 +145,41 @@ def format_result(result):
                 print(f"{k}: {v}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("message", nargs="+",
-                        help="Instruction shown to the user in the picker overlay")
-    parser.add_argument("--port", type=int, default=9222)
-    args = parser.parse_args()
+def pick_firefox(state, message):
+    import requests
+    base = f"{state['driver_url']}/session/{state['session']}"
+    requests.post(f"{base}/timeouts", json={"script": 120000})
+    r = requests.post(f"{base}/execute/async",
+                      json={"script": _PICKER_JS_FIREFOX, "args": [message]}, timeout=130)
+    return r.json()["value"]
 
-    message = " ".join(args.message)
 
+def pick_chromium(state, message):
+    from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        browser = p.chromium.connect_over_cdp(f"http://localhost:{args.port}")
+        browser = p.chromium.connect_over_cdp(state["cdp_url"])
         ctx = browser.contexts[0]
         if not ctx.pages:
             print("✗ No active tab", file=sys.stderr)
             sys.exit(1)
         page = ctx.pages[-1]
         # Long timeout — user needs time to click
-        result = page.evaluate(_PICKER_JS, message, timeout=120_000)
-        format_result(result)
+        return page.evaluate(_PICKER_JS_CHROMIUM, message, timeout=120_000)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("message", nargs="+",
+                        help="Instruction shown to the user in the picker overlay")
+    args = parser.parse_args()
+
+    message = " ".join(args.message)
+    state = read_state()
+    if state["browser"] == "firefox":
+        result = pick_firefox(state, message)
+    else:
+        result = pick_chromium(state, message)
+    format_result(result)
 
 
 if __name__ == "__main__":

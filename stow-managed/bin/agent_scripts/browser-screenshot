@@ -1,35 +1,59 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["playwright==1.60.0"]
+# dependencies = ["playwright==1.60.0", "requests==2.32.5"]
 # ///
 """Take a screenshot of the active browser tab. Prints the file path."""
 
 import argparse
+import base64
+import json
 import os
 import sys
 import tempfile
 from datetime import datetime
 
-from playwright.sync_api import sync_playwright
+STATE = os.path.expanduser("~/.cache/browser-scraping/active")
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=9222)
-    args = parser.parse_args()
+def read_state():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return {"browser": "chromium", "cdp_url": "http://localhost:9222"}
 
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = os.path.join(tempfile.gettempdir(), f"screenshot-{ts}.png")
 
+def shot_firefox(state, path):
+    import requests
+    base = f"{state['driver_url']}/session/{state['session']}"
+    data = requests.get(f"{base}/screenshot").json()["value"]
+    with open(path, "wb") as f:
+        f.write(base64.b64decode(data))
+
+
+def shot_chromium(state, path):
+    from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        browser = p.chromium.connect_over_cdp(f"http://localhost:{args.port}")
+        browser = p.chromium.connect_over_cdp(state["cdp_url"])
         ctx = browser.contexts[0]
         if not ctx.pages:
             print("✗ No active tab", file=sys.stderr)
             sys.exit(1)
         page = ctx.pages[-1]
         page.screenshot(path=path)
+
+
+def main():
+    argparse.ArgumentParser(description=__doc__).parse_args()
+
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    path = os.path.join(tempfile.gettempdir(), f"screenshot-{ts}.png")
+
+    state = read_state()
+    if state["browser"] == "firefox":
+        shot_firefox(state, path)
+    else:
+        shot_chromium(state, path)
 
     print(path)
 

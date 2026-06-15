@@ -1,14 +1,23 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["playwright==1.60.0"]
+# dependencies = ["playwright==1.60.0", "requests==2.32.5"]
 # ///
 """Evaluate JavaScript in the active browser tab."""
 
 import argparse
+import json
+import os
 import sys
 
-from playwright.sync_api import sync_playwright
+STATE = os.path.expanduser("~/.cache/browser-scraping/active")
+
+
+def read_state():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return {"browser": "chromium", "cdp_url": "http://localhost:9222"}
 
 
 def format_result(result):
@@ -26,23 +35,37 @@ def format_result(result):
         print(result)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("code", nargs="+", help="JavaScript expression to evaluate")
-    parser.add_argument("--port", type=int, default=9222)
-    args = parser.parse_args()
+def eval_firefox(state, code):
+    import requests
+    base = f"{state['driver_url']}/session/{state['session']}"
+    r = requests.post(f"{base}/execute/sync", json={"script": f"return ({code})", "args": []})
+    return r.json()["value"]
 
-    code = " ".join(args.code)
 
+def eval_chromium(state, code):
+    from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        browser = p.chromium.connect_over_cdp(f"http://localhost:{args.port}")
+        browser = p.chromium.connect_over_cdp(state["cdp_url"])
         ctx = browser.contexts[0]
         if not ctx.pages:
             print("✗ No active tab", file=sys.stderr)
             sys.exit(1)
         page = ctx.pages[-1]
-        result = page.evaluate(f"async () => {{ return ({code}) }}")
-        format_result(result)
+        return page.evaluate(f"async () => {{ return ({code}) }}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("code", nargs="+", help="JavaScript expression to evaluate")
+    args = parser.parse_args()
+
+    code = " ".join(args.code)
+    state = read_state()
+    if state["browser"] == "firefox":
+        result = eval_firefox(state, code)
+    else:
+        result = eval_chromium(state, code)
+    format_result(result)
 
 
 if __name__ == "__main__":
