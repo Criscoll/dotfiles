@@ -31,6 +31,10 @@ dangerous_patterns=(
     'find[[:space:]].*-exec[[:space:]]+(sudo[[:space:]]+)?rm'
     # Pipe to shell — executes arbitrary remote code
     '(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh|zsh)([[:space:]]|$)'
+    # Downloading a binary/archive — fetching an installer or release archive
+    '(curl|wget)[[:space:]].*\.(tar\.gz|tgz|tar\.xz|tar\.bz2|tar\.zst|zip|[Aa]pp[Ii]mage|deb|rpm)([[:space:]"?/]|$)'
+    # Pipe a download straight into tar — extract-on-fetch binary install
+    '(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?tar[[:space:]]'
     # Force-delete git branch — no recovery without reflog
     'git[[:space:]]+branch[[:space:]]+-D'
     # Git stash destruction — permanently loses stashed work

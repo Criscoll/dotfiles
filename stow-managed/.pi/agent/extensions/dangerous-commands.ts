@@ -6,6 +6,7 @@
  *
  * Patterns: rm, git rm, git reset --hard, git force push, git clean -f,
  * git checkout/restore --, find -delete/exec rm, curl|wget piped to shell,
+ * curl|wget downloading an archive/binary, curl|wget piped to tar,
  * git branch -D, git stash drop/clear, git filter-branch, truncate, shred,
  * sudo, kill/killall
  */
@@ -31,6 +32,10 @@ const dangerousPatterns: RegExp[] = [
   /find\s+.*-exec\s+(?:sudo\s+)?rm/,
   // pipe curl/wget to shell
   /(?:curl|wget)\s+.*\|\s*(?:sudo\s+)?(?:bash|sh|zsh)(?:\s|$)/,
+  // downloading a binary/archive — fetching an installer or release archive
+  /(?:curl|wget)\s+.*\.(?:tar\.gz|tgz|tar\.xz|tar\.bz2|tar\.zst|zip|[Aa]pp[Ii]mage|deb|rpm)(?:[\s"?/]|$)/,
+  // pipe a download straight into tar — extract-on-fetch binary install
+  /(?:curl|wget)\s+.*\|\s*(?:sudo\s+)?tar\s/,
   // git branch -D
   /git\s+branch\s+-D/,
   // git stash drop / clear
