@@ -1,12 +1,12 @@
 ---
-name: web-scrape
+name: browser-inspect
 description: >-
   Stateful interactive browser control AND the only way to see how a page actually
   renders — screenshots, visual inspection, visual-bug hunting. Use for tasks that need
   login sessions, JS interaction, form submission, or a real rendered view. Auto-invoke
   BEFORE tasks like: "view the front page", "are there visual bugs", "see how it looks",
   "take a screenshot", "view the app / dashboard / local dev server", "log in and scrape",
-  "click on", "scrape with authentication", "navigate and extract", "interactive scrape",
+  "click on", "inspect the rendered UI", "navigate and extract", "interactive browser",
   "fill in the form", "submit and capture", "scrape behind login".
 disable-model-invocation: false
 ---
