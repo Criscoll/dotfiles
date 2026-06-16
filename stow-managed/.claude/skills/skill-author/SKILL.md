@@ -101,3 +101,4 @@ Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do
 2. Write `SKILL.md` with correct frontmatter and a focused prompt
 3. Show the user the final file content
 4. Remind them to `git add` and commit when ready — do not commit automatically
+5. **Check symlink status**: run `ls -la ~/.claude/skills/<skill-name>` — if the symlink is missing, run `stow -v --simulate -t ~ stow-managed` to preview, then `stow -v -t ~ stow-managed` to apply. Report what was linked (or confirm it was already in place). This only applies to global skills under `stow-managed/.claude/skills/` — project-scoped skills are picked up automatically and need no stow step.
