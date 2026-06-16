@@ -1,0 +1,126 @@
+#!/bin/sh
+# websearch — on-demand SearXNG web search via Docker.
+#
+# Usage: websearch [OPTIONS] QUERY
+#
+# Options:
+#   -n N         max results to return (default: 10)
+#   -e ENGINES   comma-separated engine list (e.g. google,duckduckgo)
+#   -t TIME      time_range: day|month|year
+#
+# Output: JSON array [{title, url, snippet, engine}] on stdout.
+#         Progress/status messages go to stderr.
+#
+# Prerequisites: docker at /usr/bin/docker
+#                ~/.config/searxng/settings.yml (stow-managed)
+
+set -e
+
+DOCKER=/usr/bin/docker
+CONTAINER=searxng-websearch
+IMAGE=searxng/searxng
+CONFIG="$HOME/.config/searxng/settings.yml"
+PORT=18080
+MAX_RESULTS=10
+ENGINES=""
+TIME_RANGE=""
+
+# ── Argument parsing ────────────────────────────────────────────────────────
+while getopts "n:e:t:" opt; do
+  case "$opt" in
+    n) MAX_RESULTS="$OPTARG" ;;
+    e) ENGINES="$OPTARG" ;;
+    t) TIME_RANGE="$OPTARG" ;;
+    *) echo "Usage: websearch [-n N] [-e engines] [-t day|month|year] QUERY" >&2; exit 1 ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if [ $# -eq 0 ]; then
+  echo "Error: query required." >&2
+  echo "Usage: websearch [-n N] [-e engines] [-t day|month|year] QUERY" >&2
+  exit 1
+fi
+
+QUERY="$*"
+
+# ── Prerequisite checks ─────────────────────────────────────────────────────
+if [ ! -x "$DOCKER" ]; then
+  echo "Error: docker not found at $DOCKER — install Docker to use websearch" >&2
+  exit 1
+fi
+
+if [ ! -f "$CONFIG" ]; then
+  echo "Error: SearXNG config not found at $CONFIG" >&2
+  echo "  Run stow from the dotfiles repo to create the symlink." >&2
+  exit 1
+fi
+
+# ── Container lifecycle ─────────────────────────────────────────────────────
+# Remove any leftover container from a prior failed run.
+"$DOCKER" rm -f "$CONTAINER" >/dev/null 2>&1 || true
+
+# Use host networking so granian is reachable on the host's loopback directly.
+# Bridge network routing is not available on all machines, so --network=host is
+# the reliable option. GRANIAN_HOST=127.0.0.1 limits exposure to loopback only.
+"$DOCKER" run -d \
+  --name "$CONTAINER" \
+  --rm \
+  --network=host \
+  -e GRANIAN_HOST=127.0.0.1 \
+  -e GRANIAN_PORT="$PORT" \
+  -e SEARXNG_SECRET=websearch-local-agent \
+  -v "$CONFIG:/etc/searxng/settings.yml:ro" \
+  "$IMAGE" >/dev/null
+
+# Stop (and auto-remove via --rm) on all exit paths.
+cleanup() {
+  "$DOCKER" stop "$CONTAINER" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+BASE_URL="http://127.0.0.1:${PORT}"
+
+# ── Health check ─────────────────────────────────────────────────────────────
+echo "Waiting for SearXNG to be ready..." >&2
+ATTEMPTS=0
+MAX_ATTEMPTS=30
+while [ "$ATTEMPTS" -lt "$MAX_ATTEMPTS" ]; do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/healthz" 2>/dev/null || true)
+  if [ "$STATUS" = "200" ]; then
+    break
+  fi
+  ATTEMPTS=$((ATTEMPTS + 1))
+  sleep 1
+done
+
+if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
+  echo "Error: SearXNG did not become ready within ${MAX_ATTEMPTS}s" >&2
+  exit 1
+fi
+
+# ── URL-encode the query (python3 for portability across Linux and macOS) ────
+ENCODED_QUERY=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$QUERY")
+
+# ── Build search URL ─────────────────────────────────────────────────────────
+SEARCH_URL="${BASE_URL}/search?q=${ENCODED_QUERY}&format=json"
+if [ -n "$ENGINES" ]; then
+  ENCODED_ENGINES=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$ENGINES")
+  SEARCH_URL="${SEARCH_URL}&engines=${ENCODED_ENGINES}"
+fi
+if [ -n "$TIME_RANGE" ]; then
+  SEARCH_URL="${SEARCH_URL}&time_range=${TIME_RANGE}"
+fi
+
+# ── Search ───────────────────────────────────────────────────────────────────
+echo "Searching: $QUERY" >&2
+
+# Fetch results and emit a JSON array [{title, url, snippet, engine}] on stdout.
+# Using python3 -c so stdin remains connected to curl's output (not a heredoc).
+curl -s "$SEARCH_URL" | python3 -c "
+import json, sys
+n = $MAX_RESULTS
+raw = json.load(sys.stdin)
+out = [{'title': r.get('title',''), 'url': r.get('url',''), 'snippet': r.get('content',''), 'engine': r.get('engine','')} for r in raw.get('results', [])[:n]]
+print(json.dumps(out, ensure_ascii=False, indent=2))
+"
