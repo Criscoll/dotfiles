@@ -49,7 +49,7 @@ export default function (pi: ExtensionAPI) {
       ),
     }),
 
-    async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
+    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
       const args: string[] = [];
 
       if (params.max_results != null) {
@@ -64,6 +64,14 @@ export default function (pi: ExtensionAPI) {
 
       // Query is positional — must come after all flags.
       args.push(params.query);
+
+      const flagParts: string[] = [`max: ${params.max_results ?? 10}`];
+      if (params.engines) flagParts.push(`engines: ${params.engines}`);
+      if (params.time_range) flagParts.push(`time_range: ${params.time_range}`);
+      onUpdate?.({
+        content: [{ type: "text" as const, text: `Searching: "${params.query}"  (${flagParts.join("  ")})` }],
+        details: {},
+      });
 
       const result = await pi.exec(SCRIPT, args, { signal });
 
@@ -94,6 +102,29 @@ export default function (pi: ExtensionAPI) {
           details: { query: params.query, results: [] },
         };
       }
+
+      const engineCounts: Record<string, number> = {};
+      for (const r of results) {
+        if (r.engine) engineCounts[r.engine] = (engineCounts[r.engine] ?? 0) + 1;
+      }
+      const engineSummary = Object.entries(engineCounts)
+        .map(([e, n]) => `${e} ×${n}`)
+        .join(", ");
+
+      const preview: string[] = [`Results (${results.length}):`, ""];
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        const tag = r.engine ? `[${r.engine}]` : "";
+        preview.push(`  ${i + 1}. ${tag} ${r.title}`);
+        preview.push(`     ${r.url}`);
+        if (r.snippet) preview.push(`     ${r.snippet.slice(0, 120)}`);
+        preview.push("");
+      }
+      if (engineSummary) preview.push(`Engines: ${engineSummary}`);
+      onUpdate?.({
+        content: [{ type: "text" as const, text: preview.join("\n") }],
+        details: {},
+      });
 
       const lines: string[] = [`Search results for: ${params.query}`, ""];
       for (let i = 0; i < results.length; i++) {
