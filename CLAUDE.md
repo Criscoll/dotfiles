@@ -48,7 +48,7 @@ Some directories need to hold a mix of **tracked files** (symlinked from this re
 
 Pre-create these on any new machine before running stow:
 ```bash
-mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills ~/.claude/hooks
+mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills ~/.claude/hooks ~/.pi/agent/extensions
 ```
 
 With a real directory in place, stow places individual file symlinks inside it. Local-only skills or agents sit alongside them as untracked regular files — the repo never sees them.
@@ -58,6 +58,7 @@ Current guard directories:
 - `~/.claude/agents/` — global agents (tracked in repo) + machine-specific agents (local only)
 - `~/.claude/commands/` — legacy; skills can be invoked exactly like commands, so prefer `skills/` for anything new
 - `~/.claude/hooks/` — PreToolUse/Notification hook scripts (tracked in repo); no local-only additions expected but must be a real dir so stow links individual files
+- `~/.pi/agent/extensions/` — global pi extensions (tracked in repo) + machine-specific extensions (local only)
 
 ### Apps That Don't Follow Symlinks
 
@@ -91,7 +92,7 @@ Then stow will create the symlinks pointing to the repo versions.
 **Pi guard directories** — `~/.pi/` and `~/.pi/agent/` are created by pi on first run, so they'll usually exist before stow runs. If setting up stow before ever running pi, pre-create them:
 
 ```bash
-mkdir -p ~/.pi/agent
+mkdir -p ~/.pi/agent ~/.pi/agent/extensions
 ```
 
 ### Machine-Specific Claude Code Settings (`settings.local.json`)
@@ -212,6 +213,30 @@ If in doubt, use a `.local` file (untracked) rather than the shared config. The 
 - **Cloud sync**: rclone (Google Drive)
 - **Mail**: mbsync + msmtp + NeoMutt (WIP)
 - **Agentic harnesses**: Claude Code (primary), pi (`~/opt/pi/`)
+- **Container runtime**: Docker (`/usr/bin/docker`) — used by on-demand agent skills (e.g. web-search/SearXNG)
+
+### On-Demand Docker Pattern for Agent Skills
+
+Some skills spin up a Docker container per-call rather than keeping a long-running
+service. Cold-start is ~10–15s (image cached locally after first pull).
+
+Pattern:
+1. `docker rm -f <name> 2>/dev/null || true` — remove any stale container
+2. `docker run -d --rm --network=host -e GRANIAN_HOST=127.0.0.1 -e <APP>_PORT=<fixed>` — host networking, loopback-only bind
+3. Poll `http://127.0.0.1:<port>/healthz` until ready
+4. Issue the HTTP query on the same port, emit result to stdout
+5. `trap 'docker stop <name>' EXIT` — clean up on all exit paths
+
+**Why `--network=host`**: Docker bridge NAT (`-p 127.0.0.1::8080`) requires the host to route packets to the container's bridge IP (`172.17.x.x`). VPNs and some firewall setups install iptables rules that block this routing. Host networking sidesteps the bridge entirely — the container process binds directly to the host loopback.
+
+Current on-demand Docker skills:
+
+| Skill | Image | Container name | Config |
+|---|---|---|---|
+| `web-search` | `searxng/searxng` | `searxng-websearch` | `~/.config/searxng/settings.yml` |
+
+If Docker is absent on a read-only or minimal machine, exclude the relevant
+agent script via `.stow-local-ignore`.
 
 ### Pi Documentation
 
