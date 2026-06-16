@@ -215,25 +215,38 @@ If in doubt, use a `.local` file (untracked) rather than the shared config. The 
 - **Agentic harnesses**: Claude Code (primary), pi (`~/opt/pi/`)
 - **Container runtime**: Docker (`/usr/bin/docker`) — used by on-demand agent skills (e.g. web-search/SearXNG)
 
-### On-Demand Docker Pattern for Agent Skills
+### Docker Pattern for Agent Skills
 
-Some skills spin up a Docker container per-call rather than keeping a long-running
-service. Cold-start is ~10–15s (image cached locally after first pull).
+Agent skills that need a backing service use Docker with host networking.
+Cold-start is ~10–15s on first call (image cached locally after first pull).
 
-Pattern:
+**Why `--network=host`**: Docker bridge NAT (`-p 127.0.0.1::8080`) requires the host to route packets to the container's bridge IP (`172.17.x.x`). VPNs and some firewall setups install iptables rules that block this routing. Host networking sidesteps the bridge entirely — the container process binds directly to the host loopback.
+
+#### Persistent container pattern (preferred)
+
+For skills called concurrently or frequently. The container stays running between
+calls — no teardown on exit.
+
+1. Check if container is already running (`docker inspect --format='{{.State.Running}}'`)
+2. If not: `docker rm -f <name>` to clear stale state, then `docker run -d --network=host`
+3. Handle concurrent startup race: suppress "name already in use" error, verify something is now running
+4. Always poll `http://127.0.0.1:<port>/healthz` until ready (fast if already healthy)
+5. Issue the HTTP query, emit result to stdout
+6. No EXIT trap — container persists for the next call
+
+#### Per-call pattern (simpler, for infrequent use)
+
 1. `docker rm -f <name> 2>/dev/null || true` — remove any stale container
 2. `docker run -d --rm --network=host -e GRANIAN_HOST=127.0.0.1 -e <APP>_PORT=<fixed>` — host networking, loopback-only bind
 3. Poll `http://127.0.0.1:<port>/healthz` until ready
 4. Issue the HTTP query on the same port, emit result to stdout
 5. `trap 'docker stop <name>' EXIT` — clean up on all exit paths
 
-**Why `--network=host`**: Docker bridge NAT (`-p 127.0.0.1::8080`) requires the host to route packets to the container's bridge IP (`172.17.x.x`). VPNs and some firewall setups install iptables rules that block this routing. Host networking sidesteps the bridge entirely — the container process binds directly to the host loopback.
+Current Docker-backed skills:
 
-Current on-demand Docker skills:
-
-| Skill | Image | Container name | Config |
-|---|---|---|---|
-| `web-search` | `searxng/searxng` | `searxng-websearch` | `~/.config/searxng/settings.yml` |
+| Skill | Pattern | Image | Container name | Config |
+|---|---|---|---|---|
+| `web-search` | persistent | `searxng/searxng` | `searxng-websearch` | `~/.config/searxng/settings.yml` |
 
 If Docker is absent on a read-only or minimal machine, exclude the relevant
 agent script via `.stow-local-ignore`.
