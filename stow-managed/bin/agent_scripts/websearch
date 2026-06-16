@@ -56,32 +56,42 @@ if [ ! -f "$CONFIG" ]; then
   exit 1
 fi
 
-# ── Container lifecycle ─────────────────────────────────────────────────────
-# Remove any leftover container from a prior failed run.
-"$DOCKER" rm -f "$CONTAINER" >/dev/null 2>&1 || true
-
+# ── Container lifecycle (persistent — reused across concurrent calls) ────────
 # Use host networking so granian is reachable on the host's loopback directly.
 # Bridge network routing is not available on all machines, so --network=host is
 # the reliable option. GRANIAN_HOST=127.0.0.1 limits exposure to loopback only.
-"$DOCKER" run -d \
-  --name "$CONTAINER" \
-  --rm \
-  --network=host \
-  -e GRANIAN_HOST=127.0.0.1 \
-  -e GRANIAN_PORT="$PORT" \
-  -e SEARXNG_SECRET=websearch-local-agent \
-  -v "$CONFIG:/etc/searxng/settings.yml:ro" \
-  "$IMAGE" >/dev/null
 
-# Stop (and auto-remove via --rm) on all exit paths.
-cleanup() {
-  "$DOCKER" stop "$CONTAINER" >/dev/null 2>&1 || true
+_container_is_running() {
+  "$DOCKER" inspect --format='{{.State.Running}}' "$CONTAINER" 2>/dev/null \
+    | grep -q "^true$"
 }
-trap cleanup EXIT
+
+if ! _container_is_running; then
+  # Remove any stopped/errored container left from a prior run.
+  "$DOCKER" rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  echo "Starting SearXNG..." >&2
+  # Suppress output: concurrent calls may race on the name; the loser gets
+  # "name already in use", which is fine — the winner started what we need.
+  "$DOCKER" run -d \
+    --name "$CONTAINER" \
+    --network=host \
+    -e GRANIAN_HOST=127.0.0.1 \
+    -e GRANIAN_PORT="$PORT" \
+    -e SEARXNG_SECRET=websearch-local-agent \
+    -v "$CONFIG:/etc/searxng/settings.yml:ro" \
+    "$IMAGE" >/dev/null 2>&1 || true
+
+  # Verify something is now running (us or a concurrent call winner).
+  if ! _container_is_running; then
+    echo "Error: Failed to start SearXNG container" >&2
+    exit 1
+  fi
+fi
 
 BASE_URL="http://127.0.0.1:${PORT}"
 
 # ── Health check ─────────────────────────────────────────────────────────────
+# Always run — exits immediately if already healthy, waits if freshly started.
 echo "Waiting for SearXNG to be ready..." >&2
 ATTEMPTS=0
 MAX_ATTEMPTS=30
