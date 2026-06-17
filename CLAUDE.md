@@ -259,6 +259,16 @@ If `~/opt/pi/docs/` does not exist on this machine, alert the user before procee
 
 **Target platforms**: Linux (primary) and macOS (read-only pull target). Scripts and shell commands must be portable — avoid GNU-specific flags (`readlink -f`, `realpath` without fallback, `stat -c`, etc.). Use `python3` as a fallback when a portable equivalent is not available.
 
+### Pi Extension TUI Conventions
+
+When building pi extensions with custom TUI overlays or pickers (`ctx.ui.custom()`), apply these defaults:
+
+- **Vim navigation**: `j`/`k` navigate down/up; translate them to arrow-key escape codes (`\x1b[B` / `\x1b[A`) before forwarding to list widgets. `l` selects; `h` goes back/cancels if meaningful (skip it for pickers where 'h' may be a search character).
+- **Scroll shortcuts**: `gg` → top, `G` → bottom, `[`/`]` → prev/next section (for document views).
+- **Count prefix**: accumulate digit presses as a count multiplier for j/k/G.
+- **Search**: prefer type-to-filter over a dedicated search mode. Always show a hint line so it's discoverable.
+- **Hint line**: every overlay must render a one-line summary of available keys at the bottom.
+
 ## Key Conventions
 
 - **Comma-prefix aliases** (`,upload_notes`, `,pdfcompress`, etc.) are used throughout `.zshrc` to namespace custom commands and avoid collisions with system commands
