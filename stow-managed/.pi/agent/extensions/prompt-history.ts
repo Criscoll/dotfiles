@@ -88,7 +88,7 @@ function deduplicateHistory(entries: HistoryEntry[]): HistoryEntry[] {
 
 export default function promptHistory(pi: ExtensionAPI) {
 	pi.on("input", async (event, ctx) => {
-		if (event.source === "interactive" && event.text) {
+		if ((event.source === "interactive" || event.source === "extension") && event.text) {
 			appendEntry(event.text, ctx.cwd);
 		}
 	});

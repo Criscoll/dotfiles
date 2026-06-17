@@ -13,6 +13,7 @@
     "openrouter/deepseek/deepseek-v4-pro",
     "openrouter/moonshotai/kimi-k2.6",
     "openrouter/qwen/qwen3-235b-a22b",
-    "openrouter/google/gemini-2.5-flash"
+    "openrouter/google/gemini-2.5-flash",
+    "openrouter/qwen/qwen3.6-27b"
   ]
 }
