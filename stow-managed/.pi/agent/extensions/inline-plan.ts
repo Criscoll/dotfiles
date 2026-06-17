@@ -1,793 +1,668 @@
 /**
  * Inline Plan Extension
  *
- * Generates a structured plan from a goal, with annotation-based refinement,
- * model selection, and handoff to a new session.
- *
- * Usage:
- *   /plan <goal>
+ * A plan-mode workflow driven by the MAIN agent — so you watch its reasoning and
+ * tool calls stream live in the chat — with a toggleable near-full-screen overlay
+ * for reviewing the plan and attaching line-anchored comments, and a fresh-session
+ * handoff to a chosen executor model.
  *
  * Flow:
- *   1. Research: BorderedLoader + complete() generates initial plan
- *   2. Overlay: plan shown with Markdown + annotation input at bottom
- *   3. Annotate: Enter submits annotation → async re-complete → overlay updates
- *   4. Accept: Ctrl+A captures final plan → closes overlay
- *   5. Model select: separate overlay picks model (or keep current)
- *   6. Handoff: ctx.newSession() → setEditorText(plan) → setModel
+ *   /plan <goal>     Enable plan mode (read-only tools) and kick off the agent. The
+ *                    agent explores and emits a markdown plan wrapped in
+ *                    <!--PLAN--> ... <!--/PLAN--> markers, re-emitting the full plan
+ *                    on every refinement.
+ *   (watch in chat)  The agent's thinking + tool calls stream normally.
+ *   Alt+P            Toggle the plan overlay: read the rendered plan, visually select
+ *                    lines, leave comments, then:
+ *                      v  visual select lines
+ *                      c  comment on cursor/selection
+ *                      p  preview all comments
+ *                      s  submit comments  -> sends a refine message; agent revises
+ *                      a  accept           -> model select + fresh-session handoff
+ *                      /  section search + jump
+ *                      y  copy plan path to editor
+ *                      esc close           -> back to chat to watch the agent work
+ *   Freeform refine  Anything typed in the normal chat input while in plan mode is
+ *                    treated as a refinement request by the agent.
+ *   /plan            (no args, while enabled) disable plan mode, restore full tools.
  *
- * Single file, zero npm deps. Imports proven patterns from handoff.ts, qna.ts, preset.ts.
+ * Modeled on pi's official plan-mode example pattern. Single file, zero npm deps.
  */
 
-import type { AgentMessage, SessionEntry } from "@earendil-works/pi-agent-core";
-import type { Message } from "@earendil-works/pi-ai";
-import { complete } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-	BorderedLoader,
-	convertToLlm,
-	serializeConversation,
-	getMarkdownTheme,
-	DynamicBorder,
-} from "@earendil-works/pi-coding-agent";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import {
 	Container,
+	Editor,
+	type EditorTheme,
+	Key,
+	Markdown,
+	matchesKey,
 	type SelectItem,
 	SelectList,
 	Text,
-	Markdown,
-	matchesKey,
-	Key,
+	truncateToWidth,
 	visibleWidth,
-	CURSOR_MARKER,
 } from "@earendil-works/pi-tui";
 
-// ─── System Prompt ────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a structured planning assistant. Given a conversation history and a user's goal, generate a detailed plan that lays out what to do, in what order, and why.
+const PLAN_START = "<!--PLAN-->";
+const PLAN_END = "<!--/PLAN-->";
 
-## Instructions
+/** Read-only tool allowlist while drafting a plan (matches the official example). */
+const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
 
-1. Analyze the conversation history for relevant context: decisions made, approaches discussed, files modified, pain points identified.
-2. Understand the user's stated goal and how it relates to the existing context.
-3. Produce a plan with:
-   - A short title/header describing the plan
-   - Numbered steps, each with a clear description of what to do
-   - For each step: what to change, why, and potential risks or dependencies
-   - Any files that need to be created or modified (if relevant)
-   - Tests or verification steps (if relevant)
+const TOGGLE_SHORTCUT = "alt+p";
 
-## Format
+// ─── Planning Directive ───────────────────────────────────────────────────────
 
-Use a clear hierarchical markdown structure. Example:
+function planDirective(goal: string): string {
+	return `[PLAN MODE ACTIVE]
+You are in plan mode: a read-only planning phase. Do NOT modify files or run mutating commands.
 
-# Plan: [Short Title]
+Goal:
+${goal}
+
+Your job:
+1. Explore the codebase as needed (read-only tools only).
+2. Produce ONE comprehensive, self-contained implementation plan. It will be handed to a
+   FRESH agent with no prior context, so it must be executable from the plan + codebase alone.
+3. Treat every subsequent user message as a refinement request and revise the plan.
+
+Output rules (critical):
+- Emit the COMPLETE plan wrapped exactly between ${PLAN_START} and ${PLAN_END} on their own lines.
+- Re-emit the ENTIRE updated plan every time you revise — never a diff or a partial plan.
+- Use this markdown structure:
+
+${PLAN_START}
+# Plan: <short title>
 
 ## Context
-Brief summary of relevant context from the conversation (omit if no context exists).
+<relevant findings and constraints>
 
 ## Steps
-1. **Step one title** — What to do and why. Potential risks: ...
-   - Files: path/to/file1.ts, path/to/file2.ts
-2. **Step two title** — What to do and why.
-   - Files: path/to/file3.ts
+1. **<step title>** — what to do and why. Files: path/a.ts, path/b.ts
+2. **<step title>** — ...
 
 ## Verification
-- Steps to run tests, check types, or manually verify.
+- how to test / verify the change end to end
+${PLAN_END}
 
-Be thorough but concise. Do not include any preamble — output the plan directly.`;
-
-// ─── Context Gathering (same pattern as handoff.ts) ────────────────────────────
-
-function entryToMessage(entry: SessionEntry): AgentMessage | undefined {
-	if (entry.type === "message") return entry.message;
-	if (entry.type === "compaction") {
-		return {
-			role: "compactionSummary",
-			summary: entry.summary,
-			tokensBefore: entry.tokensBefore,
-			timestamp: new Date(entry.timestamp).getTime(),
-		};
-	}
-	return undefined;
+You may write a short explanation before the plan block, but the authoritative plan must
+live between the markers.`;
 }
 
-function getHandoffMessages(branch: SessionEntry[]): AgentMessage[] {
-	let compactionIndex = -1;
-	for (let i = branch.length - 1; i >= 0; i--) {
-		if (branch[i].type === "compaction") {
-			compactionIndex = i;
-			break;
+// ─── Plan Extraction ──────────────────────────────────────────────────────────
+
+function isAssistantMessage(m: AgentMessage): m is AssistantMessage {
+	return m.role === "assistant" && Array.isArray(m.content);
+}
+
+function getText(m: AssistantMessage): string {
+	return m.content
+		.filter((b): b is TextContent => b.type === "text")
+		.map((b) => b.text)
+		.join("\n");
+}
+
+/** Find the most recent assistant message carrying a marked plan block; return its inner markdown. */
+function extractPlanFromMessages(messages: AgentMessage[]): string | null {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const m = messages[i];
+		if (!isAssistantMessage(m)) continue;
+		const text = getText(m);
+		const start = text.lastIndexOf(PLAN_START);
+		const end = text.lastIndexOf(PLAN_END);
+		if (start >= 0 && end > start) {
+			return text.slice(start + PLAN_START.length, end).trim();
 		}
 	}
-	if (compactionIndex < 0) {
-		return branch.map(entryToMessage).filter((m): m is AgentMessage => m !== undefined);
-	}
-	const compaction = branch[compactionIndex];
-	const firstKeptIndex =
-		compaction.type === "compaction"
-			? branch.findIndex((e) => e.id === compaction.firstKeptEntryId)
-			: -1;
-	const compactedBranch = [
-		compaction,
-		...(firstKeptIndex >= 0 ? branch.slice(firstKeptIndex, compactionIndex) : []),
-		...branch.slice(compactionIndex + 1),
-	];
-	return compactedBranch.map(entryToMessage).filter((m): m is AgentMessage => m !== undefined);
+	return null;
 }
 
-// ─── Extension Entry Point ────────────────────────────────────────────────────
+// ─── Comment Anchors ──────────────────────────────────────────────────────────
 
-export default function (pi: ExtensionAPI) {
-	pi.registerCommand("plan", {
-		description: "Generate a structured plan from a goal",
-		handler: async (args, ctx) => {
-			// ── Guard: TUI only ───────────────────────────────────────────
-			if (ctx.mode !== "tui") {
-				ctx.ui.notify("/plan requires interactive mode", "error");
-				return;
-			}
-
-			// ── Guard: model available ─────────────────────────────────────
-			if (!ctx.model) {
-				ctx.ui.notify("No model selected", "error");
-				return;
-			}
-
-			// ── Guard: non-empty goal ──────────────────────────────────────
-			const goal = args.trim();
-			if (!goal) {
-				ctx.ui.notify("Usage: /plan <goal>", "error");
-				return;
-			}
-
-			// ── Gather conversation context ────────────────────────────────
-			const branch = ctx.sessionManager.getBranch();
-			const messages = getHandoffMessages(branch);
-			const llmMessages = convertToLlm(messages);
-			const conversationText = serializeConversation(llmMessages);
-
-			// ── Research Phase: Generate initial plan ──────────────────────
-			const plan = await generatePlanPhase(ctx, goal, conversationText);
-			if (plan === null) {
-				ctx.ui.notify("Cancelled", "info");
-				return;
-			}
-
-			// ── Display + Annotation Loop (overlay) ───────────────────────
-			const acceptedPlan = await planOverlayPhase(ctx, plan, goal, conversationText);
-			if (acceptedPlan === null) {
-				ctx.ui.notify("Cancelled", "info");
-				return;
-			}
-
-			// ── Model Selection ───────────────────────────────────────────
-			const selectedModelStr = await modelSelectionPhase(ctx);
-
-			// ── Handoff ───────────────────────────────────────────────────
-			const currentSessionFile = ctx.sessionManager.getSessionFile();
-
-			const newSessionResult = await ctx.newSession({
-				parentSession: currentSessionFile,
-				withSession: async (replacementCtx) => {
-					replacementCtx.ui.setEditorText(acceptedPlan);
-
-					// Apply selected model if different from current
-					if (selectedModelStr && ctx.model) {
-						const currentLabel = `${ctx.model.provider}/${ctx.model.id}`;
-						if (selectedModelStr !== currentLabel) {
-							const slashIdx = selectedModelStr.indexOf("/");
-							if (slashIdx > 0) {
-								const provider = selectedModelStr.slice(0, slashIdx);
-								const modelId = selectedModelStr.slice(slashIdx + 1);
-								const model = ctx.modelRegistry.find(provider, modelId);
-								if (model) {
-									await pi.setModel(model);
-								}
-							}
-						}
-					}
-
-					replacementCtx.ui.notify("Plan loaded. Submit when ready.", "info");
-				},
-			});
-
-			if (newSessionResult.cancelled) {
-				ctx.ui.notify("New session cancelled", "info");
-			}
-		},
-	});
-}
-
-// ─── Phase 1: Generate Initial Plan ───────────────────────────────────────────
-
-async function generatePlanPhase(
-	ctx: any,
-	goal: string,
-	conversationText: string,
-): Promise<string | null> {
-	return ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
-		const loader = new BorderedLoader(tui, theme, `Generating plan...`);
-		loader.onAbort = () => done(null);
-
-		const doGenerate = async () => {
-			const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model!);
-			if (!auth.ok || !auth.apiKey) {
-				throw new Error(auth.ok ? `No API key for ${ctx.model!.provider}` : auth.error);
-			}
-
-			const userText =
-				(conversationText.length > 0 ? `## Conversation History\n\n${conversationText}\n\n` : "") +
-				`## User's Goal\n\n${goal}`;
-
-			const userMessage: Message = {
-				role: "user",
-				content: [{ type: "text", text: userText }],
-				timestamp: Date.now(),
-			};
-
-			const response = await complete(
-				ctx.model!,
-				{ systemPrompt: SYSTEM_PROMPT, messages: [userMessage] },
-				{ apiKey: auth.apiKey, headers: auth.headers, signal: loader.signal },
-			);
-
-			if (response.stopReason === "aborted") return null;
-
-			return response.content
-				.filter((c): c is { type: "text"; text: string } => c.type === "text")
-				.map((c) => c.text)
-				.join("\n");
-		};
-
-		doGenerate()
-			.then(done)
-			.catch((err) => {
-				console.error("Plan generation failed:", err);
-				done(null);
-			});
-
-		return loader;
-	});
-}
-
-// ─── Phase 2: Plan Overlay with Annotation Loop ───────────────────────────────
-
-interface AnnotationItem {
-	/** 0-indexed line number in the rendered markdown output */
-	line: number;
-	/** The annotation text */
+interface Comment {
+	/** First ~50 chars of the first selected line (display label). */
+	anchor: string;
+	/** Index into mdLines[] where the comment starts. */
+	lineStart: number;
+	/** Index into mdLines[] where the comment ends. */
+	lineEnd: number;
 	text: string;
 }
 
-async function planOverlayPhase(
-	ctx: any,
-	initialPlan: string,
-	goal: string,
-	conversationText: string,
-): Promise<string | null> {
-	// Called when user presses Ctrl+A with annotations to trigger replan.
-	const replanWithLoader = async (
-		currentPlan: string,
-		annotations: AnnotationItem[],
-	): Promise<string | null> => {
-		return ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
-			const loader = new BorderedLoader(tui, theme, "Refining plan with annotations...");
-			loader.onAbort = () => done(null);
+function stripInline(s: string): string {
+	return s
+		.replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1")
+		.replace(/`([^`]+)`/g, "$1")
+		.trim();
+}
 
-			const doRefine = async () => {
-				const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model);
-				if (!auth.ok || !auth.apiKey) {
-					throw new Error(auth.ok ? `No API key for ${ctx.model.provider}` : auth.error);
-				}
+function composeRefine(comments: Comment[]): string {
+	const body = comments.map((c) => `- [${c.anchor}] ${c.text}`).join("\n");
+	return (
+		`Refine the plan based on these review comments. Then re-emit the COMPLETE updated ` +
+		`plan between the ${PLAN_START} / ${PLAN_END} markers.\n\nComments:\n${body}`
+	);
+}
 
-				const annotationLines = annotations
-					.map((a, i) => `${i + 1}. Line ${a.line + 1}: ${a.text}`)
-					.join("\n");
+// ─── Plan File Persistence ────────────────────────────────────────────────────
 
-				const userText =
-					(conversationText.length > 0
-						? `## Conversation History\n\n${conversationText}\n\n`
-						: "") +
-					`## Current Plan\n\n${currentPlan}\n\n` +
-					`## Annotations\n\n` +
-					`Refine the plan based on these line-specific annotations (line numbers refer ` +
-					`to the rendered plan output):\n${annotationLines}`;
+function savePlanFile(plan: string, goal: string): string {
+	const dir = join(homedir(), ".pi", "plans");
+	mkdirSync(dir, { recursive: true });
+	const slug = goal.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
+	const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+	const file = join(dir, `${ts}-${slug}.md`);
+	writeFileSync(file, plan, "utf8");
+	return file;
+}
 
-				const userMessage: Message = {
-					role: "user",
-					content: [{ type: "text", text: userText }],
-					timestamp: Date.now(),
-				};
+// ─── Overlay ──────────────────────────────────────────────────────────────────
 
-				const response = await complete(
-					ctx.model,
-					{ systemPrompt: SYSTEM_PROMPT, messages: [userMessage] },
-					{ apiKey: auth.apiKey, headers: auth.headers, signal: loader.signal },
-				);
+type OverlayResult =
+	| { action: "submit"; comments: Comment[] }
+	| { action: "accept" }
+	| { action: "close" };
 
-				if (response.stopReason === "aborted") return null;
+function viewportRows(tui: { rows?: number; height?: number }): number {
+	const h =
+		typeof tui?.rows === "number" ? tui.rows :
+		typeof tui?.height === "number" ? tui.height :
+		(typeof process !== "undefined" && process.stdout?.rows) || 40;
+	// 7 = top-border + title + rule + rule + summary + hint + bottom-border
+	return Math.max(12, Math.floor(h * 0.92) - 7);
+}
 
-				return response.content
-					.filter((c): c is { type: "text"; text: string } => c.type === "text")
-					.map((c) => c.text)
-					.join("\n");
-			};
+// ─── Sidebar Helpers ──────────────────────────────────────────────────────────
 
-			doRefine()
-				.then(done)
-				.catch(() => done(null));
+interface HeadingEntry { level: number; text: string; approxLine: number; }
 
-			return loader;
+function buildHeadingMap(plan: string, totalRenderedLines: number): HeadingEntry[] {
+	const rawLines = plan.split("\n");
+	const entries: HeadingEntry[] = [];
+	let inCodeBlock = false;
+	for (let i = 0; i < rawLines.length; i++) {
+		const trimmed = rawLines[i].trim();
+		if (trimmed.startsWith("```")) { inCodeBlock = !inCodeBlock; continue; }
+		if (inCodeBlock) continue;
+		const m = rawLines[i].match(/^(#{1,6})\s+(.*)$/);
+		if (m) entries.push({
+			level: m[1].length,
+			text: stripInline(m[2]),
+			approxLine: Math.round((i / rawLines.length) * totalRenderedLines),
 		});
-	};
-
-	// Loop: show overlay → collect annotations → replan → re-open overlay → ...
-	let currentPlan = initialPlan;
-
-	while (true) {
-		const result = await showPlanOverlay(ctx, currentPlan, replanWithLoader);
-
-		if (result === null) {
-			return null;
-		}
-
-		if (result.accepted) {
-			return currentPlan;
-		}
-
-		if (result.newPlan !== null) {
-			currentPlan = result.newPlan;
-		}
 	}
+	return entries;
 }
 
-/**
- * Result from the plan overlay:
- * - `accepted: true` — user accepted plan as-is (Ctrl+A with no annotations)
- * - `accepted: false` + `newPlan: string | null` — annotations submitted and replanned
- */
-interface PlanOverlayResult {
-	accepted: boolean;
-	newPlan?: string | null;
+function activeSectionIdx(headings: HeadingEntry[], scrollOffset: number): number {
+	let idx = 0;
+	for (let i = 0; i < headings.length; i++) {
+		if (headings[i].approxLine <= scrollOffset + 1) idx = i;
+	}
+	return idx;
 }
 
-type PanelFocus = "plan" | "annotate";
+function renderSidebar(
+	headings: HeadingEntry[], activeIdx: number,
+	maxRows: number, width: number, theme: any,
+): string[] {
+	const lines: string[] = [];
+	for (let i = 0; i < headings.length && lines.length < maxRows; i++) {
+		const h = headings[i];
+		const indent = "  ".repeat(Math.max(0, h.level - 1));
+		const isActive = i === activeIdx;
+		const prefix = isActive ? "▸ " : "  ";
+		const raw = truncateToWidth(indent + prefix + h.text, width);
+		const pad = " ".repeat(Math.max(0, width - visibleWidth(raw)));
+		lines.push(isActive
+			? theme.fg("accent", raw + pad)
+			: theme.fg("muted", raw) + pad);
+	}
+	while (lines.length < maxRows) lines.push(" ".repeat(width));
+	return lines;
+}
 
-async function showPlanOverlay(
-	ctx: any,
-	plan: string,
-	replanFn: (currentPlan: string, annotations: AnnotationItem[]) => Promise<string | null>,
-): Promise<PlanOverlayResult | null> {
-	return ctx.ui.custom<PlanOverlayResult | null>(
-		(tui, theme, _kb, done) => {
-			let state: "showing" | "loading" = "showing";
+// ─── Plan Overlay ─────────────────────────────────────────────────────────────
+
+function openPlanOverlay(ctx: any, plan: string, goal: string, planFile: string): Promise<OverlayResult | null> {
+	return ctx.ui.custom<OverlayResult | null>(
+		(tui: any, theme: any, _kb: any, done: (r: OverlayResult | null) => void) => {
 			let mdTheme = getMarkdownTheme();
 			let md = new Markdown(plan, 0, 0, mdTheme);
+			const comments: Comment[] = [];
 
-			// Plan panel
+			let mode: "view" | "pick" | "edit" | "preview" | "confirm" = "view";
 			let scrollOffset = 0;
 			let cursorLine = 0;
-			let cachedMdLines: string[] = [];
+			let selectionStart: number | null = null;
+			let mdLines: string[] = [];
+			let headings: HeadingEntry[] = [];
+			let pendingAnchor = "";
+			let pendingLineStart = 0;
+			let pendingLineEnd = 0;
+			let countBuffer = "";
+			let pendingG = false;
 
-			// Annotation panel
-			let annotationText = "";
-			let annotationCursor = 0;
-			let focus: PanelFocus = "plan";
-			let annotations: AnnotationItem[] = [];
+			const editorTheme: EditorTheme = {
+				borderColor: (s: string) => theme.fg("accent", s),
+				selectList: {
+					selectedPrefix: (t: string) => theme.fg("accent", t),
+					selectedText: (t: string) => theme.fg("accent", t),
+					description: (t: string) => theme.fg("muted", t),
+					scrollInfo: (t: string) => theme.fg("dim", t),
+					noMatch: (t: string) => theme.fg("warning", t),
+				},
+			};
+			const editor = new Editor(tui, editorTheme);
+			let selectList: SelectList | null = null;
 
 			const requestRender = () => tui.requestRender();
 
-			const startReplan = () => {
-				state = "loading";
+			editor.onSubmit = (value: string) => {
+				const t = value.trim();
+				const idx = comments.findIndex(c => c.lineStart === pendingLineStart && c.lineEnd === pendingLineEnd);
+				if (!t) { if (idx >= 0) comments.splice(idx, 1); }
+				else if (idx >= 0) { comments[idx].text = t; comments[idx].anchor = pendingAnchor; }
+				else comments.push({ anchor: pendingAnchor, lineStart: pendingLineStart, lineEnd: pendingLineEnd, text: t });
+				editor.setText("");
+				mode = "view";
 				requestRender();
-
-				replanFn(plan, annotations).then((newPlan) => {
-					if (newPlan !== null) {
-						md = new Markdown(newPlan, 0, 0, mdTheme);
-					}
-					annotationText = "";
-					annotationCursor = 0;
-					annotations = [];
-					cursorLine = 0;
-					scrollOffset = 0;
-					focus = "plan";
-					state = "showing";
-					requestRender();
-
-					done({ accepted: false, newPlan });
-				});
 			};
 
-			// Split width: left panel gets ~55%, right gets the rest.
-			const splitAt = (w: number) => {
-				const left = Math.max(30, Math.floor(w * 0.55));
-				const right = w - left - 1; // -1 for the vertical divider
-				return { left, right };
+			const openNavPicker = () => {
+				const items: SelectItem[] = headings.map((h) => ({
+					value: String(h.approxLine),
+					label: h.text,
+					description: "",
+				}));
+				if (!items.length) return;
+				selectList = new SelectList(items, Math.min(items.length, viewportRows(tui)), {
+					selectedPrefix: (t: string) => theme.fg("accent", t),
+					selectedText: (t: string) => theme.fg("accent", t),
+					description: (t: string) => theme.fg("success", t),
+					scrollInfo: (t: string) => theme.fg("dim", t),
+					noMatch: (t: string) => theme.fg("warning", t),
+				});
+				selectList.onSelect = (item: SelectItem) => {
+					const line = parseInt(item.value, 10);
+					cursorLine = line;
+					const maxV = viewportRows(tui);
+					scrollOffset = Math.min(line, Math.max(0, mdLines.length - maxV));
+					mode = "view";
+					requestRender();
+				};
+				selectList.onCancel = () => {
+					mode = "view";
+					requestRender();
+				};
+				mode = "pick";
+				requestRender();
 			};
 
 			return {
 				render(width: number): string[] {
-					const { left, right } = splitAt(width - 4); // -4 for outer borders
-					const lines: string[] = [];
+					const inner = width - 4;
+					const out: string[] = [];
+					const border = (s: string) => theme.fg("border", s);
+					const row = (content: string) => {
+						const clipped = truncateToWidth(content, inner);
+						const pad = Math.max(0, inner - visibleWidth(clipped));
+						return border("│ ") + clipped + " ".repeat(pad) + border(" │");
+					};
+					const rule = () => border(`├${"─".repeat(width - 2)}┤`);
 
-					// Top border
-					lines.push(theme.fg("border", `┌${"─".repeat(width - 2)}┐`));
-					const titleText = " Inline Plan ";
-					const titleStyled = theme.fg("accent", theme.bold(titleText));
-					lines.push(
-						theme.fg("border", "│ ") +
-							titleStyled +
-							" ".repeat(Math.max(0, width - 4 - visibleWidth(titleStyled))) +
-							theme.fg("border", "│"),
-					);
-					lines.push(theme.fg("border", `├${"─".repeat(width - 2)}┤`));
+					out.push(border(`┌${"─".repeat(width - 2)}┐`));
+					const pathHint = planFile
+						? theme.fg("dim", `  ${planFile.replace(homedir(), "~")}`)
+						: "";
+					const title =
+						theme.fg("accent", theme.bold("Plan Review")) +
+						(goal ? theme.fg("muted", `  ${goal}`) : "") +
+						pathHint;
+					out.push(row(title));
 
-					if (state === "loading") {
-						const spinner = theme.fg("accent", "⟳");
-						const msg = theme.fg("muted", "Refining plan with annotations...");
-						const line = ` ${spinner} ${msg}`;
-						const innerW = width - 4;
-						const padding = Math.max(0, innerW - visibleWidth(line));
-						lines.push(
-							theme.fg("border", "│ ") + line + " ".repeat(padding) + theme.fg("border", "│"),
-						);
-					} else {
-						// ── Render plan lines ──
-						cachedMdLines = md.render(left - 2); // -2 for inner left-panel padding
-						const totalLines = cachedMdLines.length;
-						const maxVisible = 18;
-						const clampedOffset = Math.min(scrollOffset, Math.max(0, totalLines - maxVisible));
-						const start = clampedOffset;
-						const end = Math.min(start + maxVisible, totalLines);
-
-						// Precompute which lines have annotations (for indicators)
-						const annotatedLines = new Set(annotations.map((a) => a.line));
-
-						// Render each visible row: plan on left | annotation info on right
-						for (let i = start; i < end; i++) {
-							const globalLine = i;
-							const mdLine = cachedMdLines[i] ?? "";
-
-							// Left side: plan line
-							const isCursor = globalLine === cursorLine && focus === "plan";
-							const hasAnnotation = annotatedLines.has(globalLine);
-							const cursorMarker = isCursor ? theme.fg("accent", "▶ ") : "  ";
-							const annotationMarker = hasAnnotation && !isCursor ? theme.fg("success", "● ") : "  ";
-							const marker = isCursor ? cursorMarker : annotationMarker;
-							const leftContent = marker + mdLine;
-							const leftPadding = Math.max(0, left - visibleWidth(leftContent));
-
-							// Right side: show annotation if present for this line, or context for cursor line
-							let rightContent = "";
-							if (hasAnnotation) {
-								const ann = annotations.find((a) => a.line === globalLine)!;
-								const preview =
-									ann.text.length > right - 2 ? ann.text.slice(0, right - 5) + "..." : ann.text;
-								rightContent = theme.fg("success", preview);
-							} else if (isCursor && focus === "annotate") {
-								rightContent = theme.fg("muted", "← annotating this line");
-							}
-							const rightPadding = Math.max(0, right - visibleWidth(rightContent));
-
-							lines.push(
-								theme.fg("border", "│ ") +
-									leftContent +
-									" ".repeat(leftPadding) +
-									theme.fg("border", "│") +
-									rightContent +
-									" ".repeat(rightPadding) +
-									theme.fg("border", "│"),
-							);
-						}
-
-						// Fill remaining rows if < maxVisible
-						const renderedRows = end - start;
-						for (let i = renderedRows; i < maxVisible; i++) {
-							lines.push(
-								theme.fg("border", "│ ") +
-									" ".repeat(left) +
-									theme.fg("border", "│") +
-									" ".repeat(right) +
-									theme.fg("border", "│"),
-							);
-						}
-
-						// Separator
-						lines.push(
-							theme.fg("border", "├─") +
-								"─".repeat(left) +
-								theme.fg("border", "┼") +
-								"─".repeat(right) +
-								theme.fg("border", "┤"),
-						);
-
-						// Annotation input row
-						const focusLabel =
-							focus === "annotate"
-								? theme.fg("accent", ` Annotating line ${cursorLine + 1}: `)
-								: theme.fg("muted", ` Annotations (${annotations.length}): `);
-
-						if (focus === "annotate") {
-							const before = annotationText.slice(0, annotationCursor);
-							const atCursor =
-								annotationCursor < annotationText.length
-									? annotationText[annotationCursor] ?? " "
-									: " ";
-							const after = annotationText.slice(annotationCursor + 1);
-							const inputContent = `${focusLabel}${before}${CURSOR_MARKER}\x1b[7m${atCursor}\x1b[27m${after}`;
-							// Input spans both columns
-							const fullWidth = left + right + 1;
-							const padding = Math.max(0, fullWidth - visibleWidth(inputContent));
-							lines.push(
-								theme.fg("border", "│ ") +
-									inputContent +
-									" ".repeat(padding) +
-									theme.fg("border", "│"),
-							);
-						} else {
-							// Show annotation list preview
-							let summaryLine = focusLabel;
-							if (annotations.length > 0) {
-								summaryLine += annotations
-									.map((a) => theme.fg("success", `L${a.line + 1}`))
-									.join(", ");
-							} else {
-								summaryLine += theme.fg("dim", "none yet");
-							}
-							const fullWidth = left + right + 1;
-							const padding = Math.max(0, fullWidth - visibleWidth(summaryLine));
-							lines.push(
-								theme.fg("border", "│ ") +
-									summaryLine +
-									" ".repeat(padding) +
-									theme.fg("border", "│"),
-							);
-						}
-
-						// Help bar
-						const scrollInfo =
-							totalLines > maxVisible
-								? ` ${start + 1}-${end}/${totalLines}`
-								: "";
-						const help =
-							theme.fg("dim",
-								focus === "plan"
-									? ` ↑↓ navigate • Enter annotate line • Tab annotate panel • Ctrl+A submit • Esc cancel ${scrollInfo}`
-									: ` Type annotation • Enter save • Tab/↑↓ plan panel • Esc cancel`,
-							);
-						const fullWidth = left + right + 1;
-						const helpPadding = Math.max(0, fullWidth - visibleWidth(help));
-						lines.push(
-							theme.fg("border", "│ ") +
-								help +
-								" ".repeat(helpPadding) +
-								theme.fg("border", "│"),
-						);
+					if (mode === "pick" && selectList) {
+						out.push(rule());
+						for (const l of selectList.render(inner)) out.push(row(l));
+						out.push(rule());
+						out.push(row(theme.fg("dim", "/ type to search · j/k navigate · l/enter jump · esc back")));
+						out.push(border(`└${"─".repeat(width - 2)}┘`));
+						return out;
 					}
 
-					// Bottom border
-					lines.push(theme.fg("border", `└${"─".repeat(width - 2)}┘`));
-					return lines;
+					if (mode === "edit") {
+						out.push(rule());
+						out.push(row(theme.fg("accent", "Comment on: ") + theme.fg("muted", pendingAnchor)));
+						for (const l of editor.render(inner)) out.push(row(l));
+						out.push(rule());
+						out.push(row(theme.fg("dim", "normal text · enter save · empty → delete · esc back")));
+						out.push(border(`└${"─".repeat(width - 2)}┘`));
+						return out;
+					}
+
+					if (mode === "preview") {
+						out.push(rule());
+						if (comments.length === 0) {
+							out.push(row(theme.fg("dim", "No comments yet.")));
+						} else {
+							for (const c of comments) {
+								out.push(row(theme.fg("accent", `[${c.anchor}]`)));
+								out.push(row(theme.fg("muted", `  ${c.text}`)));
+							}
+						}
+						out.push(rule());
+						out.push(row(theme.fg("dim", "p/esc close preview")));
+						out.push(border(`└${"─".repeat(width - 2)}┘`));
+						return out;
+					}
+
+					if (mode === "confirm") {
+						out.push(rule());
+						out.push(
+							row(
+								theme.fg("warning", `Discard ${comments.length} unsent comment(s)? `) +
+									theme.fg("dim", "y / n"),
+							),
+						);
+						out.push(border(`└${"─".repeat(width - 2)}┘`));
+						return out;
+					}
+
+					// view mode — two-column layout: sidebar | gutter | main
+					const SB = 28;
+					const mainW = Math.max(20, inner - SB - 3); // SB + divider(1) + gutter(2)
+					mdLines = md.render(mainW);
+					const maxVisible = viewportRows(tui);
+					scrollOffset = Math.min(scrollOffset, Math.max(0, mdLines.length - maxVisible));
+					cursorLine = Math.min(cursorLine, Math.max(0, mdLines.length - 1));
+					const end = Math.min(scrollOffset + maxVisible, mdLines.length);
+
+					headings = buildHeadingMap(plan, mdLines.length);
+					const activeIdx = activeSectionIdx(headings, scrollOffset);
+					const sidebarLines = renderSidebar(headings, activeIdx, maxVisible, SB, theme);
+
+					// ├──SB+1──┬──gutter(2)+mainW+1──┤
+					const splitHeaderRule = border(`├${"─".repeat(SB + 1)}┬${"─".repeat(mainW + 3)}┤`);
+					const splitFooterRule = border(`├${"─".repeat(SB + 1)}┴${"─".repeat(mainW + 3)}┤`);
+
+					out.push(splitHeaderRule);
+
+					const gutterChar = (lineIdx: number): string => {
+						const isCursor = lineIdx === cursorLine;
+						const inSel = selectionStart !== null &&
+							lineIdx >= Math.min(selectionStart, cursorLine) &&
+							lineIdx <= Math.max(selectionStart, cursorLine);
+						const hasComment = comments.some(c => lineIdx >= c.lineStart && lineIdx <= c.lineEnd);
+						const mark = isCursor ? "▶" : (inSel ? "│" : " ");
+						return mark + (hasComment ? "●" : " ");
+					};
+
+					const twoColRow = (sidebarLine: string, gutter: string, mainContent: string) => {
+						const clipped = truncateToWidth(mainContent, mainW);
+						const pad = Math.max(0, mainW - visibleWidth(clipped));
+						return border("│ ") + sidebarLine + border("│") + gutter + clipped + " ".repeat(pad) + border(" │");
+					};
+
+					for (let i = 0; i < maxVisible; i++) {
+						const lineIdx = scrollOffset + i;
+						const inSel = selectionStart !== null &&
+							lineIdx >= Math.min(selectionStart, cursorLine) &&
+							lineIdx <= Math.max(selectionStart, cursorLine);
+						const rawLine = mdLines[lineIdx] ?? "";
+						const coloredLine = inSel ? theme.fg("accent", rawLine) : rawLine;
+						out.push(twoColRow(sidebarLines[i], gutterChar(lineIdx), coloredLine));
+					}
+
+					out.push(splitFooterRule);
+
+					const commentAtCursor = comments.find(c => cursorLine >= c.lineStart && cursorLine <= c.lineEnd);
+					const summary = commentAtCursor
+						? theme.fg("success", "● ") + theme.fg("accent", commentAtCursor.anchor + ": ") + theme.fg("muted", commentAtCursor.text)
+						: comments.length > 0
+							? theme.fg("muted", `${comments.length} comment(s) — `) + comments.map(() => theme.fg("success", "●")).join("") + theme.fg("dim", "  p to preview")
+							: theme.fg("dim", "No comments — v select · c annotate · p preview");
+
+					const scrollInfo =
+						mdLines.length > maxVisible ? `  ${scrollOffset + 1}-${end}/${mdLines.length}` : "";
+					out.push(row(summary));
+					out.push(
+						row(theme.fg("dim", `j/k cursor · [ ] section · / search · v select · c annotate · p preview · y path · s submit · a accept · esc/alt+p close${scrollInfo}`)),
+					);
+					out.push(border(`└${"─".repeat(width - 2)}┘`));
+					return out;
 				},
 
 				invalidate(): void {
 					mdTheme = getMarkdownTheme();
 					md = new Markdown(plan, 0, 0, mdTheme);
-					cachedMdLines = [];
 				},
 
 				handleInput(data: string): void {
-					if (state === "loading") return;
-
-					// ── Global keys ──
-					if (matchesKey(data, Key.escape)) {
-						// Esc from annotation panel: cancel annotation, return to plan
-						if (focus === "annotate") {
-							annotationText = "";
-							annotationCursor = 0;
-							focus = "plan";
-							requestRender();
-							return;
-						}
-						// Esc from plan panel: cancel entirely if no annotations, accept otherwise
-						if (annotations.length === 0) {
-							done(null);
-						} else {
-							done({ accepted: true });
-						}
-						return;
-					}
-
-					if (matchesKey(data, "ctrl+a") || matchesKey(data, "ctrl+A")) {
-						if (annotations.length === 0) {
-							// No annotations → accept plan as-is
-							done({ accepted: true });
-						} else {
-							// Submit all annotations for replan
-							startReplan();
-						}
-						return;
-					}
-
-					// ── Tab: switch focus ──
-					if (matchesKey(data, Key.tab)) {
-						focus = focus === "plan" ? "annotate" : "plan";
-						annotationCursor = annotationText.length;
+					if (mode === "pick") {
+						if (data === "j") selectList?.handleInput("\x1b[B");
+						else if (data === "k") selectList?.handleInput("\x1b[A");
+						else if (data === "l") selectList?.handleInput("\r");
+						else selectList?.handleInput(data);
 						requestRender();
 						return;
 					}
 
-					// ── Plan panel keys ──
-					if (focus === "plan") {
-						const totalLines = cachedMdLines.length;
-						const maxVisible = 18;
-
-						if (matchesKey(data, Key.up)) {
-							if (cursorLine > 0) {
-								cursorLine--;
-								if (cursorLine < scrollOffset) scrollOffset = cursorLine;
-								requestRender();
-							}
-							return;
-						}
-						if (matchesKey(data, Key.down)) {
-							if (cursorLine < totalLines - 1) {
-								cursorLine++;
-								if (cursorLine >= scrollOffset + maxVisible) {
-									scrollOffset = cursorLine - maxVisible + 1;
-								}
-								requestRender();
-							}
-							return;
-						}
-						if (matchesKey(data, Key.home)) {
-							cursorLine = 0;
-							scrollOffset = 0;
+					if (mode === "edit") {
+						if (matchesKey(data, Key.escape)) {
+							editor.setText("");
+							mode = "view";
 							requestRender();
 							return;
 						}
-						if (matchesKey(data, Key.end)) {
-							cursorLine = totalLines - 1;
-							scrollOffset = Math.max(0, totalLines - maxVisible);
-							requestRender();
-							return;
-						}
-
-						// Enter: start annotating the current line
-						if (matchesKey(data, Key.enter)) {
-							// Remove existing annotation for this line if present
-							annotations = annotations.filter((a) => a.line !== cursorLine);
-							focus = "annotate";
-							annotationText = "";
-							annotationCursor = 0;
-							requestRender();
-							return;
-						}
-
-						// Delete: remove annotation from current line
-						if (matchesKey(data, Key.delete) || matchesKey(data, Key.backspace)) {
-							const before = annotations.length;
-							annotations = annotations.filter((a) => a.line !== cursorLine);
-							if (annotations.length < before) requestRender();
-							return;
-						}
-
+						editor.handleInput(data);
+						requestRender();
 						return;
 					}
 
-					// ── Annotation panel keys ──
-					if (focus === "annotate") {
-						// Enter: save annotation and return to plan
-						if (matchesKey(data, Key.enter)) {
-							const trimmed = annotationText.trim();
-							if (trimmed.length > 0) {
-								annotations.push({ line: cursorLine, text: trimmed });
-							}
-							annotationText = "";
-							annotationCursor = 0;
-							focus = "plan";
-							requestRender();
-							return;
-						}
-
-						// Text editing
-						if (matchesKey(data, Key.backspace)) {
-							if (annotationCursor > 0) {
-								annotationText =
-									annotationText.slice(0, annotationCursor - 1) +
-									annotationText.slice(annotationCursor);
-								annotationCursor--;
-								requestRender();
-							}
-							return;
-						}
-						if (matchesKey(data, Key.left)) {
-							if (annotationCursor > 0) {
-								annotationCursor--;
-								requestRender();
-							}
-							return;
-						}
-						if (matchesKey(data, Key.right)) {
-							if (annotationCursor < annotationText.length) {
-								annotationCursor++;
-								requestRender();
-							}
-							return;
-						}
-						if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
-							// In annotate mode, up/down navigate plan cursor instead
-							// so user can adjust which line they're annotating
-							const totalLines = cachedMdLines.length;
-							const maxVisible = 18;
-							if (matchesKey(data, Key.up) && cursorLine > 0) {
-								cursorLine--;
-								if (cursorLine < scrollOffset) scrollOffset = cursorLine;
-								requestRender();
-							}
-							if (matchesKey(data, Key.down) && cursorLine < totalLines - 1) {
-								cursorLine++;
-								if (cursorLine >= scrollOffset + maxVisible) {
-									scrollOffset = cursorLine - maxVisible + 1;
-								}
-								requestRender();
-							}
-							return;
-						}
-						if (data.length === 1 && data.charCodeAt(0) >= 32) {
-							annotationText =
-								annotationText.slice(0, annotationCursor) +
-								data +
-								annotationText.slice(annotationCursor);
-							annotationCursor++;
+					if (mode === "preview") {
+						if (data === "p" || data === "P" || matchesKey(data, Key.escape)) {
+							mode = "view";
 							requestRender();
 						}
+						return;
 					}
+
+					if (mode === "confirm") {
+						if (data === "y" || data === "Y") {
+							done({ action: "close" });
+							return;
+						}
+						mode = "view";
+						requestRender();
+						return;
+					}
+
+					// view mode
+					if (matchesKey(data, Key.escape) || matchesKey(data, "alt+p")) {
+						countBuffer = "";
+						pendingG = false;
+						if (selectionStart !== null) {
+							selectionStart = null;
+							requestRender();
+							return;
+						}
+						if (comments.length > 0) {
+							mode = "confirm";
+							requestRender();
+						} else {
+							done({ action: "close" });
+						}
+						return;
+					}
+
+					// Digits accumulate count prefix
+					if (/^\d$/.test(data)) {
+						countBuffer += data;
+						requestRender();
+						return;
+					}
+					const hadCount = countBuffer.length > 0;
+					const count = hadCount ? parseInt(countBuffer, 10) : 1;
+					countBuffer = "";
+
+					// g / gg → top
+					if (data === "g") {
+						if (pendingG) { cursorLine = 0; scrollOffset = 0; pendingG = false; requestRender(); }
+						else { pendingG = true; }
+						return;
+					}
+					pendingG = false;
+
+					const maxVisible = viewportRows(tui);
+
+					// G / ctrl+g → bottom (or jump to line `count` if count was typed)
+					if (data === "G" || matchesKey(data, "ctrl+g")) {
+						cursorLine = !hadCount
+							? Math.max(0, mdLines.length - 1)
+							: Math.min(count - 1, Math.max(0, mdLines.length - 1));
+						scrollOffset = !hadCount
+							? Math.max(0, mdLines.length - maxVisible)
+							: Math.min(count - 1, Math.max(0, mdLines.length - maxVisible));
+						requestRender();
+						return;
+					}
+					if (data === "[") {
+						const idx = activeSectionIdx(headings, scrollOffset);
+						const newLine = idx > 0 ? headings[idx - 1].approxLine : 0;
+						cursorLine = newLine;
+						scrollOffset = newLine;
+						requestRender();
+						return;
+					}
+					if (data === "]") {
+						const idx = activeSectionIdx(headings, scrollOffset);
+						if (idx < headings.length - 1) {
+							cursorLine = headings[idx + 1].approxLine;
+							scrollOffset = Math.min(headings[idx + 1].approxLine, Math.max(0, mdLines.length - maxVisible));
+						}
+						requestRender();
+						return;
+					}
+					if (data === "j" || matchesKey(data, Key.down)) {
+						cursorLine = Math.min(cursorLine + count, Math.max(0, mdLines.length - 1));
+						if (cursorLine >= scrollOffset + maxVisible) scrollOffset = cursorLine - maxVisible + 1;
+						if (cursorLine < scrollOffset) scrollOffset = cursorLine;
+						requestRender();
+						return;
+					}
+					if (data === "k" || matchesKey(data, Key.up)) {
+						cursorLine = Math.max(cursorLine - count, 0);
+						if (cursorLine < scrollOffset) scrollOffset = cursorLine;
+						if (cursorLine >= scrollOffset + maxVisible) scrollOffset = cursorLine - maxVisible + 1;
+						requestRender();
+						return;
+					}
+					if (matchesKey(data, Key.home)) {
+						cursorLine = 0;
+						scrollOffset = 0;
+						requestRender();
+						return;
+					}
+					if (matchesKey(data, Key.end)) {
+						cursorLine = Math.max(0, mdLines.length - 1);
+						scrollOffset = Math.max(0, mdLines.length - maxVisible);
+						requestRender();
+						return;
+					}
+					if (data === "v" || data === "V") {
+						selectionStart = selectionStart === null ? cursorLine : null;
+						requestRender();
+						return;
+					}
+					if (data === "c" || data === "C") {
+						const lineStart = selectionStart !== null ? Math.min(selectionStart, cursorLine) : cursorLine;
+						const lineEnd   = selectionStart !== null ? Math.max(selectionStart, cursorLine) : cursorLine;
+						const rawAnchor = mdLines[lineStart]?.replace(/^#+\s*/, "").trim() ?? `line ${lineStart}`;
+						pendingLineStart = lineStart;
+						pendingLineEnd = lineEnd;
+						pendingAnchor = rawAnchor.slice(0, 50);
+						const existing = comments.find(c => c.lineStart === lineStart && c.lineEnd === lineEnd);
+						editor.setText(existing?.text ?? "");
+						selectionStart = null;
+						mode = "edit";
+						requestRender();
+						return;
+					}
+					if (data === "p" || data === "P") {
+						mode = "preview";
+						requestRender();
+						return;
+					}
+					if (data === "/") {
+						openNavPicker();
+						return;
+					}
+					if (data === "y" || data === "Y") {
+						if (planFile) {
+							ctx.ui.setEditorText(planFile);
+							ctx.ui.notify("Plan path in editor — close overlay to copy.", "info");
+						}
+						return;
+					}
+					if (data === "s" || data === "S") {
+						if (comments.length > 0) done({ action: "submit", comments });
+						return;
+					}
+					if (data === "a" || data === "A") {
+						done({ action: "accept" });
+						return;
+					}
+				},
+
+				dispose(): void {
+					editor.dispose();
 				},
 			};
 		},
 		{
 			overlay: true,
-			overlayOptions: {
-				width: "85%",
-				minWidth: 65,
-				maxHeight: "85%",
-				margin: 1,
-			},
+			overlayOptions: { width: "95%", maxHeight: "98%", anchor: "center", minWidth: 60 },
 		},
 	);
 }
 
-// ─── Phase 3: Model Selection ─────────────────────────────────────────────────
+// ─── Model Selection ──────────────────────────────────────────────────────────
 
 async function modelSelectionPhase(ctx: any): Promise<string | null> {
+	const available: any[] = await ctx.modelRegistry.getAvailable();
 	const currentModel = ctx.model;
 	const currentLabel = currentModel ? `${currentModel.provider}/${currentModel.id}` : null;
 
-	if (!currentLabel) return null; // Can't select if no current model
+	if (!available.length) return currentLabel;
 
-	const items: SelectItem[] = [
-		{
-			value: "__keep__",
-			label: `Keep current (${currentLabel})`,
-			description: "Use the current model in the new session",
-		},
-		{
-			value: "__other__",
-			label: "Specify a different model...",
-			description: "Type a model identifier (e.g., anthropic/claude-sonnet-4-5)",
-		},
-	];
+	const items: SelectItem[] = available.map((m: any) => {
+		const label = `${m.provider}/${m.id}`;
+		return {
+			value: label,
+			label: m.label ?? m.id,
+			description: m.provider + (label === currentLabel ? "  (current)" : ""),
+		};
+	});
 
 	const result = await ctx.ui.custom<string | null>(
-		(tui, theme, _kb, done) => {
+		(tui: any, theme: any, _kb: any, done: (v: string | null) => void) => {
 			const container = new Container();
 			container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
 			container.addChild(
 				new Text(theme.fg("accent", theme.bold("Select Model for New Session")), 1, 0),
 			);
 
-			const selectList = new SelectList(items, items.length, {
+			const selectList = new SelectList(items, Math.min(items.length, 12), {
 				selectedPrefix: (t: string) => theme.fg("accent", t),
 				selectedText: (t: string) => theme.fg("accent", t),
 				description: (t: string) => theme.fg("muted", t),
@@ -795,38 +670,21 @@ async function modelSelectionPhase(ctx: any): Promise<string | null> {
 				noMatch: (t: string) => theme.fg("warning", t),
 			});
 
-			selectList.onSelect = async (item) => {
-				if (item.value === "__other__") {
-					const modelInput = await ctx.ui.input(
-						"Enter model identifier (provider/model-id):",
-						"",
-					);
-					if (modelInput && modelInput.trim()) {
-						done(modelInput.trim());
-					} else {
-						done(null);
-					}
-				} else {
-					done(currentLabel);
-				}
-			};
+			selectList.onSelect = (item: SelectItem) => done(item.value);
 			selectList.onCancel = () => done(null);
 
 			container.addChild(selectList);
-			container.addChild(
-				new Text(
-					theme.fg("dim", "↑↓ navigate • enter select • esc keep current"),
-					1,
-					0,
-				),
-			);
+			container.addChild(new Text(theme.fg("dim", "/ type to search · j/k navigate · l/enter select · esc cancel"), 1, 0));
 			container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
 
 			return {
 				render: (w: number) => container.render(w),
 				invalidate: () => container.invalidate(),
 				handleInput: (data: string) => {
-					selectList.handleInput(data);
+					if (data === "j") selectList.handleInput("\x1b[B");
+					else if (data === "k") selectList.handleInput("\x1b[A");
+					else if (data === "l") selectList.handleInput("\r");
+					else selectList.handleInput(data);
 					tui.requestRender();
 				},
 			};
@@ -834,6 +692,209 @@ async function modelSelectionPhase(ctx: any): Promise<string | null> {
 		{ overlay: true },
 	);
 
-	// null = cancelled → keep current model
-	return result ?? currentLabel;
+	return result;
+}
+
+// ─── Extension Entry Point ────────────────────────────────────────────────────
+
+export default function inlinePlanExtension(pi: ExtensionAPI): void {
+	let planModeEnabled = false;
+	let handoffPending = false;
+	let currentGoal = "";
+	let latestPlan = "";
+	let latestPlanFile = "";
+	let savedTools: string[] = [];
+
+	function persistState(): void {
+		pi.appendEntry("inline-plan", { enabled: planModeEnabled, goal: currentGoal });
+	}
+
+	function updateStatus(ctx: ExtensionContext): void {
+		if (planModeEnabled) {
+			const hint = latestPlan ? "Alt+P to review" : "drafting…";
+			const goal = currentGoal.length > 50 ? currentGoal.slice(0, 47) + "…" : currentGoal;
+			ctx.ui.setStatus("inline-plan", ctx.ui.theme.fg("warning", `⏸ plan · ${hint}`));
+			ctx.ui.setWidget("inline-plan", [
+				ctx.ui.theme.fg("warning", "⏸ PLAN MODE") +
+				ctx.ui.theme.fg("muted", `  ${goal}`) +
+				ctx.ui.theme.fg("dim", `  · ${hint}`),
+			]);
+		} else {
+			ctx.ui.setStatus("inline-plan", undefined);
+			ctx.ui.setWidget("inline-plan", undefined);
+		}
+	}
+
+	function toolNames(tools: unknown[]): string[] {
+		return tools.map((t: any) => (typeof t === "string" ? t : t.name)).filter(Boolean);
+	}
+
+	function enablePlanMode(ctx: ExtensionContext, goal: string): void {
+		if (!planModeEnabled) {
+			savedTools = toolNames(pi.getActiveTools());
+			pi.setActiveTools(PLAN_MODE_TOOLS);
+		}
+		planModeEnabled = true;
+		currentGoal = goal;
+		latestPlan = "";
+		latestPlanFile = "";
+		updateStatus(ctx);
+		persistState();
+	}
+
+	function disablePlanMode(ctx: ExtensionContext): void {
+		if (!planModeEnabled) return;
+		planModeEnabled = false;
+		if (savedTools.length > 0) pi.setActiveTools(savedTools);
+		latestPlan = "";
+		latestPlanFile = "";
+		currentGoal = "";
+		updateStatus(ctx);
+		persistState();
+	}
+
+	async function acceptAndHandoff(ctx: any, plan: string): Promise<void> {
+		const selected = await modelSelectionPhase(ctx);
+		if (selected === null) return;
+
+		if (selected && ctx.model) {
+			const currentLabel = `${ctx.model.provider}/${ctx.model.id}`;
+			if (selected !== currentLabel) {
+				const slash = selected.indexOf("/");
+				if (slash > 0) {
+					const model = ctx.modelRegistry.find(selected.slice(0, slash), selected.slice(slash + 1));
+					if (model) await pi.setModel(model);
+					else ctx.ui.notify(`Model not found: ${selected} (keeping current)`, "warning");
+				}
+			}
+		}
+
+		const planFile = latestPlanFile || savePlanFile(plan, currentGoal);
+		handoffPending = true;
+		disablePlanMode(ctx);
+
+		const seed =
+			`Execute the following implementation plan. It is self-contained — rely only on ` +
+			`this plan and the codebase. Plan also saved at: ${planFile}\n\n${plan}`;
+		ctx.ui.setEditorText(seed);
+		ctx.ui.notify(`Plan saved → ${planFile}. Review, then submit to execute.`, "info");
+	}
+
+	// ── /plan command ──────────────────────────────────────────────────────────
+	pi.registerCommand("plan", {
+		description: "Plan mode: the agent drafts a reviewable plan, then hands off to a fresh executor",
+		handler: async (args, ctx) => {
+			if (ctx.mode !== "tui") {
+				ctx.ui.notify("/plan requires interactive mode", "error");
+				return;
+			}
+			const goal = args.trim();
+			if (planModeEnabled && !goal) {
+				disablePlanMode(ctx);
+				ctx.ui.notify("Plan mode off — full tool access restored.", "info");
+				return;
+			}
+			if (!goal) {
+				ctx.ui.notify("Usage: /plan <goal>", "error");
+				return;
+			}
+			enablePlanMode(ctx, goal);
+			ctx.ui.notify("Plan mode on. Agent is drafting — press Ctrl+Shift+P to review.", "info");
+			pi.sendUserMessage(goal);
+		},
+	});
+
+	// ── Toggle the plan review overlay ───────────────────────────────────────────
+	pi.registerShortcut(TOGGLE_SHORTCUT, {
+		description: "Review the current plan (inline-plan) — Alt+P",
+		handler: async (ctx) => {
+			if (!planModeEnabled) {
+				ctx.ui.notify("Not in plan mode. Start with /plan <goal>.", "info");
+				return;
+			}
+			if (!latestPlan) {
+				ctx.ui.notify("No plan yet — let the agent finish drafting.", "info");
+				return;
+			}
+			if (!latestPlanFile && latestPlan) latestPlanFile = savePlanFile(latestPlan, currentGoal);
+			const result = await openPlanOverlay(ctx, latestPlan, currentGoal, latestPlanFile);
+			if (!result || result.action === "close") return;
+
+			if (result.action === "submit") {
+				const refine = composeRefine(result.comments);
+				try {
+					pi.sendUserMessage(refine);
+				} catch {
+					// Agent is mid-stream — queue the refinement until it finishes its tools.
+					pi.sendUserMessage(refine, { deliverAs: "followUp" });
+				}
+				ctx.ui.notify(`Sent ${result.comments.length} comment(s). Watch the agent revise.`, "info");
+			} else if (result.action === "accept") {
+				await acceptAndHandoff(ctx, latestPlan);
+			}
+		},
+	});
+
+	// ── Inject the planning directive while in plan mode ─────────────────────────
+	pi.on("before_agent_start", async () => {
+		if (!planModeEnabled) return;
+		return {
+			message: {
+				customType: "inline-plan-context",
+				content: planDirective(currentGoal),
+				display: false,
+			},
+		};
+	});
+
+	// ── Strip stale planning directives once plan mode is off ────────────────────
+	pi.on("context", async (event) => {
+		if (planModeEnabled) return;
+		if (handoffPending) {
+			handoffPending = false;
+			return { messages: [] };
+		}
+		return {
+			messages: event.messages.filter((m: any) => m.customType !== "inline-plan-context"),
+		};
+	});
+
+	// ── Capture the latest plan after each agent response ────────────────────────
+	pi.on("agent_end", async (event, ctx) => {
+		if (!planModeEnabled) return;
+		const plan = extractPlanFromMessages(event.messages as AgentMessage[]);
+		if (plan) {
+			latestPlan = plan;
+			latestPlanFile = savePlanFile(latestPlan, currentGoal);
+			updateStatus(ctx);
+			persistState();
+		}
+	});
+
+	// ── Restore plan-mode state on session start / resume ────────────────────────
+	pi.on("session_start", async (_event, ctx) => {
+		const entries = ctx.sessionManager.getEntries();
+		const entry = entries
+			.filter((e: any) => e.type === "custom" && e.customType === "inline-plan")
+			.pop() as { data?: { enabled?: boolean; goal?: string } } | undefined;
+
+		if (entry?.data) {
+			planModeEnabled = entry.data.enabled ?? false;
+			currentGoal = entry.data.goal ?? "";
+		}
+
+		if (planModeEnabled) {
+			const branchMessages = ctx.sessionManager
+				.getBranch()
+				.filter((e: any) => e.type === "message")
+				.map((e: any) => e.message as AgentMessage);
+			const plan = extractPlanFromMessages(branchMessages);
+			if (plan) latestPlan = plan;
+
+			savedTools = toolNames(pi.getActiveTools());
+			pi.setActiveTools(PLAN_MODE_TOOLS);
+		}
+
+		updateStatus(ctx);
+	});
 }
