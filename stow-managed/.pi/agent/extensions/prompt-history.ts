@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const HISTORY_FILE = join(homedir(), ".pi", "agent", "prompt-history.jsonl");
-const MAX_ITEMS = 500;
+const MAX_ITEMS = 100_000;
 const VISIBLE_ROWS = 15;
 
 // ── Colours ───────────────────────────────────────────────────────────────────
@@ -31,6 +31,8 @@ interface DisplayItem {
 	value: string;
 	label: string;
 	detail: string;
+	dateStr: string;    // relative time for display column, e.g. "3d ago"
+	searchDate: string; // ISO date "YYYY-MM-DD" for date-based filtering
 }
 
 // ── File helpers ──────────────────────────────────────────────────────────────
@@ -56,6 +58,18 @@ function loadHistory(): HistoryEntry[] {
 	} catch {
 		return [];
 	}
+}
+
+function relativeDate(ts: number): string {
+	const days = Math.floor((Date.now() - ts) / 86_400_000);
+	if (days === 0) return "today";
+	if (days === 1) return "yest.";
+	if (days < 7) return `${days}d ago`;
+	const weeks = Math.floor(days / 7);
+	if (weeks < 5) return `${weeks}w ago`;
+	const months = Math.floor(days / 30);
+	if (months < 12) return `${months}mo ago`;
+	return `${Math.floor(days / 365)}y ago`;
 }
 
 function deduplicateHistory(entries: HistoryEntry[]): HistoryEntry[] {
@@ -94,6 +108,8 @@ export default function promptHistory(pi: ExtensionAPI) {
 				value: e.text,
 				label: e.text.replace(/\n+/g, " ↵ ").slice(0, 200),
 				detail: `${new Date(e.ts).toLocaleDateString()}  ${e.cwd}`,
+				dateStr: relativeDate(e.ts),
+				searchDate: new Date(e.ts).toISOString().slice(0, 10),
 			}));
 
 			const selected = await ctx.ui.custom<string | null>((tui, _theme, _kb, done) => {
@@ -107,7 +123,11 @@ export default function promptHistory(pi: ExtensionAPI) {
 						filtered = [...allItems];
 					} else {
 						const q = query.toLowerCase();
-						filtered = allItems.filter((item) => item.label.toLowerCase().includes(q));
+						filtered = allItems.filter((item) =>
+							item.label.toLowerCase().includes(q) ||
+							item.searchDate.includes(q) ||
+							item.dateStr.toLowerCase().includes(q)
+						);
 					}
 					cursor = 0;
 					cachedLines = undefined;
@@ -172,7 +192,7 @@ export default function promptHistory(pi: ExtensionAPI) {
 					const add = (s: string) => lines.push(truncateToWidth(s, width));
 
 					add(c.lavender("─".repeat(width)));
-					add(c.blue(` Prompt History `) + c.dimGray(`(${allItems.length} entries)`));
+					add(c.blue(` Prompt History `) + c.dimGray(`(${allItems.length} / ${MAX_ITEMS.toLocaleString()} entries)`));
 
 					// Search bar
 					const qDisplay = query
@@ -189,13 +209,16 @@ export default function promptHistory(pi: ExtensionAPI) {
 						const start = Math.max(0, Math.min(cursor - half, filtered.length - VISIBLE_ROWS));
 						const end = Math.min(filtered.length, start + VISIBLE_ROWS);
 
+						const DATE_COL = 8; // chars reserved for date column
 						for (let i = start; i < end; i++) {
 							const item = filtered[i];
 							const isSel = i === cursor;
 							const arrow = isSel ? c.cyan("▸") : " ";
-							const label = truncateToWidth(item.label, width - 4);
+							const dateCol = item.dateStr.padEnd(DATE_COL);
+							const label = truncateToWidth(item.label, width - 4 - DATE_COL);
+							const styledDate = isSel ? c.peach(dateCol) : c.dimGray(dateCol);
 							const styledLabel = isSel ? c.yellow(label) : label;
-							add(` ${arrow} ${styledLabel}`);
+							add(` ${arrow} ${styledDate} ${styledLabel}`);
 						}
 
 						if (filtered.length > VISIBLE_ROWS) {
