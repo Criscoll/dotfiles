@@ -37,6 +37,10 @@
           {
             "type": "command",
             "command": "bash $HOME/.claude/hooks/catch-stupid-commands.sh"
+          },
+          {
+            "type": "command",
+            "command": "rtk hook claude"
           }
         ]
       }

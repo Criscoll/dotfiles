@@ -138,6 +138,7 @@ exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
 | `gofmt` | `~/opt/go/bin/gofmt` |
 | `alacritty` | `~/opt/alacritty` |
 | `pi` | `~/opt/pi/pi` |
+| `rtk` | `~/opt/rtk` |
 
 **Important for agents:** The paths above are conventions, not guarantees. If a wrapper-backed command fails on a specific machine, verify the binary actually exists at the expected location before assuming the wrapper is wrong:
 ```bash
