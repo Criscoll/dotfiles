@@ -270,6 +270,32 @@ When building pi extensions with custom TUI overlays or pickers (`ctx.ui.custom(
 - **Search**: prefer type-to-filter over a dedicated search mode. Always show a hint line so it's discoverable.
 - **Hint line**: every overlay must render a one-line summary of available keys at the bottom.
 
+## Language Standards
+
+This section documents the language-specific conventions enforced across all projects in this repo. Mechanical enforcement happens via `lint-file.sh` (called by both the `settings.json` PostToolUse hook and the `lint-on-edit.ts` pi extension). Creating or editing files in these languages should trigger the relevant agent skill.
+
+### Python
+
+- **Toolchain:** `uv` exclusively — no `pip`, no `requirements.txt`, no `setup.py`. See `python-knowledge` SKILL.md.
+- **Type checking:** `mypy --strict` via `uv run mypy`. All projects should enable strict mode.
+- **Formatting/linting:** `ruff` via `uvx ruff`. Runs automatically via `lint-file.sh` on every edit.
+- **Testing:** `pytest` via `uv run pytest`. Prefer plain asserts over `self.assertEqual`.
+- **Automatic enforcement:** `lint-file.sh` maps `.py` → `uvx ruff check --fix`.
+
+### TypeScript / JavaScript
+
+- **TypeScript strict mode required:** `tsconfig.json` must set `"strict": true`. No exceptions. See `typescript-knowledge` SKILL.md.
+- **No `any`:** Use `unknown` with type guards. `@typescript-eslint/no-explicit-any` is an `error`.
+- **Linting:** ESLint v10.5.0 via `npx eslint`. Runs automatically via `lint-file.sh` on every edit for `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`.
+- **Type checking:** `npx tsc --noEmit` is reserved for CI/dedicated lint passes — too heavy for per-edit hooks.
+- **Automatic enforcement:** `lint-file.sh` maps TypeScript extensions → `npx eslint --fix`.
+
+### Adding a New Language
+
+To add linting support for another language (e.g. Go, Rust):
+1. Add one case arm to `stow-managed/bin/agent_scripts/lint-file.sh` with a `command -v <tool>` guard
+2. No changes needed to `settings.json`, `lint-on-edit.ts`, or any other config
+
 ## Key Conventions
 
 - **Comma-prefix aliases** (`,upload_notes`, `,pdfcompress`, etc.) are used throughout `.zshrc` to namespace custom commands and avoid collisions with system commands
