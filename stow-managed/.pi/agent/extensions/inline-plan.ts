@@ -79,6 +79,11 @@ Your job:
 3. Draft a plan only once you have enough information — do NOT emit a plan immediately if you still need clarification or exploration.
 4. Produce ONE comprehensive, self-contained implementation plan. It will be handed to a
    FRESH agent with no prior context, so it must be executable from the plan + codebase alone.
+   The fresh agent has NO access to this chat, earlier messages, or any external document — so
+   never reference "the ideas file", "as discussed above", or anything not contained in the plan.
+   Carry your exploration forward: when a step depends on a non-obvious API, event name, function
+   signature, or config shape you had to discover, inline the exact signature plus a file:line
+   reference in that step so the executor does not re-explore what you already found.
 5. Treat every subsequent user message as additional context or a refinement request and revise the plan accordingly.
 
 Output rules (critical — only once you are ready to emit a plan):
@@ -102,7 +107,14 @@ Output rules (critical — only once you are ready to emit a plan):
      risk. Files: path/a.ts, path/b.ts
   2. **<step title>** — ...
   ## Verification
-  - how to test / verify the change end to end
+  - how to test / verify the change end to end. Every bullet MUST be runnable by a
+    non-interactive agent: a concrete command paired with its expected output. Do NOT write
+    steps that require driving an interactive session (e.g. "ask Claude to edit a file and watch
+    the hook fire", "ask pi to …") — the executor cannot do that. For harness or integration
+    wiring, prescribe a synthetic check instead: invoke the hook command directly with the same
+    env vars the harness would set, or fire a synthetic event at the handler. Do NOT propose a
+    syntax-only check (e.g. node -c on a .ts file) as proof of correctness — it proves nothing
+    about behaviour.
 - You may write a short explanation in chat, but the authoritative plan must be
   submitted via write_plan.`;
 }
@@ -157,11 +169,12 @@ function stripInline(s: string): string {
 function composeRefine(comments: Comment[]): string {
 	const body = comments.map((c) => `- [${c.anchor}] ${c.text}`).join("\n");
 	return (
-		`Refine the plan based on these review comments:\n\n${body}\n\n` +
+		`Review comments on the plan:\n\n${body}\n\n` +
 		`Instructions:\n` +
-		`1. If any comment is unclear, use the questionnaire tool to ask for clarification BEFORE revising.\n` +
-		`2. After revising, call the write_plan tool with the COMPLETE updated plan — do NOT print it inline.\n` +
-		`3. After the write_plan call, write a brief response (3–5 lines) stating exactly what you changed for each comment, e.g. "- [anchor]: Added X to Step 2."`
+		`1. For each comment, decide independently: does it require a plan change, or is it a question, clarification request, or observation that can be answered in prose?\n` +
+		`2. You are NOT required to edit the plan for every comment. Push back, answer, or discuss freely when that is the right response.\n` +
+		`3. Only if one or more comments warrant an actual plan change: call write_plan with the COMPLETE updated plan — do NOT print it inline.\n` +
+		`4. After addressing all comments, write a brief reply (one line per comment) describing what you did — e.g. "- [anchor]: Answered inline / Updated Step 2 / No change needed because…".`
 	);
 }
 
