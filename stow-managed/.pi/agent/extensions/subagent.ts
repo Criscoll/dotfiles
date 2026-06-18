@@ -28,6 +28,7 @@ import type { Message } from "@earendil-works/pi-ai";
 import { StringEnum } from "@earendil-works/pi-ai";
 import {
   type ExtensionAPI,
+  type ExtensionContext,
   getAgentDir,
   getMarkdownTheme,
   parseFrontmatter,
@@ -597,7 +598,66 @@ const SubagentParams = Type.Object({
   cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
 });
 
+// --- Subagent mode (Alt+S toggle) -------------------------------------------
+
+type SubagentMode = "normal" | "driven" | "disabled";
+
+const SUBAGENT_MODE_ORDER: SubagentMode[] = ["normal", "driven", "disabled"];
+
+const SUBAGENT_MODE_LABEL: Record<SubagentMode, string> = {
+  normal: "Normal",
+  driven: "Subagent-Driven",
+  disabled: "Disabled",
+};
+
+function drivenDirective(): string {
+  return [
+    "Subagent mode: DRIVEN.",
+    "Prefer delegating recon (scout), review (reviewer), and independent/parallelizable work",
+    "to the `subagent` tool to preserve your own context; only do it inline when delegation",
+    "has no benefit.",
+  ].join(" ");
+}
+
+function disabledDirective(): string {
+  return [
+    "Subagent mode: DISABLED.",
+    "The `subagent` tool is disabled this session — do not call it; do the work inline.",
+  ].join(" ");
+}
+
 export default function (pi: ExtensionAPI) {
+  let mode: SubagentMode = "normal";
+
+  function updateStatus(ctx: ExtensionContext): void {
+    if (mode === "driven") {
+      ctx.ui.setStatus("subagent-mode", ctx.ui.theme.fg("warning", "⚡ subagent · driven"));
+      ctx.ui.setWidget("subagent-mode", [ctx.ui.theme.fg("warning", "⚡ SUBAGENT-DRIVEN")]);
+    } else if (mode === "disabled") {
+      ctx.ui.setStatus("subagent-mode", ctx.ui.theme.fg("muted", "⊘ subagent · off"));
+      ctx.ui.setWidget("subagent-mode", [ctx.ui.theme.fg("muted", "⊘ SUBAGENTS DISABLED")]);
+    } else {
+      ctx.ui.setStatus("subagent-mode", undefined);
+      ctx.ui.setWidget("subagent-mode", undefined);
+    }
+  }
+
+  function persistState(): void {
+    pi.appendEntry("subagent-mode", { mode });
+  }
+
+  function setMode(ctx: ExtensionContext, m: SubagentMode): void {
+    mode = m;
+    updateStatus(ctx);
+    persistState();
+  }
+
+  function cycleMode(ctx: ExtensionContext): void {
+    const next = SUBAGENT_MODE_ORDER[(SUBAGENT_MODE_ORDER.indexOf(mode) + 1) % SUBAGENT_MODE_ORDER.length];
+    setMode(ctx, next);
+    ctx.ui.notify(`Subagent mode: ${SUBAGENT_MODE_LABEL[next]}`, "info");
+  }
+
   pi.registerTool({
     name: "subagent",
     label: "Subagent",
@@ -616,6 +676,14 @@ export default function (pi: ExtensionAPI) {
     parameters: SubagentParams,
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
+      if (mode === "disabled") {
+        return {
+          content: [{ type: "text", text: "Subagent mode is disabled (Alt+S to re-enable)." }],
+          isError: true,
+          details: { mode: "single", agentScope: "user", projectAgentsDir: null, results: [] },
+        };
+      }
+
       const agentScope: AgentScope = params.agentScope ?? "user";
       const discovery = discoverAgents(ctx.cwd, agentScope);
       const agents = discovery.agents;
@@ -1121,5 +1189,69 @@ export default function (pi: ExtensionAPI) {
       const text = result.content[0];
       return new Text(text?.type === "text" ? text.text : "(no output)", 0, 0);
     },
+  });
+
+  // ── Cycle subagent mode (normal → driven → disabled) ────────────────────────
+  pi.registerShortcut("alt+s", {
+    description: "Cycle subagent mode: normal → driven → disabled — Alt+S",
+    handler: (ctx) => cycleMode(ctx),
+  });
+
+  pi.registerCommand("subagent-mode", {
+    description: "Set subagent mode (no arg cycles): driven | off | normal",
+    handler: (args, ctx) => {
+      const arg = args.trim().toLowerCase();
+      if (!arg) {
+        cycleMode(ctx);
+        return;
+      }
+      let next: SubagentMode | null = null;
+      if (arg === "driven") next = "driven";
+      else if (arg === "off" || arg === "disabled") next = "disabled";
+      else if (arg === "normal") next = "normal";
+      if (!next) {
+        ctx.ui.notify(`Unknown subagent mode: "${arg}" (use driven | off | normal)`, "error");
+        return;
+      }
+      setMode(ctx, next);
+      ctx.ui.notify(`Subagent mode: ${SUBAGENT_MODE_LABEL[next]}`, "info");
+    },
+  });
+
+  // ── Inject the current-mode directive while not in normal mode ──────────────
+  pi.on("before_agent_start", async () => {
+    if (mode === "normal") return;
+    return {
+      message: {
+        customType: "subagent-mode-context",
+        content: mode === "driven" ? drivenDirective() : disabledDirective(),
+        display: false,
+        details: { mode },
+      },
+    };
+  });
+
+  // ── Strip stale subagent-mode directives that don't match the current mode ──
+  pi.on("context", async (event) => {
+    return {
+      messages: event.messages.filter((m) => {
+        const cm = m as { customType?: string; details?: { mode?: SubagentMode } };
+        if (cm.customType !== "subagent-mode-context") return true;
+        return mode !== "normal" && cm.details?.mode === mode;
+      }),
+    };
+  });
+
+  // ── Restore subagent mode on session start / resume ─────────────────────────
+  pi.on("session_start", async (_event, ctx) => {
+    const entries = ctx.sessionManager.getEntries();
+    const entry = entries
+      .filter((e) => {
+        const ce = e as { type?: string; customType?: string };
+        return ce.type === "custom" && ce.customType === "subagent-mode";
+      })
+      .pop() as { data?: { mode?: SubagentMode } } | undefined;
+    if (entry?.data?.mode) mode = entry.data.mode;
+    updateStatus(ctx);
   });
 }
