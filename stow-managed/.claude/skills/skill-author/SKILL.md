@@ -20,10 +20,13 @@ Skills are stowed (or placed directly) into `~/.claude/skills/` and picked up by
 ```markdown
 ---
 name: <skill-name>
-description: <one-liner that covers both purpose and trigger phrases>
+description: >-
+  <one-liner that covers both purpose and trigger phrases>
 disable-model-invocation: false
 ---
 ```
+
+Always use the `>-` block scalar for `description`. Skill descriptions almost always contain `Trigger phrases: "..."` which introduces a colon inside an unquoted YAML value — strict YAML parsers (including pi's) reject this with "Nested mappings are not allowed in compact mappings". `>-` folds the value into a plain string and sidesteps the issue entirely. Never write `description: <inline text>` if the text contains a colon.
 
 The `description` field is used by Claude to decide when to invoke the skill — make it specific and include example trigger phrases.
 
