@@ -48,7 +48,7 @@ Some directories need to hold a mix of **tracked files** (symlinked from this re
 
 Pre-create these on any new machine before running stow:
 ```bash
-mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills ~/.claude/hooks ~/.pi/agent/extensions
+mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills ~/.claude/hooks ~/.pi/agent/extensions ~/.pi/agent/agents
 ```
 
 With a real directory in place, stow places individual file symlinks inside it. Local-only skills or agents sit alongside them as untracked regular files — the repo never sees them.
@@ -59,6 +59,7 @@ Current guard directories:
 - `~/.claude/commands/` — legacy; skills can be invoked exactly like commands, so prefer `skills/` for anything new
 - `~/.claude/hooks/` — PreToolUse/Notification hook scripts (tracked in repo); no local-only additions expected but must be a real dir so stow links individual files
 - `~/.pi/agent/extensions/` — global pi extensions (tracked in repo) + machine-specific extensions (local only)
+- `~/.pi/agent/agents/` — global pi subagent definitions (tracked in repo) + machine-specific agents (local only)
 
 ### Apps That Don't Follow Symlinks
 
@@ -92,7 +93,7 @@ Then stow will create the symlinks pointing to the repo versions.
 **Pi guard directories** — `~/.pi/` and `~/.pi/agent/` are created by pi on first run, so they'll usually exist before stow runs. If setting up stow before ever running pi, pre-create them:
 
 ```bash
-mkdir -p ~/.pi/agent ~/.pi/agent/extensions
+mkdir -p ~/.pi/agent ~/.pi/agent/extensions ~/.pi/agent/agents
 ```
 
 ### Machine-Specific Claude Code Settings (`settings.local.json`)
