@@ -12,9 +12,6 @@ stow-managed/.stow-local-ignore
 # Auto-generated fontconfig UUID — never commit
 stow-managed/.local/share/fonts/.uuid
 
-# Pi session exports — never commit
-pi-session-*.html
-
 # Deep-plan runtime artifacts — never commit
 .plans/
 
