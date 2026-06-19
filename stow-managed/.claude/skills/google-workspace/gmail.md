@@ -6,13 +6,17 @@ The hook allows only the subcommands listed here. Anything else is denied.
 
 ## Reading
 
-```bash
-# List inbox (default: recent 20)
-uvx gws-cli@1.3.0 gmail list
-uvx gws-cli@1.3.0 gmail list --max 50
+For list and read, always use the wrapper scripts rather than raw gws-cli. The wrappers strip the JSON security-warning wrapper (~2.7KB per call) and truncate long bodies, cutting token usage by an order of magnitude.
 
-# Read a message (by message ID from list output)
-uvx gws-cli@1.3.0 gmail read <message-id>
+```bash
+# List inbox (default: recent 20) — via token-efficient wrapper
+~/bin/agent_scripts/gmail-list
+~/bin/agent_scripts/gmail-list --max 50
+
+# Read a message — via token-efficient wrapper (truncates body to 2000 chars)
+~/bin/agent_scripts/gmail-read <message-id>
+# Full body (no truncation)
+~/bin/agent_scripts/gmail-read --full <message-id>
 
 # Search
 uvx gws-cli@1.3.0 gmail search "from:someone@example.com subject:invoice"

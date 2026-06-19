@@ -240,6 +240,57 @@ Both Option A and Option B are now **superseded by existing tools**. The remaini
 
 Either way, the original setup notes (GCP OAuth credentials, PKCE flow) apply directly — both tools consume the same Desktop App OAuth client.
 
+## Token Efficiency & Wrapper Scripts
+
+**Date**: 2026-06-19
+
+After analysing a pi coding session, a single "list + read" workflow consumed 102,991
+input tokens — far too expensive for routine use. Root cause analysis of the raw
+`gws-cli` JSON output revealed three main sources of bloat:
+
+1. **JSON security-warning wrapper** — every field like `subject` and `body` is
+   wrapped in `{"data": "...", "trust_level": "external", ...}` dicts. Even a
+   short subject line carries 200+ bytes of trust-level metadata. The
+   `security_warnings` array alone costs ~2.7KB per message.
+
+2. **Nested JSON-string-inside-JSON** — `gws-cli` embeds the actual message body
+   as a JSON-encoded string inside a JSON field. Reading it raw doubles the
+   quoted/escaped overhead.
+
+3. **Un-truncated newsletter bodies** — a single newsletter can be 65KB+. The
+   agent tokenises every byte of this, wasting context on boilerplate HTML.
+
+### Solution: Thin wrapper scripts
+
+Two stdlib-only PEP 723 Python scripts under `stow-managed/bin/agent_scripts/` that
+shell out to `uvx gws-cli@1.3.0`, parse the verbose JSON, and emit compact
+text:
+
+- **`gmail-list`** — prints a pipe-delimited table:
+  `id | thread_id | date | from | subject | snippet`
+  Accepts `--max`, `--query`, `--labels` passthrough flags.
+
+- **`gmail-read`** — prints a clean header (From/To/Date/Subject) + body text.
+  Strips HTML tags, decodes HTML entities, truncates to 2000 chars by default.
+  `--full` flag returns the complete untruncated body.
+
+### Why wrappers over raw CLI
+
+- **`jq` is not guaranteed** on read-only machines and cannot elegantly handle the
+  nested JSON-string-inside-JSON that gws-cli emits.
+- **Upstream `--format compact`** was considered but gws-cli is pre-v1 and release
+  cadence is uncertain.
+- **Stdlib Python** is available everywhere `uv run --script` works, and handles
+  the nested parsing cleanly.
+
+### Measured savings
+
+| Operation | Raw `gws-cli` | Wrapper | Factor |
+|---|---|---|---|
+| `list --max 1` | >1 KB | <300 B | ~4× |
+| `read <message-id>` (newsletter) | ~65 KB | ~2 KB | ~30× |
+| Combined workflow | ~103 KB | <5 KB | ~20× |
+
 ### New References
 
 - [googleworkspace/cli — GitHub](https://github.com/googleworkspace/cli)
