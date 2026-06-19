@@ -72,6 +72,10 @@ claude mcp add --transport sse --scope user playwright http://localhost:8931/sse
 
 ---
 
+## File Search
+
+`fd` and similar tools respect `.gitignore` by default. If a file the user references cannot be found, check whether it is gitignored before concluding it doesn't exist. Use `fd --no-ignore` or check `.gitignore` directly to diagnose.
+
 ## What Not to Do
 
 - Don't add features, refactors, or improvements beyond what was asked
