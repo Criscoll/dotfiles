@@ -34,8 +34,8 @@ If the whole task is small enough to be a single roadmap item, that's fine — w
 
 **First, resolve the artifact directory** — where `ROADMAP.md`, `REQUIREMENTS.md`, and `PLAN.md` live for this task. Phase detection depends on it, so settle it before anything else:
 
-- **Default: in-repo.** Write artifacts to the repo you're planning against, so they version and travel with the code and a fresh agent finds them in the workspace. If the repo has a `docs/plans/` (or similar) convention, use it; otherwise the working-directory root.
-- **External task dir.** If the user points the output at a location outside the repo — a notes vault, or a task with no code repo at all — do **not** drop loose files into that shared location. Create an appropriately named subdirectory there to encapsulate *this* task's artifacts (e.g. `<specified-location>/<task-slug>/` holding `ROADMAP.md`, `REQUIREMENTS.md`, and `PLAN.md` together), deriving the slug from the task. Use the **absolute path** to this directory everywhere downstream — phase detection and both handoff prompts need it, since the working directory won't point here.
+- **Default: `.plans/<task-slug>/`** in the repo root. Derive the slug from the task description (lowercase, hyphen-separated, e.g. `add-progressive-disclosure`). `.plans/` is gitignored — artifacts are local working state, not committed source. Create the directory if it doesn't exist.
+- **Explicit path.** If the user specifies a location — a notes vault, a directory outside the repo, or an existing `.plans/` subdirectory — use it directly. If it points to a shared container (not a task-specific dir), create an appropriately named subdirectory there (e.g. `<specified-location>/<task-slug>/`). Use the **absolute path** to this directory everywhere downstream — phase detection and both handoff prompts need it.
 
 State the resolved artifact directory in one line before proceeding.
 
@@ -57,212 +57,13 @@ REQUIREMENTS.md and PLAN.md each declare the item they cover in a header line (s
 
 ---
 
-## Roadmap phase
+## Load Reference Files When Relevant
 
-The point of Roadmap is to break a large goal into a terse, ordered list of high-level items a fresh agent can work through one at a time. **Keep it terse and high-level** — a title plus a line of intent per item. Detail is deliberately deferred: each item gets its own REQUIREMENTS.md when its turn comes. Do not pre-plan the items here.
+Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do not guess their contents — read them.
 
-0. **No prompt given — guide the user.** If `$ARGUMENTS` is empty and no `ROADMAP.md` exists, the user invoked deep-plan without specifying what they want to plan. Do not decompose an empty goal. Instead, ask the user to describe what they're trying to achieve:
-
-   > I see you've invoked deep-plan without a task description and there's no existing Roadmap. Let's scope what you're working on. What's the goal or problem you want to plan for?
-
-   Let the user respond in their own words. Ask follow-up questions as needed — what problem they're solving, what constraints or context exist, what a successful outcome looks like. Once they've described the goal, restate it in one sentence to confirm shared understanding, then move into step 1. **Do not decompose the goal until the user has confirmed your restatement.**
-
-1. **Restate** the overall goal in one sentence. If the restatement feels wrong or the goal is ambiguous, stop and ask — do not decompose around a guessed interpretation.
-
-2. **Validate enough to slice.** Read the relevant code and docs (CLAUDE.md, README, repo structure) at the depth needed to cut sensible slices — not the deep per-component dive Refine does. You're answering: *what are the natural vertical slices of this goal, and in what order?*
-
-3. **Decompose into vertical slices.** Each item should deliver something visible and testable on its own — avoid "infrastructure-only" items that produce nothing a user can see. Order them so each builds on the last. Prefer few items over many. If the goal genuinely is one slice, a single item is correct.
-
-4. **Write `ROADMAP.md`** — terse, the durable tracker for the whole build. Tell the user the path once written. Structure:
-
-```
-# Roadmap: <overall goal>
-
-## Goal
-One or two sentences — the end state when every item is done.
-
-## Items
-Ordered, high-level vertical slices. Each delivers something visible/testable.
-Terse — a title plus a one-line intent. NO technical detail; that lives in each
-item's REQUIREMENTS.md when its turn comes.
-- [ ] 1. <title> — <one-line intent / need>
-- [ ] 2. <title> — <one-line intent / need>
-
-## Out of Scope
-What the build as a whole does NOT cover.
-```
-
-5. **Annotation cycle on `ROADMAP.md`.** Hand control back with this invitation:
-
-   > ROADMAP.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: reorder items, drop or merge slices, add a missing one, retitle. Then tell me "address my notes" and I'll update it. **I won't refine, plan, or implement anything until you explicitly approve.**
-
-   When the user says they've annotated: re-read the file from disk (they edited it — don't trust your in-context copy), **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants.
-
-6. **Gate → handoff to Refine.** When the user approves, do NOT roll into Refine. Tell them plainly:
-
-   > Roadmap approved. Run `/clear` to start a fresh session, then invoke `/deep-plan` again — it will detect ROADMAP.md and enter the Refine phase for the first item.
-
-   If the artifacts live in an external task dir, tell the user to re-invoke from that directory (or to pass its path) so the next phase resolves the same artifact directory instead of the in-repo default.
-
----
-
-## Refine phase
-
-The point of Refine is to convert the **current roadmap item** into validated, codebase-compatible requirements that a fresh agent can pick up without your context.
-
-1. **Re-read `ROADMAP.md` from disk** and identify the current item (first unchecked). State which item you're refining. Everything below is scoped to **that one item** — not the whole roadmap.
-
-2. **Restate** the item in one sentence. If the restatement feels wrong or the item is ambiguous, stop and ask — do not refine around a guessed interpretation.
-
-3. **Validate against the codebase.** Read the relevant code in depth — not just the file named, but how it connects to the surrounding system. Grep for related symbols, check `git log` for prior work, read adjacent modules and their callers. You're answering: *does this item make sense, and is it compatible with what already exists* (including whatever earlier roadmap items already built)?
-
-4. **Ask when unclear.** If the item is ambiguous, under-specified, or incompatible with the code as written, use AskUserQuestion to resolve it. Asking is this phase's entire job — do not paper over gaps by guessing.
-
-5. **Write `REQUIREMENTS.md`** (overwrite any stale one from a previous item) — self-contained enough that a fresh agent (or you, post-`/clear`) can pick it up cold. Tell the user the path once written. Structure:
-
-```
-# Requirements: <item title>
-
-> Roadmap item: <n> — <title>   (from ROADMAP.md; lets a fresh session confirm scope)
-
-## Context
-Why this item is being done now — the problem or need, what it builds on from
-earlier roadmap items, the intended outcome.
-
-## Goals
-One or two sentences. What this item achieves and why. The anchor everything
-else serves.
-
-## Validated Requirements
-The verified, codebase-compatible ask for THIS item. What must be true when it
-is done. Each requirement concrete enough to plan against and to test against later.
-
-## What We Know
-Confirmed facts from the codebase, docs, or context that establish the item is
-feasible — relevant file paths, how the affected components connect, constraints
-discovered, prior work from git log or earlier roadmap items.
-
-## Open Questions
-What must still be answered before planning can start. Name what is unknown
-and why it blocks progress. Do not resolve these by guessing.
-
-## Out of Scope
-What this item explicitly does NOT cover (including anything deferred to a later
-roadmap item).
-```
-
-   **No technical design here** — no chosen approach, no file-by-file steps, no edge-case engineering. That is the Plan phase's job. Refine establishes *what and why* for this item, validated against reality; Plan decides *how*.
-
-6. **Annotation cycle on `REQUIREMENTS.md`.** Hand control back with this invitation:
-
-   > REQUIREMENTS.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: corrections, removed requirements, missed constraints, clarifications. Then tell me "address my notes" and I'll update it. **I won't plan or implement anything until you explicitly approve.**
-
-   When the user says they've annotated: re-read the file from disk, **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants.
-
-7. **Gate → handoff to Plan.** When the user approves, do NOT roll into planning. Tell them plainly:
-
-   > Requirements approved. Run `/clear` to start a fresh session, then invoke `/deep-plan` again — it will detect REQUIREMENTS.md and enter the Plan phase for this item.
-
-   If the artifacts live in an external task dir, tell the user to re-invoke from that directory (or to pass its path). The fresh session is deliberate: the Plan phase should start from the clean artifact, not your accumulated Refine context.
-
----
-
-## Plan phase
-
-The point of Plan is to turn the current item's approved requirements into a technical design durable enough to implement from.
-
-1. **Re-read `REQUIREMENTS.md` from disk.** It is this phase's input and the session is fresh — load it, don't reconstruct it from memory. Confirm its `Roadmap item` header matches the current unchecked item in `ROADMAP.md`. If it has unresolved Open Questions, surface them and resolve with the user before planning on top of them.
-
-2. **Research for decisions.** Do any further targeted reading needed to make sound technical choices — the requirements told you *what*; you may need to look closer to decide *how*. As you research, **extract concrete code-level context** — don't just understand the approach conceptually, capture the exact import paths, function signatures, class/interface names, API contracts, and file paths to proven implementations. You WILL write these into the plan's Reuse section in the next step.
-
-3. **Distill references.** Before writing the plan, consolidate what you found in step 2 into a Reuse section. The goal: an implementer reading the plan should never need to open a reference file or doc — every concrete import path, function signature, interface name, API contract, and gotcha is already written down. If you found yourself reading an example file (handoff.ts, qna.ts, etc.) or a doc page (extensions.md, tui.md, etc.), you must have captured what you learned from it here.
-
-4. **Write `PLAN.md`** (overwrite any stale one from a previous item). Tell the user the path once written. Structure (the requirements material lives in REQUIREMENTS.md and is not duplicated here):
-
-```
-# Plan: <item title>
-
-> Roadmap item: <n> — <title>   (must match REQUIREMENTS.md and ROADMAP.md)
-
-## Technical Context
-Brief — what you read to choose the approach, and the key constraints that
-shaped it. Reference REQUIREMENTS.md rather than restating it.
-
-## Ins and Outs
-Treat the solution as a black box.
-**In:** raw inputs, triggers, conditions entering the box
-**Box:** the solution/component being designed — named, not described yet
-**Out:** what emerges that resolves the problem
-Repeat per major sub-box if the solution composes stages. Keep it abstract —
-internals belong in later sections.
-
-## Edge Cases
-Scenarios that break a naive solution. Name the specific input/state/condition,
-not just "error handling". If you genuinely can't think of any, say so.
-
-## Key Decisions / Possible Approaches
-A review surface for the annotation cycle — present options so the user can choose.
-For each decision point:
-- **Option A** — what it is, trade-offs
-- **Option B** — what it is, trade-offs
-- **Recommendation** (if confident) or **Left open** (if not)
-On approval this section is COLLAPSED to the chosen approach only (see Gate step) —
-the implementer gets the decision, not the menu.
-
-## Proposed Steps
-High-level sequence, not implementation detail. Each step independently
-reviewable. Mark steps blocked on an open question with [BLOCKED: <question>].
-
-## Testing & Verification
-How the implementer will know each step works. Name the test framework and
-where tests live, the specific cases worth covering (not just "add tests"),
-and the verification gate the whole item must pass before it's done
-(e.g. typecheck && lint && test && build). If the change isn't testable in
-the usual way, say how it will be verified instead.
-
-## Todo
-A granular, checkbox task list derived from Proposed Steps — the tracker the
-implementer will work through for THIS item. Break into sub-phases if the item
-has natural stages.
-- [ ] task
-- [ ] task
-
-## Boundaries
-Behavioral guardrails for the implementer, in three tiers:
-- **✅ Always** — invariants the implementation must uphold
-- **⚠️ Ask first** — changes that require checking with the user before proceeding
-- **🚫 Never** — things the implementation must not do
-
-## Out of Scope
-What this item's plan explicitly does NOT address.
-
-## Reuse
-Concrete code-level context the implementer needs at their fingertips — distilled from reading reference files, docs, and APIs during the Research step. Capture:
-- **Import paths** — every package to import from and what to import. E.g. `@earendil-works/pi-tui` → `{ Container, Text, Markdown, matchesKey, Key, CURSOR_MARKER }`
-- **Function/class/interface signatures** — the exact types and shapes. E.g. `complete(model, { systemPrompt, messages }, { apiKey, headers, signal })` returns `{ stopReason, content[] }`
-- **API contracts** — methods and their signatures. E.g. `ctx.ui.custom<T>(factory, opts?) → Promise<T>`, `ctx.modelRegistry.getApiKeyAndHeaders(model) → { ok, apiKey, headers, error }`
-- **Reference files** — which existing files demonstrate the required pattern and what pattern each shows. E.g. `handoff.ts` → pattern for `ctx.ui.custom(...)` + `BorderedLoader` + `complete()`
-- **Gotchas** — non-obvious patterns or pitfalls. E.g. multiple `toolResult` messages each get their own message, Focusable interface needs IME support via CURSOR_MARKER
-Do NOT paste entire files — just the skeleton and signatures needed to write the implementation.
-```
-
-5. **Annotation cycle on `PLAN.md`.** Hand control back:
-
-   > PLAN.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: corrections, removed sections, different approaches, missed context. Then tell me "address my notes" and I'll update it. **I won't implement anything until you explicitly approve.**
-
-   When the user says they've annotated: re-read from disk, **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants. The guard holds every round: **do not write production code until the user explicitly approves.**
-
-6. **Gate → hand off Act.** When the user approves, do NOT roll into coding. **First, collapse the plan to the decided path:** edit `PLAN.md` to reduce `## Key Decisions / Possible Approaches` to only the chosen approaches — remove the rejected options and the menu framing, keeping a terse record of *what* was decided and, briefly, *why*. Drop any other now-moot alternatives elsewhere in the file too. The Act session should read one path, not a debate; rejected options are context rot once chosen. Tell the user you've collapsed it.
-
-   Then state plainly that implementation is a separate session and the approved `PLAN.md` (with its Todo list) is the source of truth for this item. Hand them a ready-to-paste **implementation prompt**. Emit it as a **fenced code block** (triple backticks), never a `>` blockquote — a blockquote renders with a left gutter bar that gets dragged into the copy, whereas a code block copies clean and has a one-click copy button. Tailor it to the plan, following this shape (placeholders filled in with real values):
-
-   ```
-   Implement <path>/PLAN.md (roadmap item <n> — <title>). Work through the Todo list in order, marking each task complete in PLAN.md as you go. Read the Reuse section for import paths, function signatures, and reference files — do not search for these yourself, they're already distilled. Uphold the Boundaries section (Always/Ask/Never). Do not stop until all tasks are done. Run the Testing & Verification gate (<the gate from the plan>) and fix failures before considering the item complete. When the gate passes, tick this item's box (- [ ] → - [x]) in <path>/ROADMAP.md. No unrelated changes or "while I'm here" fixes.
-   ```
-
-   Fill `<the gate from the plan>` with the actual command(s) from the Testing & Verification section. If the artifacts live in an external task dir, use **absolute paths** to `PLAN.md` and `ROADMAP.md` — the Act session's working directory won't point there. Tell them to `/clear` and run it in a fresh session — optionally on a cheaper model, since the thinking is already captured in the plan. If the plan still has unresolved Open Questions, note that the prompt should not be run until they're answered.
-
-   **Then point at the loop.** Tell the user that once the item is implemented and its box is ticked, they should `/clear` and re-invoke `/deep-plan` to enter Refine for the next roadmap item — and that deep-plan will report when every item is checked and the roadmap is complete.
+- **references/roadmap-phase.md** — load when: no `ROADMAP.md` found in the artifact directory, or `$ARGUMENTS` names phase "roadmap"
+- **references/refine-phase.md** — load when: `ROADMAP.md` exists but `REQUIREMENTS.md` is absent or covers a stale roadmap item, or `$ARGUMENTS` names phase "refine"
+- **references/plan-phase.md** — load when: `REQUIREMENTS.md` covers the current item but `PLAN.md` is absent or covers a stale item, or `$ARGUMENTS` names phase "plan"
 
 ---
 
@@ -276,9 +77,10 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
 - **User annotations are `//`-prefixed.** At every annotation round, re-read the file from disk and scan for `//` comment markers — that's where the user's notes are. Address each, then clear the marker.
 - **Re-read the input artifact from disk** at the start of each phase and before each annotation round. The session is fresh and/or the user edited the file; your in-context copy is stale.
 - **The "don't implement yet" guard is addressed outward**, to the user, not just to yourself. Say it explicitly at every gate.
-- **The plan handed to Act carries the decision, not the debate.** Options and trade-offs are review scaffolding for the annotation cycle; collapse them to the chosen path at the approval gate so the implementer reads one approach, not a menu. Rejected alternatives are context rot once chosen.
+- **The plan handed to Act carries the decision and its reasoning, not the menu.** Option A/B framing is review scaffolding; collapse it at the gate so the implementer reads one chosen path — but keep a short record of what was chosen, why, and what was considered-and-rejected with the reason. The *menu* is context rot once chosen; the *why-not* is signal.
+- **Open decisions block the Act handoff.** An `[OPEN]` Key Decision at the gate is treated like an unresolved Open Question — surfaced, asked, and never collapsed or handed off until settled.
+- **Every plan leads with its Goal** — a one-sentence orientation of what the plan accomplishes, not a re-derivation of REQUIREMENTS.md.
 - **The Reuse section makes the plan self-sufficient.** An implementer should never need to open a reference file, doc page, or search for an import path — everything concrete is distilled into Reuse. If you find yourself referencing something from an example file or doc without capturing it in Reuse, the plan is incomplete.
 - **The implementation prompt is a fenced code block, never a blockquote.** It's the one artifact meant to be copied verbatim into a fresh session — a `>` blockquote drags a gutter bar into the copy; a code block pastes clean. Fill placeholders with real values before emitting.
 - **Don't resolve Open Questions by guessing** — surface them, and in Refine, ask.
 - Keep artifacts honest: a shorter accurate document beats a longer speculative one. Don't invent uncertainty where none exists, and don't pad the Todo list or the roadmap.
-- Keep Ins and Outs abstract. If you're describing *how* the box works, move it to Proposed Steps or Key Decisions.
