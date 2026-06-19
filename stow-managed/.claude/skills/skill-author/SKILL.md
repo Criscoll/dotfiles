@@ -103,6 +103,7 @@ Rules:
 - [ ] Consistent terminology throughout; skill name is descriptive, not `helper`/`utils`/`tools`.
 - [ ] If multi-topic: detail extracted to `references/`, one level deep, one sub-topic per file.
 - [ ] If it ships scripts or spawns subagents: `references/quality-scripts-subagents.md` rules applied (declared deps, no voodoo constants, inlined subagent context).
+- [ ] If it drives a noisy CLI or API: wrapper scripts in `~/bin/agent_scripts/` exist for the common read paths so agents don't re-derive parsing each session (token-efficiency wrapper pattern — see `references/quality-scripts-subagents.md`).
 - [ ] Symlink verified via `ls -la` (global skills only).
 
 ## Load Reference Files When Relevant

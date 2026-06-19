@@ -41,6 +41,41 @@ Branch `feature/foo` (issue #N). Working tree dirty — N files modified.
 - …
 ```
 
+## Token-efficiency wrapper pattern
+
+When a skill drives a CLI tool or external API whose output is noisy, nested, or
+requires multi-step parsing, extract a wrapper script rather than leaving the agent
+to re-derive the extraction logic each session.
+
+**Signs a skill needs a wrapper:**
+- The skill shows agents a Python heredoc or jq chain just to decode the output.
+- Multiple sessions would re-discover the same JSON structure through trial and error.
+- The raw output has a security wrapper, encoding layer, or high-noise fields
+  (warnings, metadata) the agent doesn't need.
+- A session analysis reveals 2+ tool calls spent just figuring out how to read the data.
+
+**Wrapper design rules:**
+- One clear job per script — don't bundle unrelated operations.
+- Pipe-friendly flat output: one record per line, fields separated by ` | `, so the
+  agent can read results without further parsing.
+- Accept a `--limit N` flag on any script that returns potentially large bodies
+  (default 500–2000 chars; `0` = no truncation).
+- Print a usage error and exit 2 when required args are absent.
+- Print "No results found." and exit 0 when the query succeeds but returns nothing
+  (distinguish from errors).
+- Scripts live in `stow-managed/bin/agent_scripts/` and are referenced by full path.
+- Update the skill's reference docs to use the wrapper; remove or demote the raw
+  CLI examples so agents reach for the wrapper first.
+
+**Existing examples to follow:**
+- `~/bin/agent_scripts/gmail-list`, `gmail-read`, `gmail-search` — strip gws-cli's
+  security-warning JSON wrapper; output flat `id | date | from | to | subject | snippet`.
+- `~/bin/agent_scripts/pi-session-info`, `pi-session-tools`, `pi-session-chat`,
+  `pi-session-decode` — decode pi's base64-HTML format; handle two toolResult variants.
+
+**When reviewing an existing skill**, ask: "Could an agent spend 2+ tool calls just
+reading and parsing the raw output?" If yes, a wrapper is warranted.
+
 ## Scripts and dependencies
 
 Prefer a checked-in script over generated code for any deterministic, repeated
