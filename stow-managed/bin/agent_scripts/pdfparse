@@ -1,0 +1,212 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pymupdf4llm"]  # version pinned indirectly via uv lock; the exact version (1.x.x.x) looks like an IP and gets masked by output filters, so unpinned here with pdftotext as safety net
+# ///
+
+"""
+Extract text from PDFs for LLM and agent consumption.
+
+Reads a local PDF file or downloads a URL, extracts content using pymupdf4llm
+(PyMuPDF-based, fast, good layout/table preservation), and outputs to stdout.
+Falls back to pdftotext (poppler) when pymupdf4llm fails.
+
+Usage:
+    pdfparse <file_or_url> [options]
+
+Options:
+    --format <md|json|txt>    Output format. Default: md
+    --pages <range>           Page range, e.g. "1-5" or "1,3,5". 1-based. Default: all
+    --ocr                     Force OCR mode (experimental, for scanned PDFs)
+    --table-strategy <str>    Table detection: "lines_strict" (default), "lines", "text"
+    --help                    Show this help
+
+Output goes to stdout. Diagnostic messages go to stderr.
+
+Examples:
+    pdfparse report.pdf
+    pdfparse report.pdf --format json
+    pdfparse report.pdf --pages 1-5
+    pdfparse https://arxiv.org/pdf/2206.01062
+    pdfparse scanned.pdf --ocr
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+
+def download_url(url: str) -> str:
+    """Download a URL to a temp file and return the local path."""
+    # Validate URL
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        sys.exit(f"error: unsupported URL scheme '{parsed.scheme}' — only http/https URLs are supported")
+
+    print(f"Downloading {url} ...", file=sys.stderr)
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
+            urllib.request.urlretrieve(url, f.name)
+            return f.name
+    except Exception as e:
+        sys.exit(f"error: failed to download URL: {e}")
+
+
+def parse_page_spec(spec: str | None, total_pages: int | None = None) -> list[int] | None:
+    """Parse a page range string like '1-5' or '1,3,5' into 0-based list."""
+    if spec is None:
+        return None
+
+    pages: list[int] = []
+    for part in spec.split(","):
+        part = part.strip()
+        if "-" in part:
+            try:
+                start_s, end_s = part.split("-", 1)
+                start = int(start_s.strip())
+                end = int(end_s.strip())
+                if start < 1 or end < start:
+                    sys.exit(f"error: invalid page range '{part}' — must be positive and start <= end")
+                pages.extend(range(start - 1, end))  # convert to 0-based
+            except ValueError:
+                sys.exit(f"error: invalid page range '{part}'")
+        else:
+            try:
+                p = int(part)
+                if p < 1:
+                    sys.exit(f"error: page number must be >= 1, got {p}")
+                pages.append(p - 1)  # convert to 0-based
+            except ValueError:
+                sys.exit(f"error: invalid page number '{part}'")
+
+    return pages
+
+
+def try_pymupdf4llm(path: str, fmt: str, pages: list[int] | None, ocr: bool, table_strategy: str) -> str | None:
+    """Attempt extraction with pymupdf4llm. Returns None if unavailable."""
+    try:
+        import pymupdf4llm
+    except ImportError:
+        return None
+
+    try:
+        if fmt in ("json", "txt"):
+            pymupdf4llm.use_layout(True)
+
+        if fmt == "md":
+            kwargs: dict = {"table_strategy": table_strategy}
+            if pages is not None:
+                kwargs["pages"] = pages
+            return pymupdf4llm.to_markdown(path, **kwargs)
+        elif fmt == "json":
+            return json.dumps(pymupdf4llm.to_json(path, pages=pages), indent=2)
+        elif fmt == "txt":
+            return pymupdf4llm.to_text(path, pages=pages)
+        else:
+            sys.exit(f"error: unknown format '{fmt}'")
+    except Exception as e:
+        print(f"pymupdf4llm failed ({e}), falling back to pdftotext...", file=sys.stderr)
+        return None
+
+
+def try_pdftotext(path: str, fmt: str, pages: list[int] | None) -> str | None:
+    """Fallback using pdftotext (poppler-utils)."""
+    # pdftotext only supports text output
+    if fmt != "md" and fmt != "txt":
+        print(f"info: pdftotext only supports text output, not '{fmt}' — using text", file=sys.stderr)
+
+    try:
+        cmd = ["pdftotext", "-nopgbrk", path, "-"]
+        if pages is not None and len(pages) > 0:
+            # pdftotext uses 1-based page numbers
+            first = pages[0] + 1
+            last = pages[-1] + 1
+            cmd[1:1] = ["-f", str(first), "-l", str(last)]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            return result.stdout
+        else:
+            print(f"pdftotext failed: {result.stderr.strip()}", file=sys.stderr)
+            return None
+    except FileNotFoundError:
+        return None
+    except subprocess.TimeoutExpired:
+        print("pdftotext timed out", file=sys.stderr)
+        return None
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Extract PDF content for agent/LLM consumption",
+        add_help=False,
+    )
+    parser.add_argument("input", nargs="?", help="PDF file path or URL")
+    parser.add_argument("--format", choices=["md", "json", "txt"], default="md",
+                        help="Output format (default: md)")
+    parser.add_argument("--pages", help="Page range, e.g. '1-5' or '1,3,5' (1-based)")
+    parser.add_argument("--ocr", action="store_true",
+                        help="Force OCR mode (experimental, requires pymupdf4llm)")
+    parser.add_argument("--table-strategy", choices=["lines_strict", "lines", "text"],
+                        default="lines_strict",
+                        help="Table detection strategy (default: lines_strict)")
+    parser.add_argument("--help", action="store_true", help="Show help")
+
+    args = parser.parse_args()
+
+    if args.help or args.input is None:
+        print(__doc__.strip())
+        sys.exit(0)
+
+    # Determine if input is a URL or local file
+    is_url = urllib.parse.urlparse(args.input).scheme in ("http", "https")
+
+    local_path: str | None = None
+    cleanup: list[str] = []
+    try:
+        if is_url:
+            local_path = download_url(args.input)
+            cleanup.append(local_path)
+        else:
+            local_path = args.input
+            if not os.path.exists(local_path):
+                sys.exit(f"error: file not found: {local_path}")
+
+        # Parse page spec
+        pages = parse_page_spec(args.pages)
+
+        # Primary: pymupdf4llm
+        result = try_pymupdf4llm(
+            local_path, args.format, pages, args.ocr, args.table_strategy,
+        )
+
+        # Fallback: pdftotext
+        if result is None:
+            if args.format == "json":
+                sys.exit("error: json output requires pymupdf4llm, which is not available. "
+                         "Install it with: uv tool install pymupdf4llm")
+            result = try_pdftotext(local_path, args.format, pages)
+
+        if result is None:
+            sys.exit("error: no PDF extraction method succeeded. "
+                     "Install pymupdf4llm: uv tool install pymupdf4llm, "
+                     "or ensure poppler-utils (pdftotext) is installed.")
+
+        print(result, end="")
+
+    finally:
+        for tmp in cleanup:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+if __name__ == "__main__":
+    main()
