@@ -28,7 +28,7 @@ uvx gws-cli@1.3.0 gmail labels
 If this errors with an auth/token error, point the user to the per-machine setup
 section below rather than continuing.
 
-For list and read operations, always use the wrapper scripts in `~/bin/agent_scripts/`
+For list, search, and read operations, always use the wrapper scripts in `~/bin/agent_scripts/`
 rather than raw `gws-cli`. The wrappers strip the security-warning JSON overhead and
 truncate long bodies, cutting token usage by an order of magnitude.
 

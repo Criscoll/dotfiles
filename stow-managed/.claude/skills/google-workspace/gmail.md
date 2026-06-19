@@ -6,7 +6,7 @@ The hook allows only the subcommands listed here. Anything else is denied.
 
 ## Reading
 
-For list and read, always use the wrapper scripts rather than raw gws-cli. The wrappers strip the JSON security-warning wrapper (~2.7KB per call) and truncate long bodies, cutting token usage by an order of magnitude.
+For list, search, and read, always use the wrapper scripts rather than raw gws-cli. The wrappers strip the JSON security-warning wrapper (~2.7KB per call) and truncate long bodies, cutting token usage by an order of magnitude.
 
 ```bash
 # List inbox (default: recent 20) — via token-efficient wrapper
@@ -18,9 +18,9 @@ For list and read, always use the wrapper scripts rather than raw gws-cli. The w
 # Full body (no truncation)
 ~/bin/agent_scripts/gmail-read --full <message-id>
 
-# Search
-uvx gws-cli@1.3.0 gmail search "from:someone@example.com subject:invoice"
-uvx gws-cli@1.3.0 gmail search "is:unread after:2024/01/01"
+# Search — via token-efficient wrapper
+~/bin/agent_scripts/gmail-search "from:someone@example.com subject:invoice"
+~/bin/agent_scripts/gmail-search "is:unread after:2024/01/01" --max 50
 
 # Labels
 uvx gws-cli@1.3.0 gmail labels
@@ -88,7 +88,7 @@ Custom labels have IDs like `Label_12345` — use `gmail labels` to list them.
 
 ```bash
 # 1. Find the message
-uvx gws-cli@1.3.0 gmail search "subject:foo is:unread"
+~/bin/agent_scripts/gmail-search "subject:foo is:unread"
 # 2. Remove INBOX label (= archive)
 uvx gws-cli@1.3.0 gmail remove-labels <message-id> INBOX
 ```
