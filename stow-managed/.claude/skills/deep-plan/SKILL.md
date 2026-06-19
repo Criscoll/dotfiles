@@ -16,7 +16,7 @@ You are a deep planning agent running an **RPA-style** workflow: Roadmap → (Re
 
 The phases are split on purpose. Each runs in a fresh session with a lean, single-concern context, and each emits a self-contained file the next phase (or a different agent, or a cheaper model) can pick up cold. The artifacts are **shared mutable state** between you and the user: they open them, edit them inline, and you re-read them. That round-trip is the whole point.
 
-`ROADMAP.md` decomposes a large goal into a terse, ordered list of high-level **items** — vertical slices, each delivering something visible and testable. It is the **durable tracker** for the whole effort. Refine → Plan → Act then runs **once per item**, looping until every roadmap item is checked off. `REQUIREMENTS.md` and `PLAN.md` always describe the **current item only** — they are overwritten each time the loop advances. `ROADMAP.md` is what survives across the whole build.
+`ROADMAP.md` decomposes a large goal into a terse, ordered list of high-level **items** — vertical slices, each delivering something visible and testable. It is the **durable tracker** for the whole effort. Refine → Plan → Act then runs **once per item**, looping until every roadmap item is checked off. `REQUIREMENTS.md` and `PLAN.md` always describe the **current item only** — they are deleted and recreated each time the loop advances to a new item. `ROADMAP.md` is what survives across the whole build.
 
 ```
 Roadmap → decompose the goal into vertical slices → ROADMAP.md → annotate → approve → /clear
@@ -46,14 +46,15 @@ State the resolved artifact directory in one line before proceeding.
   - **No `ROADMAP.md`** → run **Roadmap**.
   - **`ROADMAP.md` exists** → read it and find the **current item** = the first unchecked (`- [ ]`) item.
     - **All items checked** → the roadmap is complete. Don't redo work: say so, and stop. (If the user wants to extend the build, they can add items to `ROADMAP.md` and re-invoke.)
-    - **`REQUIREMENTS.md` missing, or it declares a different roadmap item than the current one** → run **Refine** for the current item (overwriting any stale REQUIREMENTS.md from a previous item).
-    - **`REQUIREMENTS.md` covers the current item, but `PLAN.md` is missing or declares a different item** → run **Plan** for the current item.
+    - **Current item is tagged `[quick]`** → skip Refine and Plan entirely. Do NOT create REQUIREMENTS.md or PLAN.md. Instead, emit a short inline Act brief (fenced code block, ready to paste into a fresh session) covering: what to change, which files, scope boundaries (what NOT to touch), and a verification step. Tell the user there is no artifact file for this item — the brief is the source of truth. After they confirm, tell them to tick the item box in ROADMAP.md manually (or ask the implementer to do it), then `/clear` and re-invoke `/deep-plan` for the next item.
+    - **`REQUIREMENTS.md` missing, or it declares a different roadmap item than the current one** → the loop is advancing to a new item. **Delete both `REQUIREMENTS.md` and `PLAN.md`** (`rm -f REQUIREMENTS.md PLAN.md` in the artifact directory) before doing anything else — stale files from the previous item must not be present when Refine starts, or a future invocation will misread them as current. Then run **Refine** for the current item.
+    - **`REQUIREMENTS.md` covers the current item, but `PLAN.md` is missing or declares a different item** → **delete `PLAN.md`** (`rm -f PLAN.md`) before doing anything else, then run **Plan** for the current item.
     - **Both `REQUIREMENTS.md` and `PLAN.md` cover the current item** → both artifacts for this item are complete. Re-emit the Act handoff prompt, or — if the user wants changes — re-enter the annotation cycle on whichever file they name.
 - State which phase you're entering, for which roadmap item, and why, in one line, before proceeding. If the detected phase seems wrong for what the user asked, say so and confirm rather than guessing.
 
 REQUIREMENTS.md and PLAN.md each declare the item they cover in a header line (see the templates). That declaration is how you tell a current artifact from a stale one left over from the previous item.
 
-(Overwriting REQUIREMENTS.md / PLAN.md when the loop **advances to a new item** is expected — just do it. Only ask before overwriting if the existing file covers the **same** current item, since you'd be discarding in-progress work — or before overwriting `ROADMAP.md`.)
+(Deleting REQUIREMENTS.md / PLAN.md when the loop **advances to a new item** is expected — just do it. Only ask before deleting if the existing file covers the **same** current item, since you'd be discarding in-progress work — or before touching `ROADMAP.md`.)
 
 ---
 
@@ -71,7 +72,7 @@ Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do
 
 - **Never implement during Roadmap, Refine, or Plan.** No production code, no commits. Short illustrative snippets to clarify a concept are fine; anything that would be committed is not.
 - **One phase per invocation.** Detect the phase, run only it, stop at its gate. The fresh-session boundary between phases is the point — don't chain phases in a single session, even for a one-item roadmap.
-- **ROADMAP.md is the durable tracker; REQUIREMENTS.md and PLAN.md are the current item only.** They are overwritten as the loop advances. Each declares its roadmap item in a header so a fresh session can tell current from stale. Never carry detail for a future item into the current REQUIREMENTS/PLAN.
+- **ROADMAP.md is the durable tracker; REQUIREMENTS.md and PLAN.md are the current item only.** They are deleted and recreated as the loop advances to a new item. Each declares its roadmap item in a header so a fresh session can tell current from stale. Never carry detail for a future item into the current REQUIREMENTS/PLAN.
 - **Keep the roadmap terse and high-level.** Items are a title plus a line of intent. No technical design in ROADMAP.md — that's deferred to each item's Refine/Plan turn.
 - **The artifacts are files, always.** This is the hard difference from `/plan`. If you find yourself about to dump a roadmap, requirements, or a plan inline, write the file instead.
 - **User annotations are `//`-prefixed.** At every annotation round, re-read the file from disk and scan for `//` comment markers — that's where the user's notes are. Address each, then clear the marker.

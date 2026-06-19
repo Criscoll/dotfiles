@@ -14,6 +14,12 @@ The point of Roadmap is to break a large goal into a terse, ordered list of high
 
 3. **Decompose into vertical slices.** Each item should deliver something visible and testable on its own — avoid "infrastructure-only" items that produce nothing a user can see. Order them so each builds on the last. Prefer few items over many. If the goal genuinely is one slice, a single item is correct.
 
+   **Sizing test.** An item is chunky enough if implementing it would require: reading the codebase carefully, making at least one real design decision, and producing something testable. If an item fails that test, it's too small — fold it into an adjacent item.
+
+   **Folding rule.** Small items that naturally belong to a larger item should be absorbed into it. Don't give an item its own row just to tick a box.
+
+   **`[quick]` tag.** For small-but-necessary items that can't be folded — changes where the approach is self-evident from the roadmap description and no codebase research or design decisions are needed — append `[quick]` to the item line. A `[quick]` item bypasses Refine and Plan entirely and goes directly to a short inline Act brief (no REQUIREMENTS.md or PLAN.md written). Use sparingly; if in doubt, make it a full item.
+
 4. **Write `ROADMAP.md`** — terse, the durable tracker for the whole build. Tell the user the path once written. Structure:
 
 ```
@@ -27,7 +33,7 @@ Ordered, high-level vertical slices. Each delivers something visible/testable.
 Terse — a title plus a one-line intent. NO technical detail; that lives in each
 item's REQUIREMENTS.md when its turn comes.
 - [ ] 1. <title> — <one-line intent / need>
-- [ ] 2. <title> — <one-line intent / need>
+- [ ] 2. <title> — <one-line intent / need> [quick]
 
 ## Out of Scope
 What the build as a whole does NOT cover.
@@ -35,7 +41,7 @@ What the build as a whole does NOT cover.
 
 5. **Annotation cycle on `ROADMAP.md`.** Hand control back with this invitation:
 
-   > ROADMAP.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: reorder items, drop or merge slices, add a missing one, retitle. Then tell me "address my notes" and I'll update it. **I won't refine, plan, or implement anything until you explicitly approve.**
+   > ROADMAP.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: reorder items, drop or merge slices, add a missing one, retitle. Also check item sizing: merge any items that are too fine-grained to justify their own Refine → Plan → Act pass, or append `[quick]` to items that are small but can't be folded (self-evident changes needing no research). Then tell me "address my notes" and I'll update it. **I won't refine, plan, or implement anything until you explicitly approve.**
 
    When the user says they've annotated: re-read the file from disk (they edited it — don't trust your in-context copy), **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants.
 
