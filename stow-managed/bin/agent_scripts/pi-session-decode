@@ -1,0 +1,36 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Decode a pi session HTML file and emit the full JSON to stdout for jq piping."""
+
+import base64, json, re, sys
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    if len(sys.argv) != 2:
+        eprint("Usage: pi-session-decode <session.html>")
+        sys.exit(2)
+
+    try:
+        html = open(sys.argv[1]).read()
+    except FileNotFoundError:
+        eprint(f"File not found: {sys.argv[1]}")
+        sys.exit(1)
+
+    m = re.search(r'id="session-data"[^>]*>(.*?)</script>', html, re.DOTALL)
+    if not m:
+        eprint("No session-data element found — is this a pi session export?")
+        sys.exit(1)
+
+    data = json.loads(base64.b64decode(m.group(1).strip()).decode("utf-8"))
+    print(json.dumps(data))
+
+
+if __name__ == "__main__":
+    main()

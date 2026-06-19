@@ -1,0 +1,64 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Print a compact overview of a pi session: header, models, entry counts, token/cost."""
+
+import base64, collections, json, re, sys
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    if len(sys.argv) != 2:
+        eprint("Usage: pi-session-info <session.html>")
+        sys.exit(2)
+
+    try:
+        html = open(sys.argv[1]).read()
+    except FileNotFoundError:
+        eprint(f"File not found: {sys.argv[1]}")
+        sys.exit(1)
+
+    m = re.search(r'id="session-data"[^>]*>(.*?)</script>', html, re.DOTALL)
+    if not m:
+        eprint("No session-data element found — is this a pi session export?")
+        sys.exit(1)
+
+    data = json.loads(base64.b64decode(m.group(1).strip()).decode("utf-8"))
+    entries = data["entries"]
+    header = data["header"]
+
+    type_counts = collections.Counter(e["type"] for e in entries)
+    count_str = ", ".join(f"{v} {k}" for k, v in type_counts.items())
+
+    print(f"Session: {header['id']}")
+    print(f"CWD:     {header['cwd']}")
+    print(f"Start:   {header['timestamp']}")
+    print(f"Entries: {len(entries)} ({count_str})")
+
+    models = []
+    for e in entries:
+        if e["type"] == "model_change":
+            models.append(f"{e['provider']}/{e['modelId']}")
+    if models:
+        print(f"Models:  {', '.join(models)}")
+
+    total_in = total_out = total_cost = 0
+    for e in entries:
+        if e["type"] != "message":
+            continue
+        u = e["message"].get("usage")
+        if not u:
+            continue
+        total_in += u.get("input", 0)
+        total_out += u.get("output", 0)
+        total_cost += u.get("cost", {}).get("total", 0)
+    print(f"Tokens:  ↑{total_in:,}  ↓{total_out:,}    Cost: ${total_cost:.4f}")
+
+
+if __name__ == "__main__":
+    main()

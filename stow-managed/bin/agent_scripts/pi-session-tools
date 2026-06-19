@@ -1,0 +1,106 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Print all tool calls with their results from a pi session HTML file.
+
+Usage: pi-session-tools [--limit N] <session.html>
+  --limit N   Truncate each result body to N chars (default: 500; 0 = no limit)
+"""
+
+import base64, json, re, sys
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    args = sys.argv[1:]
+    limit = 500
+    path = None
+
+    i = 0
+    while i < len(args):
+        if args[i] == "--limit" and i + 1 < len(args):
+            limit = int(args[i + 1])
+            i += 2
+        else:
+            path = args[i]
+            i += 1
+
+    if not path:
+        eprint("Usage: pi-session-tools [--limit N] <session.html>")
+        sys.exit(2)
+
+    try:
+        html = open(path).read()
+    except FileNotFoundError:
+        eprint(f"File not found: {path}")
+        sys.exit(1)
+
+    m = re.search(r'id="session-data"[^>]*>(.*?)</script>', html, re.DOTALL)
+    if not m:
+        eprint("No session-data element found — is this a pi session export?")
+        sys.exit(1)
+
+    data = json.loads(base64.b64decode(m.group(1).strip()).decode("utf-8"))
+    entries = data["entries"]
+
+    # Build call-id → (name, arguments) from assistant messages
+    call_index: dict[str, tuple[str, object]] = {}
+    for e in entries:
+        if e["type"] != "message":
+            continue
+        for part in e["message"].get("content", []):
+            if isinstance(part, dict) and part.get("type") == "toolCall":
+                call_index[part["id"]] = (part["name"], part["arguments"])
+
+    # Emit each tool result paired with its call.
+    # Pi native format: toolCallId lives on message directly; content is [{type:text}].
+    # OpenAI/Claude format: content has [{type:toolResult, toolCallId, content:[...]}].
+    for e in entries:
+        if e["type"] != "message":
+            continue
+        msg = e["message"]
+        if msg.get("role") != "toolResult":
+            continue
+
+        # Try pi native format first
+        if "toolCallId" in msg:
+            tc_id = msg["toolCallId"]
+            name, args_val = call_index.get(tc_id, (msg.get("toolName", "?"), {}))
+            result_text = " ".join(
+                p.get("text", "") for p in msg.get("content", [])
+                if isinstance(p, dict)
+            )
+            args_str = json.dumps(args_val)
+            if len(args_str) > 200:
+                args_str = args_str[:200] + "…"
+            print(f"[{name}] {args_str}")
+            if limit and len(result_text) > limit:
+                result_text = result_text[:limit] + f"… [{len(result_text)} chars total]"
+            print(f"  {result_text}")
+            print()
+        else:
+            # OpenAI/Claude nested format
+            for part in msg.get("content", []):
+                if not isinstance(part, dict) or part.get("type") != "toolResult":
+                    continue
+                name, args_val = call_index.get(part.get("toolCallId", ""), ("?", {}))
+                result_text = " ".join(
+                    x.get("text", "") for x in part.get("content", [])
+                )
+                args_str = json.dumps(args_val)
+                if len(args_str) > 200:
+                    args_str = args_str[:200] + "…"
+                print(f"[{name}] {args_str}")
+                if limit and len(result_text) > limit:
+                    result_text = result_text[:limit] + f"… [{len(result_text)} chars total]"
+                print(f"  {result_text}")
+                print()
+
+
+if __name__ == "__main__":
+    main()

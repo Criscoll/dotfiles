@@ -1,0 +1,81 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Print the human-readable conversation from a pi session: user and assistant text turns only.
+
+Tool calls, tool results, and thinking blocks are omitted.
+
+Usage: pi-session-chat [--limit N] <session.html>
+  --limit N   Truncate each assistant turn to N chars (default: 1000; 0 = no limit)
+"""
+
+import base64, json, re, sys
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    args = sys.argv[1:]
+    limit = 1000
+    path = None
+
+    i = 0
+    while i < len(args):
+        if args[i] == "--limit" and i + 1 < len(args):
+            limit = int(args[i + 1])
+            i += 2
+        else:
+            path = args[i]
+            i += 1
+
+    if not path:
+        eprint("Usage: pi-session-chat [--limit N] <session.html>")
+        sys.exit(2)
+
+    try:
+        html = open(path).read()
+    except FileNotFoundError:
+        eprint(f"File not found: {path}")
+        sys.exit(1)
+
+    m = re.search(r'id="session-data"[^>]*>(.*?)</script>', html, re.DOTALL)
+    if not m:
+        eprint("No session-data element found — is this a pi session export?")
+        sys.exit(1)
+
+    data = json.loads(base64.b64decode(m.group(1).strip()).decode("utf-8"))
+    entries = data["entries"]
+
+    for e in entries:
+        if e["type"] != "message":
+            continue
+        msg = e["message"]
+        role = msg.get("role")
+
+        if role == "user":
+            for part in msg.get("content", []):
+                if isinstance(part, dict) and part.get("type") == "text":
+                    print(f"USER: {part['text']}")
+                    print()
+
+        elif role == "assistant":
+            text_parts = [
+                part["text"]
+                for part in msg.get("content", [])
+                if isinstance(part, dict) and part.get("type") == "text"
+            ]
+            if not text_parts:
+                continue
+            text = "\n".join(text_parts)
+            if limit and len(text) > limit:
+                text = text[:limit] + f"\n… [{len(text)} chars total]"
+            print(f"ASSISTANT: {text}")
+            print()
+
+
+if __name__ == "__main__":
+    main()
