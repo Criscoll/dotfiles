@@ -107,6 +107,13 @@ Output rules (critical — only once you are ready to emit a plan):
   - [ ] **<step title>** — what to do, why it serves the goal, and any non-obvious
      risk. Files: path/a.ts, path/b.ts
   - [ ] **<step title>** — ...
+  ## Code Snippets
+  <optional: key code fragments the implementing agent will need. Include them
+   only when you discovered non-obvious signatures, import patterns, config shapes,
+   shell commands, or data structures during exploration. Each snippet should have
+   a one-line label (e.g. "Import block for api.ts" or "gws-cli JSON wrapper shape").
+   Use fenced code blocks with a language tag. Do NOT duplicate snippets that are
+   already obvious from the codebase — only the ones you had to hunt for.>
   ## Verification
   - how to test / verify the change end to end. Every bullet MUST be runnable by a
     non-interactive agent: a concrete command paired with its expected output. Do NOT write
