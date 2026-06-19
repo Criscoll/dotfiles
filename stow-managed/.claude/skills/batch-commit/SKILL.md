@@ -62,6 +62,8 @@ Use the commit message format native to the repo if one is apparent from `git lo
 <scope>: <imperative short description>
 ```
 
+**One-liner vs. extended message:** default to a one-liner. Add a body only when the WHY is not obvious from the scope and description alone — e.g. a non-obvious constraint, a workaround for a specific bug, or a decision that would surprise a reader. If removing the body wouldn't confuse someone reading `git log`, don't write it.
+
 Never use `git add -A` or `git add .` — always stage specific files by name to avoid accidentally including unintended files.
 
 Never push. Never amend existing commits. Never use `--no-verify`.
