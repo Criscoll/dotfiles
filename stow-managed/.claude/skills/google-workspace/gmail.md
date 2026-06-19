@@ -17,6 +17,9 @@ For list, search, and read, always use the wrapper scripts rather than raw gws-c
 ~/bin/agent_scripts/gmail-read <message-id>
 # Full body (no truncation)
 ~/bin/agent_scripts/gmail-read --full <message-id>
+# WARNING: gmail-read is API-backed — takes 30–60 seconds per call.
+# Never pipe with | head -N (no output is produced until the API call completes,
+# so head has nothing to truncate). Always use a 60-second timeout or higher.
 
 # Search — via token-efficient wrapper
 ~/bin/agent_scripts/gmail-search "from:someone@example.com subject:invoice"
@@ -48,6 +51,40 @@ uvx gws-cli@1.3.0 gmail get-filter <filter-id>
 uvx gws-cli@1.3.0 gmail history --start-history-id <id>
 ```
 
+## Gmail search syntax
+
+### Boolean operators
+
+```bash
+# OR grouping — one API call instead of many
+~/bin/agent_scripts/gmail-search "{recruiter recruitment headhunter} after:2026/01/01" --max 100
+
+# Negation — exclude terms or senders
+~/bin/agent_scripts/gmail-search "recruiter -from:jobs-listings@linkedin.com"
+
+# Combine: multi-keyword OR with exclusions
+~/bin/agent_scripts/gmail-search '{"recruiter" "recruitment" "talent acquisition"} after:2026/01/01 -from:jobs-listings@linkedin.com -from:messages-noreply@linkedin.com -from:invitations@linkedin.com' --max 100
+```
+
+Key operators:
+| Syntax | Meaning |
+|---|---|
+| `{a b c}` | OR — matches any of a, b, c (one API call) |
+| `-term` | NOT — exclude messages containing term |
+| `-from:x` | exclude messages from sender x |
+| `"phrase"` | exact phrase match |
+| `after:YYYY/MM/DD` | date filter |
+| `category:promotions` | Gmail category |
+
+### Comprehensive trawl pattern
+
+When surveying a topic across many possible keywords, prefer one `{}` query over multiple searches. Avoids duplicates; uses one API call.
+
+```bash
+# Recruiter survey — all keywords + exclude LinkedIn auto-noise
+~/bin/agent_scripts/gmail-search '{"recruiter" "recruitment" "headhunter" "talent acquisition" "job opportunity" "new opportunity"} after:2026/01/01 -from:jobs-listings@linkedin.com -from:messages-noreply@linkedin.com -from:invitations@linkedin.com' --max 100
+```
+
 ## Attachments
 
 ### Detect: read an email — attachments shown automatically
@@ -61,6 +98,7 @@ uvx gws-cli@1.3.0 gmail history --start-history-id <id>
 ~/bin/agent_scripts/gmail-list-attachments <message-id>
 # One line per attachment: attachment_id | filename | mime_type | size_kb
 ```
+Note: if you have already run `gmail-read <message-id>`, the output already shows all attachment IDs. Only use `gmail-list-attachments` when you need attachment IDs without reading the email body.
 
 ### Download
 ```bash
