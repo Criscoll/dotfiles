@@ -96,16 +96,17 @@ Output rules (critical — only once you are ready to emit a plan):
   # Plan: <short title>
   ## Goal
   <the problem being solved and what success looks like — one short paragraph>
-  ## Approach
+  ## Approach (and alternatives considered)
   <how we're solving it — key design decisions and why, in 3–5 sentences. Not a
-   step list. State the shape of the solution and why this way over alternatives.>
+   step list. State the shape of the solution and why this approach was chosen.
+   End with one sentence on what was rejected and why.>
   ## Constraints
   <only facts that constrain or explain a decision — each bullet states why it is
    listed. Omit background noise.>
   ## Steps
-  1. **<step title>** — what to do, why it serves the goal, and any non-obvious
+  - [ ] **<step title>** — what to do, why it serves the goal, and any non-obvious
      risk. Files: path/a.ts, path/b.ts
-  2. **<step title>** — ...
+  - [ ] **<step title>** — ...
   ## Verification
   - how to test / verify the change end to end. Every bullet MUST be runnable by a
     non-interactive agent: a concrete command paired with its expected output. Do NOT write
@@ -115,6 +116,11 @@ Output rules (critical — only once you are ready to emit a plan):
     env vars the harness would set, or fire a synthetic event at the handler. Do NOT propose a
     syntax-only check (e.g. node -c on a .ts file) as proof of correctness — it proves nothing
     about behaviour.
+  ## Post-implementation
+  - [ ] <path/to/doc.md>: <what to add or update>
+  (List every doc, CLAUDE.md, or README that needs updating once the code is
+   working. The executor runs in a fresh session with no memory of this chat — if
+   you don't list it here, it won't know to update it.)
 - You may write a short explanation in chat, but the authoritative plan must be
   submitted via write_plan.`;
 }
@@ -943,6 +949,7 @@ async function openExecutionMenu(ctx: any, modelLabel: string): Promise<Executio
 
 export default function inlinePlanExtension(pi: ExtensionAPI): void {
 	let planModeEnabled = false;
+	let planInMotion = false;
 	let handoffPending = false;
 	let currentGoal = "";
 	let latestPlan = "";
@@ -952,7 +959,7 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 	let onPlanRefreshCallback: (() => void) | null = null;
 
 	function persistState(): void {
-		pi.appendEntry("inline-plan", { enabled: planModeEnabled, goal: currentGoal });
+		pi.appendEntry("inline-plan", { enabled: planModeEnabled, goal: currentGoal, inMotion: planInMotion });
 	}
 
 	function updateStatus(ctx: ExtensionContext): void {
@@ -982,6 +989,7 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 		}
 		planModeEnabled = true;
 		currentGoal = goal;
+		planInMotion = goal.trim() !== "";
 		latestPlan = "";
 		latestPlanFile = "";
 		updateStatus(ctx);
@@ -991,6 +999,7 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 	function disablePlanMode(ctx: ExtensionContext): void {
 		if (!planModeEnabled) return;
 		planModeEnabled = false;
+		planInMotion = false;
 		if (savedTools.length > 0) pi.setActiveTools(savedTools);
 		latestPlan = "";
 		latestPlanFile = "";
@@ -1140,10 +1149,16 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 
 	// ── Toggle the plan review overlay ───────────────────────────────────────────
 	pi.registerShortcut(TOGGLE_SHORTCUT, {
-		description: "Review the current plan (inline-plan) — Alt+P",
+		description: "Toggle plan mode / review the current plan (inline-plan) — Alt+P",
 		handler: async (ctx) => {
 			if (!planModeEnabled) {
-				ctx.ui.notify("Not in plan mode. Start with /plan <goal>.", "info");
+				enablePlanMode(ctx, "");
+				ctx.ui.notify("Plan mode on. Describe what you want to build (Alt+P again to exit).", "info");
+				return;
+			}
+			if (!planInMotion) {
+				disablePlanMode(ctx);
+				ctx.ui.notify("Plan mode off — full tool access restored.", "info");
 				return;
 			}
 			if (!latestPlan) {
@@ -1181,6 +1196,7 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 	// ── Inject the planning directive while in plan mode ─────────────────────────
 	pi.on("before_agent_start", async () => {
 		if (!planModeEnabled) return;
+		if (!planInMotion) { planInMotion = true; persistState(); }
 		return {
 			message: {
 				customType: "inline-plan-context",
@@ -1207,11 +1223,12 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 		const entries = ctx.sessionManager.getEntries();
 		const entry = entries
 			.filter((e: any) => e.type === "custom" && e.customType === "inline-plan")
-			.pop() as { data?: { enabled?: boolean; goal?: string } } | undefined;
+			.pop() as { data?: { enabled?: boolean; goal?: string; inMotion?: boolean } } | undefined;
 
 		if (entry?.data) {
 			planModeEnabled = entry.data.enabled ?? false;
 			currentGoal = entry.data.goal ?? "";
+			planInMotion = entry.data.inMotion ?? false;
 		}
 
 		if (planModeEnabled) {
@@ -1232,6 +1249,8 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 				const plan = extractPlanFromMessages(branchMessages);
 				if (plan) latestPlan = plan;
 			}
+
+			if (planModeEnabled && latestPlan) planInMotion = true;
 
 			savedTools = toolNames(pi.getActiveTools());
 			pi.setActiveTools(PLAN_MODE_TOOLS);
