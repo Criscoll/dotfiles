@@ -601,15 +601,25 @@ const SubagentParams = Type.Object({
 
 // --- Subagent mode (Alt+S toggle) -------------------------------------------
 
-type SubagentMode = "normal" | "driven" | "disabled";
+type SubagentMode = "off" | "scout-first" | "driven";
 
-const SUBAGENT_MODE_ORDER: SubagentMode[] = ["normal", "driven", "disabled"];
+const SUBAGENT_MODE_ORDER: SubagentMode[] = ["off", "scout-first", "driven"];
 
 const SUBAGENT_MODE_LABEL: Record<SubagentMode, string> = {
-  normal: "Normal",
-  driven: "Subagent-Driven",
-  disabled: "Disabled",
+  off: "Off",
+  "scout-first": "Scout-First",
+  driven: "Driven",
 };
+
+function scoutFirstDirective(): string {
+  return [
+    "Scout-first mode: When exploring unfamiliar code, tracing how pieces connect, or building",
+    "context across multiple files — prefer delegating to the scout via the `subagent` tool.",
+    "This keeps your context lean for the actual work. For writing, editing, and debugging —",
+    "work inline. Rule of thumb: am I exploring or executing? Exploring → subagent scout;",
+    "Executing → inline.",
+  ].join(" ");
+}
 
 function drivenDirective(): string {
   return [
@@ -620,23 +630,16 @@ function drivenDirective(): string {
   ].join(" ");
 }
 
-function disabledDirective(): string {
-  return [
-    "Subagent mode: DISABLED.",
-    "The `subagent` tool is disabled this session — do not call it; do the work inline.",
-  ].join(" ");
-}
-
 export default function (pi: ExtensionAPI) {
-  let mode: SubagentMode = "normal";
+  let mode: SubagentMode = "off";
 
   function updateStatus(ctx: ExtensionContext): void {
-    if (mode === "driven") {
+    if (mode === "scout-first") {
+      ctx.ui.setStatus("subagent-mode", ctx.ui.theme.fg("accent", "◎ subagent · scout-first"));
+      ctx.ui.setWidget("subagent-mode", [ctx.ui.theme.fg("accent", "◎ SCOUT-FIRST")]);
+    } else if (mode === "driven") {
       ctx.ui.setStatus("subagent-mode", ctx.ui.theme.fg("warning", "⚡ subagent · driven"));
-      ctx.ui.setWidget("subagent-mode", [ctx.ui.theme.fg("warning", "⚡ SUBAGENT-DRIVEN")]);
-    } else if (mode === "disabled") {
-      ctx.ui.setStatus("subagent-mode", ctx.ui.theme.fg("muted", "⊘ subagent · off"));
-      ctx.ui.setWidget("subagent-mode", [ctx.ui.theme.fg("muted", "⊘ SUBAGENTS DISABLED")]);
+      ctx.ui.setWidget("subagent-mode", [ctx.ui.theme.fg("warning", "⚡ DRIVEN")]);
     } else {
       ctx.ui.setStatus("subagent-mode", undefined);
       ctx.ui.setWidget("subagent-mode", undefined);
@@ -677,14 +680,6 @@ export default function (pi: ExtensionAPI) {
     parameters: SubagentParams,
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
-      if (mode === "disabled") {
-        return {
-          content: [{ type: "text", text: "Subagent mode is disabled (Alt+S to re-enable)." }],
-          isError: true,
-          details: { mode: "single", agentScope: "user", projectAgentsDir: null, results: [] },
-        };
-      }
-
       const agentScope: AgentScope = params.agentScope ?? "user";
       const discovery = discoverAgents(ctx.cwd, agentScope);
       const agents = discovery.agents;
@@ -1199,7 +1194,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("subagent-mode", {
-    description: "Set subagent mode (no arg cycles): driven | off | normal",
+    description: "Set subagent mode (no arg cycles): off | scout-first | driven",
     handler: (args, ctx) => {
       const arg = args.trim().toLowerCase();
       if (!arg) {
@@ -1207,11 +1202,11 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       let next: SubagentMode | null = null;
-      if (arg === "driven") next = "driven";
-      else if (arg === "off" || arg === "disabled") next = "disabled";
-      else if (arg === "normal") next = "normal";
+      if (arg === "off") next = "off";
+      else if (arg === "scout-first" || arg === "scout") next = "scout-first";
+      else if (arg === "driven") next = "driven";
       if (!next) {
-        ctx.ui.notify(`Unknown subagent mode: "${arg}" (use driven | off | normal)`, "error");
+        ctx.ui.notify(`Unknown subagent mode: "${arg}" (use off | scout-first | driven)`, "error");
         return;
       }
       setMode(ctx, next);
@@ -1221,11 +1216,12 @@ export default function (pi: ExtensionAPI) {
 
   // ── Inject the current-mode directive while not in normal mode ──────────────
   pi.on("before_agent_start", withHookLogging("subagent", "before_agent_start", async () => {
-    if (mode === "normal") return;
+    if (mode === "off") return;
+    const content = mode === "scout-first" ? scoutFirstDirective() : drivenDirective();
     return {
       message: {
         customType: "subagent-mode-context",
-        content: mode === "driven" ? drivenDirective() : disabledDirective(),
+        content,
         display: false,
         details: { mode },
       },
@@ -1238,7 +1234,7 @@ export default function (pi: ExtensionAPI) {
       messages: event.messages.filter((m) => {
         const cm = m as { customType?: string; details?: { mode?: SubagentMode } };
         if (cm.customType !== "subagent-mode-context") return true;
-        return mode !== "normal" && cm.details?.mode === mode;
+        return mode !== "off" && cm.details?.mode === mode;
       }),
     };
   }));
