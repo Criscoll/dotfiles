@@ -1,0 +1,53 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["easyocr==1.7.2", "Pillow==11.2.1", "torch", "torchvision"]
+#
+# [tool.uv.sources]
+# torch = { index = "pytorch-cpu" }
+# torchvision = { index = "pytorch-cpu" }
+#
+# [[tool.uv.index]]
+# name = "pytorch-cpu"
+# url = "https://download.pytorch.org/whl/cpu"
+# explicit = true
+# ///
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import easyocr  # type: ignore[import-untyped]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="ocr-read",
+        description="Extract text from an image using EasyOCR (offline, no API cost)",
+    )
+    parser.add_argument("image", help="Path to the image file")
+    parser.add_argument(
+        "--lang",
+        default="en",
+        metavar="LANG",
+        help="Comma-separated language codes, e.g. en,fr,de (default: en)",
+    )
+    args = parser.parse_args()
+
+    image_path = Path(args.image)
+    if not image_path.exists():
+        print(f"Error: file not found: {args.image}", file=sys.stderr)
+        sys.exit(1)
+
+    langs = [lang.strip() for lang in args.lang.split(",")]
+    reader = easyocr.Reader(langs, verbose=False)
+    results: list[tuple[list[list[int]], str, float]] = reader.readtext(str(image_path))
+
+    blocks = [text for _, text, _ in results]
+    print("\n".join(blocks))
+
+
+if __name__ == "__main__":
+    main()
