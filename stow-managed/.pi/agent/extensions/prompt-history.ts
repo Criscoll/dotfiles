@@ -1,3 +1,4 @@
+import { withHookLogging } from "./lib/hook-logger";
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
@@ -87,11 +88,11 @@ function deduplicateHistory(entries: HistoryEntry[]): HistoryEntry[] {
 // ── Extension ─────────────────────────────────────────────────────────────────
 
 export default function promptHistory(pi: ExtensionAPI) {
-	pi.on("input", async (event, ctx) => {
+	pi.on("input", withHookLogging("prompt-history", "input", async (event, ctx) => {
 		if ((event.source === "interactive" || event.source === "extension") && event.text) {
 			appendEntry(event.text, ctx.cwd);
 		}
-	});
+	}));
 
 	pi.registerShortcut("ctrl+r", {
 		description: "Search prompt history",

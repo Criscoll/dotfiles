@@ -16,6 +16,7 @@
  * before denying. If the tool is absent, the command is allowed through.
  */
 
+import { withHookLogging } from "./lib/hook-logger";
 import { execSync } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -112,7 +113,7 @@ function checkCommand(command: string): { matched: boolean; suggestion: string }
 }
 
 export default function (pi: ExtensionAPI) {
-  pi.on("tool_call", async (event, ctx) => {
+  pi.on("tool_call", withHookLogging("inefficient-commands", "tool_call", async (event, ctx) => {
     if (event.toolName !== "bash") return;
 
     const command = event.input.command as string;
@@ -120,5 +121,5 @@ export default function (pi: ExtensionAPI) {
     if (!matched) return;
 
     return { block: true, reason: suggestion };
-  });
+  }));
 }

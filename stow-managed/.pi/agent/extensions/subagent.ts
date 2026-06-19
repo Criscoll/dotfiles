@@ -19,6 +19,7 @@
  * ~/opt/pi/examples/extensions/subagent/ with strict-mode-safe types.
  */
 
+import { withHookLogging } from "./lib/hook-logger";
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -1219,7 +1220,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ── Inject the current-mode directive while not in normal mode ──────────────
-  pi.on("before_agent_start", async () => {
+  pi.on("before_agent_start", withHookLogging("subagent", "before_agent_start", async () => {
     if (mode === "normal") return;
     return {
       message: {
@@ -1229,10 +1230,10 @@ export default function (pi: ExtensionAPI) {
         details: { mode },
       },
     };
-  });
+  }));
 
   // ── Strip stale subagent-mode directives that don't match the current mode ──
-  pi.on("context", async (event) => {
+  pi.on("context", withHookLogging("subagent", "context", async (event) => {
     return {
       messages: event.messages.filter((m) => {
         const cm = m as { customType?: string; details?: { mode?: SubagentMode } };
@@ -1240,10 +1241,10 @@ export default function (pi: ExtensionAPI) {
         return mode !== "normal" && cm.details?.mode === mode;
       }),
     };
-  });
+  }));
 
   // ── Restore subagent mode on session start / resume ─────────────────────────
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", withHookLogging("subagent", "session_start", async (_event, ctx) => {
     const entries = ctx.sessionManager.getEntries();
     const entry = entries
       .filter((e) => {
@@ -1253,5 +1254,5 @@ export default function (pi: ExtensionAPI) {
       .pop() as { data?: { mode?: SubagentMode } } | undefined;
     if (entry?.data?.mode) mode = entry.data.mode;
     updateStatus(ctx);
-  });
+  }));
 }

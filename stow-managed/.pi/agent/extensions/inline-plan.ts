@@ -28,6 +28,7 @@
  * Modeled on pi's official plan-mode example pattern. Single file, zero npm deps.
  */
 
+import { withHookLogging } from "./lib/hook-logger";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -1201,7 +1202,7 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 	});
 
 	// ── Inject the planning directive while in plan mode ─────────────────────────
-	pi.on("before_agent_start", async () => {
+	pi.on("before_agent_start", withHookLogging("inline-plan", "before_agent_start", async () => {
 		if (!planModeEnabled) return;
 		if (!planInMotion) { planInMotion = true; persistState(); }
 		return {
@@ -1211,10 +1212,10 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 				display: false,
 			},
 		};
-	});
+	}));
 
 	// ── Strip stale planning directives once plan mode is off ────────────────────
-	pi.on("context", async (event) => {
+	pi.on("context", withHookLogging("inline-plan", "context", async (event) => {
 		if (planModeEnabled) return;
 		if (handoffPending) {
 			handoffPending = false;
@@ -1223,10 +1224,10 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 		return {
 			messages: event.messages.filter((m: any) => m.customType !== "inline-plan-context"),
 		};
-	});
+	}));
 
 	// ── Restore plan-mode state on session start / resume ────────────────────────
-	pi.on("session_start", async (_event, ctx) => {
+	pi.on("session_start", withHookLogging("inline-plan", "session_start", async (_event, ctx) => {
 		const entries = ctx.sessionManager.getEntries();
 		const entry = entries
 			.filter((e: any) => e.type === "custom" && e.customType === "inline-plan")
@@ -1264,5 +1265,5 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 		}
 
 		updateStatus(ctx);
-	});
+	}));
 }

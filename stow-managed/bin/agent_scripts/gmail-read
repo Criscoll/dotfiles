@@ -79,6 +79,8 @@ def main():
     if not full and len(body_clean) > limit:
         body_clean = body_clean[:limit].rstrip() + "\n[…truncated, use --full to show all]"
 
+    attachments = outer.get("attachments", [])
+
     print(f"From:    {from_addr}")
     print(f"To:      {to_addr}")
     if cc:
@@ -88,6 +90,16 @@ def main():
     print(f"Subject: {subject}")
     print("-" * 40)
     print(body_clean if body_clean else "[No body text]")
+
+    if attachments:
+        print(f"\nAttachments ({len(attachments)}):")
+        for i, att in enumerate(attachments, 1):
+            filename = att.get("filename", "(unknown)")
+            mime = att.get("mime_type", "")
+            size_bytes = att.get("size", 0)
+            att_id = att.get("attachment_id", "")
+            size_kb = round(size_bytes / 1024, 1)
+            print(f"  [{i}] {filename}  {mime}  {size_kb} KB  (attachment_id: {att_id})")
 
 
 if __name__ == "__main__":

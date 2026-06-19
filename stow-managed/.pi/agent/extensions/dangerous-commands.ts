@@ -11,6 +11,7 @@
  * sudo, kill/killall
  */
 
+import { withHookLogging } from "./lib/hook-logger";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const dangerousPatterns: RegExp[] = [
@@ -53,7 +54,7 @@ const dangerousPatterns: RegExp[] = [
 ];
 
 export default function (pi: ExtensionAPI) {
-  pi.on("tool_call", async (event, ctx) => {
+  pi.on("tool_call", withHookLogging("dangerous-commands", "tool_call", async (event, ctx) => {
     if (event.toolName !== "bash") return;
 
     const command = event.input.command as string;
@@ -72,5 +73,5 @@ export default function (pi: ExtensionAPI) {
     if (!ok) {
       return { block: true, reason: "Blocked by user" };
     }
-  });
+  }));
 }

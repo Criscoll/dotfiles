@@ -9,6 +9,7 @@
  * Allow-lists are kept byte-for-byte parallel to gws-guard.sh.
  */
 
+import { withHookLogging } from "./lib/hook-logger";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // Single source of truth — keep parallel to gws-guard.sh GMAIL_ALLOW
@@ -127,7 +128,7 @@ function checkSegment(seg: string): string | null {
 }
 
 export default function (pi: ExtensionAPI) {
-  pi.on("tool_call", async (event, ctx) => {
+  pi.on("tool_call", withHookLogging("gws-guard", "tool_call", async (event, ctx) => {
     if (event.toolName !== "bash") return;
 
     const command = event.input.command as string;
@@ -150,5 +151,5 @@ export default function (pi: ExtensionAPI) {
         return { block: true, reason };
       }
     }
-  });
+  }));
 }

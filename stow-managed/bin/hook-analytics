@@ -1,0 +1,325 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# ///
+"""
+hook-analytics — visual analytics for Claude Code and pi hook invocations.
+
+Reads JSONL from ~/.local/share/hook-analytics/hooks.jsonl.
+
+Usage:
+  hook-analytics                    Summary dashboard
+  hook-analytics --history          Last 20 invocations
+  hook-analytics --failures         Error entries only
+  hook-analytics --hook <name>      Detailed log for one hook
+  hook-analytics --daily            Daily breakdown table
+  hook-analytics --weekly           Weekly breakdown table
+  hook-analytics --monthly          Monthly breakdown table
+  hook-analytics --all              Daily + weekly + monthly
+  hook-analytics --graph            ASCII bar chart of daily invocations
+  hook-analytics --json             Output filtered records as JSON
+  hook-analytics --since <date>     Filter to on-or-after date (YYYY-MM-DD)
+  hook-analytics --harness <name>   Filter to claude-code or pi
+  hook-analytics --limit <N>        Cap result count (for --history, --hook)
+"""
+
+import argparse
+import json
+import sys
+from collections import defaultdict
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+LOG_FILE = Path.home() / ".local" / "share" / "hook-analytics" / "hooks.jsonl"
+
+
+def load_entries():
+    """Load all JSONL records, returning list of dicts sorted by ts descending."""
+    if not LOG_FILE.exists():
+        return []
+    entries = []
+    with open(LOG_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    entries.sort(key=lambda e: e.get("ts", ""), reverse=True)
+    return entries
+
+
+def apply_filters(entries, args):
+    """Return entries matching CLI filters."""
+    if args.since:
+        since = args.since
+        entries = [e for e in entries if (e.get("ts", "")[:10] >= since)]
+    if args.harness:
+        entries = [e for e in entries if e.get("harness") == args.harness]
+    if args.failures:
+        entries = [e for e in entries
+                   if e.get("outcome") == "error" or e.get("exit_code", 0) != 0]
+    if args.hook:
+        entries = [e for e in entries if e.get("hook") == args.hook]
+    return entries
+
+
+def fmt_duration(ms):
+    if ms < 1:
+        return "<1ms"
+    if ms < 1000:
+        return f"{ms}ms"
+    if ms < 60000:
+        return f"{ms/1000:.1f}s"
+    return f"{ms/60000:.1f}m"
+
+
+def fmt_ts(ts):
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        return dt.strftime("%m-%d %H:%M")
+    except Exception:
+        return ts[:16]
+
+
+def outcome_color(outcome):
+    colors = {
+        "passed":   "\x1b[32m",
+        "handled":  "\x1b[34m",
+        "allowed":  "\x1b[32m",
+        "notified": "\x1b[36m",
+        "asked":    "\x1b[33m",
+        "denied":   "\x1b[31m",
+        "blocked":  "\x1b[31m",
+        "error":    "\x1b[35m",
+    }
+    return colors.get(outcome, "\x1b[37m")
+
+RESET = "\x1b[0m"
+DIM = "\x1b[2m"
+BOLD = "\x1b[1m"
+
+
+def summary(entries):
+    """Print the summary dashboard — per-hook stats table."""
+    by_hook = defaultdict(lambda: {"count": 0, "outcomes": defaultdict(int),
+                                     "durations": [], "harness": ""})
+    for e in entries:
+        hk = e.get("hook", "unknown")
+        by_hook[hk]["count"] += 1
+        by_hook[hk]["outcomes"][e.get("outcome", "unknown")] += 1
+        by_hook[hk]["durations"].append(e.get("duration_ms", 0))
+        by_hook[hk]["harness"] = e.get("harness", "")
+
+    total = len(entries)
+    total_errors = sum(
+        1 for e in entries
+        if e.get("outcome") == "error" or e.get("exit_code", 0) != 0
+    )
+
+    print(f"{BOLD}Hook Analytics{RESET}")
+    print(f"{DIM}════════════════════════════════════════════════════════════{RESET}")
+    print()
+    print(f"  Total invocations: {total}")
+    print(f"  Errors:            {total_errors}")
+    print()
+    print(f"{DIM}By Hook{RESET}")
+    print(f"{DIM}──────────────────────────────────────────────────────────────{RESET}")
+    header = f"  {'Hook':<30} {'Harness':<12} {'Count':>6} {'Pass%':>7} {'Block%':>7} {'Ask%':>6} {'Err%':>6} {'Avg':>7} {'Max':>7}"
+    print(header)
+    print(f"  {DIM}{'─'*88}{RESET}")
+
+    for hook_name in sorted(by_hook.keys()):
+        stats = by_hook[hook_name]
+        c = stats["count"]
+        outcomes = stats["outcomes"]
+        durations = stats["durations"]
+        passed = outcomes.get("passed", 0) + outcomes.get("handled", 0) + outcomes.get("allowed", 0) + outcomes.get("notified", 0)
+        blocked = outcomes.get("blocked", 0) + outcomes.get("denied", 0)
+        asked = outcomes.get("asked", 0)
+        errors = outcomes.get("error", 0)
+        avg_ms = sum(durations) / len(durations) if durations else 0
+        max_ms = max(durations) if durations else 0
+
+        print(f"  {hook_name:<30} {stats['harness']:<12} {c:>6} {passed/c*100:>6.1f}% {blocked/c*100:>6.1f}% {asked/c*100:>5.1f}% {errors/c*100:>5.1f}% {fmt_duration(int(avg_ms)):>7} {fmt_duration(max_ms):>7}")
+
+    print()
+
+
+def history(entries, limit=20):
+    """Print the last N invocations."""
+    for e in entries[:limit]:
+        ts = fmt_ts(e.get("ts", ""))
+        hook = e.get("hook", "?")
+        outcome = e.get("outcome", "?")
+        reason = e.get("reason", "")[:80]
+        dur = fmt_duration(e.get("duration_ms", 0))
+        color = outcome_color(outcome)
+        print(f"  {DIM}{ts}{RESET}  {color}{outcome:<8}{RESET}  {BOLD}{hook}{RESET}  {DIM}{dur}{RESET}")
+        if reason:
+            print(f"         {DIM}{reason}{RESET}")
+        print()
+
+
+def hook_detail(entries):
+    """Print every invocation for the filtered hook in reverse chronological order."""
+    hook_name = entries[0].get("hook", "?") if entries else "?"
+    print(f"{BOLD}Hook: {hook_name}{RESET}")
+    total = len(entries)
+    errors = sum(1 for e in entries if e.get("outcome") == "error" or e.get("exit_code", 0) != 0)
+    print(f"  Invocations: {total}  Errors: {errors}")
+    print(f"  {DIM}{'─'*80}{RESET}")
+
+    for e in entries:
+        ts = fmt_ts(e.get("ts", ""))
+        outcome = e.get("outcome", "?")
+        reason = e.get("reason", "")
+        dur = fmt_duration(e.get("duration_ms", 0))
+        event = e.get("event", "")
+        exit_code = e.get("exit_code", 0)
+        color = outcome_color(outcome)
+        print(f"  {DIM}{ts}{RESET}  {color}{outcome:<8}{RESET}  event={event}  dur={dur}  exit={exit_code}")
+        if reason:
+            print(f"         {DIM}reason:{RESET} {reason}")
+        print()
+
+
+def time_breakdown(entries, period):
+    """Print a tabular breakdown by day, week, or month."""
+    buckets = defaultdict(lambda: {"count": 0, "passed": 0, "blocked": 0, "asked": 0, "errors": 0})
+
+    for e in entries:
+        ts = e.get("ts", "")[:10]
+        if period == "daily":
+            key = ts
+        elif period == "weekly":
+            try:
+                d = date.fromisoformat(ts)
+                monday = d - timedelta(days=d.weekday())
+                key = monday.isoformat()
+            except Exception:
+                key = ts
+        else:
+            key = ts[:7]
+
+        outcome = e.get("outcome", "")
+        buckets[key]["count"] += 1
+        if outcome in ("passed", "handled", "allowed", "notified"):
+            buckets[key]["passed"] += 1
+        elif outcome in ("blocked", "denied"):
+            buckets[key]["blocked"] += 1
+        elif outcome == "asked":
+            buckets[key]["asked"] += 1
+        elif outcome == "error":
+            buckets[key]["errors"] += 1
+
+    if not buckets:
+        print(f"  No data for {period} breakdown.")
+        return
+
+    label_map = {"daily": "Date", "weekly": "Week (Mon)", "monthly": "Month"}
+    label = label_map.get(period, "Period")
+    print(f"  {BOLD}{label:<12} {'Count':>6} {'Pass':>6} {'Block':>6} {'Ask':>6} {'Err':>6}{RESET}")
+    print(f"  {DIM}{'─'*48}{RESET}")
+
+    for key in sorted(buckets.keys()):
+        b = buckets[key]
+        print(f"  {key:<12} {b['count']:>6} {b['passed']:>6} {b['blocked']:>6} {b['asked']:>6} {b['errors']:>6}")
+
+    total_c = sum(b["count"] for b in buckets.values())
+    total_p = sum(b["passed"] for b in buckets.values())
+    total_b = sum(b["blocked"] for b in buckets.values())
+    total_a = sum(b["asked"] for b in buckets.values())
+    total_e = sum(b["errors"] for b in buckets.values())
+    print(f"  {DIM}{'─'*48}{RESET}")
+    print(f"  {BOLD}{'TOTAL':<12} {total_c:>6} {total_p:>6} {total_b:>6} {total_a:>6} {total_e:>6}{RESET}")
+    print()
+
+
+def ascii_graph(entries):
+    """ASCII bar chart of daily invocations (last 30 days)."""
+    daily = defaultdict(int)
+    for e in entries:
+        day = e.get("ts", "")[:10]
+        daily[day] += 1
+
+    if not daily:
+        print("  No data for graph.")
+        return
+
+    days = sorted(daily.keys())[-30:]
+    max_count = max(daily.values())
+    bar_max = 40
+
+    print(f"  {BOLD}Daily Hook Invocations (last {len(days)} days){RESET}")
+    print()
+
+    for day in days:
+        count = daily[day]
+        bar_len = int(count / max_count * bar_max) if max_count > 0 else 0
+        bar = "█" * bar_len + "░" * (bar_max - bar_len)
+        pct = f"{count / max_count * 100:.0f}%" if max_count > 0 else "0%"
+        print(f"  {DIM}{day}{RESET} {bar} {count:>4} {DIM}{pct}{RESET}")
+
+    print()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Hook analytics tool")
+    parser.add_argument("--history", action="store_true")
+    parser.add_argument("--failures", action="store_true")
+    parser.add_argument("--hook", type=str)
+    parser.add_argument("--daily", action="store_true")
+    parser.add_argument("--weekly", action="store_true")
+    parser.add_argument("--monthly", action="store_true")
+    parser.add_argument("--all", action="store_true")
+    parser.add_argument("--graph", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--since", type=str, help="Filter from date (YYYY-MM-DD)")
+    parser.add_argument("--harness", type=str, choices=["claude-code", "pi"])
+    parser.add_argument("--limit", type=int, default=20)
+
+    args = parser.parse_args()
+    entries = load_entries()
+    entries = apply_filters(entries, args)
+
+    if args.json:
+        print(json.dumps(entries, indent=2))
+        return
+
+    if args.graph:
+        ascii_graph(entries)
+        return
+
+    if args.hook:
+        hook_detail(entries[:args.limit])
+        return
+
+    if args.history:
+        history(entries, args.limit)
+        return
+
+    if args.all or args.daily:
+        print(f"\n{BOLD}Daily Breakdown{RESET}")
+        print(f"{DIM}{'═'*50}{RESET}")
+        time_breakdown(entries, "daily")
+
+    if args.all or args.weekly:
+        print(f"\n{BOLD}Weekly Breakdown{RESET}")
+        print(f"{DIM}{'═'*50}{RESET}")
+        time_breakdown(entries, "weekly")
+
+    if args.all or args.monthly:
+        print(f"\n{BOLD}Monthly Breakdown{RESET}")
+        print(f"{DIM}{'═'*50}{RESET}")
+        time_breakdown(entries, "monthly")
+
+    if not any([args.history, args.failures, args.hook, args.daily,
+                args.weekly, args.monthly, args.all, args.graph, args.json]):
+        summary(entries)
+
+
+if __name__ == "__main__":
+    main()

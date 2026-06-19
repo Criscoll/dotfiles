@@ -9,6 +9,7 @@
  *   - OSC 99: Kitty
  */
 
+import { withHookLogging } from "./lib/hook-logger";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 function notifyOSC777(title: string, body: string): void {
@@ -30,7 +31,7 @@ function notify(title: string, body: string): void {
 }
 
 export default function (pi: ExtensionAPI) {
-  pi.on("agent_end", async () => {
+  pi.on("agent_end", withHookLogging("notify-ready", "agent_end", async () => {
     notify("Pi", "Ready for input");
-  });
+  }));
 }

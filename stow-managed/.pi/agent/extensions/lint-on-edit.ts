@@ -10,6 +10,7 @@
  * only a new case arm there; this extension needs no changes.
  */
 
+import { withHookLogging } from "./lib/hook-logger";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -27,7 +28,7 @@ function resolveHome(p: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
-  pi.on("tool_result", async (event, ctx) => {
+  pi.on("tool_result", withHookLogging("lint-on-edit", "tool_result", async (event, ctx) => {
     if (event.toolName !== "write" && event.toolName !== "edit") return;
 
     const filePath: string | undefined = (event.input as Record<string, unknown>)?.path as string | undefined;
@@ -56,5 +57,5 @@ export default function (pi: ExtensionAPI) {
     } catch {
       // Script failed silently (tool missing, file gone, etc.) — ignore
     }
-  });
+  }));
 }

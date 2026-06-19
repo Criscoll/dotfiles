@@ -9,6 +9,7 @@
  * Section 3 (right) — input/output tokens, per-prompt cost (Δ), and session total (Σ)
  */
 
+import { withHookLogging } from "./lib/hook-logger";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, truncateToWidth } from "@earendil-works/pi-tui";
 
@@ -34,7 +35,7 @@ export default function (pi: ExtensionAPI) {
 	let lastOutput = 0;
 	let lastCost = 0;
 
-	pi.on("session_start", async (_event, ctx) => {
+	pi.on("session_start", withHookLogging("context-ui", "session_start", async (_event, ctx) => {
 		lastInput = 0;
 		lastOutput = 0;
 		lastCost = 0;
@@ -136,7 +137,7 @@ export default function (pi: ExtensionAPI) {
 				},
 			};
 		});
-	});
+	}));
 
 	pi.on("turn_end", async (event) => {
 		// Accumulate across all turns within one user prompt
