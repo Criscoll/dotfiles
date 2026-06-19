@@ -1,13 +1,15 @@
 ---
 name: google-workspace
 description: >-
-  Read Gmail (list/search/read/label-move) and Calendar (list/get/create/update)
-  via gws-cli. Enforced at the harness layer by a deny-by-default allow-list hook —
+  Read Gmail (list/search/read/label-move), download and view email attachments
+  (PDFs, etc.), and manage Calendar (list/get/create/update) via gws-cli.
+  Enforced at the harness layer by a deny-by-default allow-list hook —
   send, delete, and destructive Calendar operations are structurally blocked and
   cannot be invoked regardless of how the command is phrased.
   Trigger phrases: "check email", "search gmail", "list emails", "read email",
   "archive email", "label email", "mark as read", "list calendar events",
-  "create event", "update event", "google calendar", "gmail", "workspace".
+  "create event", "update event", "google calendar", "gmail", "workspace",
+  "attachment", "download attachment", "email pdf", "has attachment".
 disable-model-invocation: false
 ---
 

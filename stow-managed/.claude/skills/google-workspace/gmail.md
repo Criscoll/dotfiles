@@ -34,9 +34,9 @@ uvx gws-cli@1.3.0 gmail get-draft <draft-id>
 uvx gws-cli@1.3.0 gmail threads
 uvx gws-cli@1.3.0 gmail get-thread <thread-id>
 
-# Attachments
-uvx gws-cli@1.3.0 gmail list-attachments <message-id>
-uvx gws-cli@1.3.0 gmail download-attachment <message-id> <attachment-id>
+# Attachments — use wrapper scripts (see Attachments section below)
+# ~/bin/agent_scripts/gmail-list-attachments <message-id>
+# ~/bin/agent_scripts/gmail-download-attachment <message-id> <attachment-id> <filename>
 
 # Settings (read-only)
 uvx gws-cli@1.3.0 gmail get-vacation
@@ -47,6 +47,40 @@ uvx gws-cli@1.3.0 gmail get-filter <filter-id>
 # History
 uvx gws-cli@1.3.0 gmail history --start-history-id <id>
 ```
+
+## Attachments
+
+### Detect: read an email — attachments shown automatically
+```bash
+~/bin/agent_scripts/gmail-read <message-id>
+# Prints "Attachments (N):" section if present, with filename/type/size/attachment_id
+```
+
+### List (when you have a message-id but not yet the full read output)
+```bash
+~/bin/agent_scripts/gmail-list-attachments <message-id>
+# One line per attachment: attachment_id | filename | mime_type | size_kb
+```
+
+### Download
+```bash
+~/bin/agent_scripts/gmail-download-attachment <message-id> <attachment-id> <filename>
+# Saves to ~/Downloads/gmail-attachments/<filename>, prints the saved path to stdout
+# Optional: --out-dir <dir> to override the destination directory
+```
+
+### View a PDF after download
+```bash
+# Use the /pdf-parse skill on the returned path
+```
+
+### Find emails that have attachments (no per-message cost)
+```bash
+~/bin/agent_scripts/gmail-search "has:attachment"
+~/bin/agent_scripts/gmail-search "has:attachment subject:insurance"
+```
+
+Note: `gmail-list` and `gmail-search` do **not** show attachment columns — the list API returns no attachment data. Use `has:attachment` as a search filter instead.
 
 ## Moving / Organizing
 

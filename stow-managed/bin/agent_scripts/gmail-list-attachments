@@ -1,0 +1,59 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import json, subprocess, sys
+
+GWS = ["uvx", "gws-cli@1.3.0", "gmail", "list-attachments"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def extract(wrapped):
+    if isinstance(wrapped, dict) and "data" in wrapped:
+        return wrapped["data"]
+    return wrapped
+
+
+def main():
+    if len(sys.argv) != 2:
+        eprint("Usage: gmail-list-attachments <message-id>")
+        sys.exit(2)
+
+    message_id = sys.argv[1]
+
+    result = subprocess.run(GWS + [message_id], capture_output=True, text=True)
+    if result.returncode != 0:
+        eprint(result.stderr.strip())
+        sys.exit(result.returncode)
+
+    try:
+        outer = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        eprint("Unexpected non-JSON output:")
+        print(result.stdout, end="")
+        sys.exit(1)
+
+    attachments = extract(outer)
+    if not isinstance(attachments, list):
+        attachments = outer.get("attachments", [])
+
+    if not attachments:
+        print("(no attachments)")
+        return
+
+    for att in attachments:
+        att_id = att.get("attachment_id", "")
+        filename = att.get("filename", "(unknown)")
+        mime = att.get("mime_type", "")
+        size_bytes = att.get("size", 0)
+        size_kb = round(size_bytes / 1024, 1)
+        print(f"{att_id} | {filename} | {mime} | {size_kb} KB")
+
+
+if __name__ == "__main__":
+    main()
