@@ -53,6 +53,21 @@ and the verification gate the whole item must pass before it's done
 (e.g. typecheck && lint && test && build). If the change isn't testable in
 the usual way, say how it will be verified instead.
 
+Two verification anti-patterns to call out in the plan when relevant:
+
+- **Verify scope:** When the plan wraps or instruments existing behavior (logging,
+  caching, metrics), scope verification to the new behavior only. Do not re-verify
+  the underlying logic — it wasn't changed and wasn't a regression risk. Write this
+  explicitly in the plan's Testing & Verification section so the implementer doesn't
+  drift into re-testing pre-existing behavior.
+
+- **Executor self-interference:** If the Act session runs inside an environment with
+  its own input guards (hooks, extensions), verification commands that embed a guarded
+  pattern — even as a quoted string or JSON fixture — may be silently intercepted.
+  The guard's block message appears as output, but no subprocess ran. When this risk
+  exists (plan configures the system the implementer runs in), note it and prefer
+  reading side-effects (log files, state files) over synthesizing matching inputs.
+
 ## Todo
 A granular, checkbox task list derived from Proposed Steps — the tracker the
 implementer will work through for THIS item. Break into sub-phases if the item

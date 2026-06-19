@@ -124,6 +124,16 @@ Output rules (critical — only once you are ready to emit a plan):
     env vars the harness would set, or fire a synthetic event at the handler. Do NOT propose a
     syntax-only check (e.g. node -c on a .ts file) as proof of correctness — it proves nothing
     about behaviour.
+  - VERIFY SCOPE: When the plan wraps or instruments existing behavior (logging, caching,
+    metrics), scope verification to the new behavior only — "does a log entry appear?" not
+    "does the underlying function still behave correctly?" The latter was not changed and is
+    not a regression risk. Scope the bullets to what this plan actually changed.
+  - EXECUTOR SELF-INTERFERENCE: If the executor runs inside an environment with its own input
+    guards (hooks, extensions), verification commands that embed a guarded pattern — even as a
+    quoted string or JSON fixture — may be silently intercepted. The guard's block message
+    appears as output, but no subprocess ran. When the plan configures the same system the
+    executor runs in, prefer reading side-effects (log files, state files) over synthesizing
+    inputs that match the guard pattern.
   ## Post-implementation
   - [ ] <path/to/doc.md>: <what to add or update>
   (List every doc, CLAUDE.md, or README that needs updating once the code is
