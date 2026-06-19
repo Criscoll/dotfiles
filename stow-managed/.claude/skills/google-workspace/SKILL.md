@@ -24,7 +24,7 @@ Always pin the exact version: `uvx gws-cli@1.3.0 <service> <subcommand> [flags]`
 Before doing any real work, verify gws-cli is authenticated:
 
 ```bash
-uvx gws-cli@1.3.0 gmail labels
+~/bin/agent_scripts/gmail-labels
 ```
 
 If this errors with an auth/token error, point the user to the per-machine setup

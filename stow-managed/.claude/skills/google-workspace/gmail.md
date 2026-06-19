@@ -25,8 +25,12 @@ For list, search, and read, always use the wrapper scripts rather than raw gws-c
 ~/bin/agent_scripts/gmail-search "from:someone@example.com subject:invoice"
 ~/bin/agent_scripts/gmail-search "is:unread after:2024/01/01" --max 50
 
-# Labels
-uvx gws-cli@1.3.0 gmail labels
+# Labels — via token-efficient wrapper
+~/bin/agent_scripts/gmail-labels
+~/bin/agent_scripts/gmail-labels --all           # include system labels
+~/bin/agent_scripts/gmail-labels --filter inbox  # filter by name substring
+
+# Get a single label by ID (raw gws-cli, no wrapper needed — single item)
 uvx gws-cli@1.3.0 gmail get-label <label-id>
 
 # Drafts (read-only)
@@ -154,7 +158,7 @@ uvx gws-cli@1.3.0 gmail create-label "My Label"
 | Spam      | `SPAM`     |
 | Unread    | `UNREAD`   |
 
-Custom labels have IDs like `Label_12345` — use `gmail labels` to list them.
+Custom labels have IDs like `Label_12345` — use `~/bin/agent_scripts/gmail-labels` to list them.
 
 ## Workflow: archive a message
 
