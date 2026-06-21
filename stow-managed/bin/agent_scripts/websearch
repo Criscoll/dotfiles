@@ -66,26 +66,61 @@ _container_is_running() {
     | grep -q "^true$"
 }
 
-if ! _container_is_running; then
-  # Remove any stopped/errored container left from a prior run.
-  "$DOCKER" rm -f "$CONTAINER" >/dev/null 2>&1 || true
-  echo "Starting SearXNG..." >&2
-  # Suppress output: concurrent calls may race on the name; the loser gets
-  # "name already in use", which is fine — the winner started what we need.
-  "$DOCKER" run -d \
-    --name "$CONTAINER" \
-    --network=host \
-    -e GRANIAN_HOST=127.0.0.1 \
-    -e GRANIAN_PORT="$PORT" \
-    -e SEARXNG_SECRET=websearch-local-agent \
-    -v "$CONFIG:/etc/searxng/settings.yml:ro" \
-    "$IMAGE" >/dev/null 2>&1 || true
+_container_status() {
+  "$DOCKER" inspect --format='{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo "absent"
+}
 
-  # Verify something is now running (us or a concurrent call winner).
-  if ! _container_is_running; then
-    echo "Error: Failed to start SearXNG container" >&2
-    exit 1
-  fi
+if ! _container_is_running; then
+  # Decide what to do based on current container state. Concurrent parallel calls
+  # can all reach this block simultaneously — only rm -f on terminal states so we
+  # don't kill a container that a concurrent call just started.
+  _STATUS=$(_container_status)
+  case "$_STATUS" in
+    running)
+      # Concurrent call beat us to it; fall through to health check.
+      ;;
+    created|restarting)
+      # Container is mid-startup from a concurrent call; let it finish.
+      ;;
+    exited|dead)
+      # Terminal state from a prior run — safe to remove and restart.
+      "$DOCKER" rm -f "$CONTAINER" >/dev/null 2>&1 || true
+      echo "Starting SearXNG..." >&2
+      "$DOCKER" run -d \
+        --name "$CONTAINER" \
+        --network=host \
+        -e GRANIAN_HOST=127.0.0.1 \
+        -e GRANIAN_PORT="$PORT" \
+        -e SEARXNG_SECRET=websearch-local-agent \
+        -v "$CONFIG:/etc/searxng/settings.yml:ro" \
+        "$IMAGE" >/dev/null 2>&1 || true
+      ;;
+    *)
+      # absent or unknown — start fresh. Concurrent callers that also reach here
+      # will get "name already in use" from docker run (suppressed); the one that
+      # wins is enough to get the container started.
+      echo "Starting SearXNG..." >&2
+      "$DOCKER" run -d \
+        --name "$CONTAINER" \
+        --network=host \
+        -e GRANIAN_HOST=127.0.0.1 \
+        -e GRANIAN_PORT="$PORT" \
+        -e SEARXNG_SECRET=websearch-local-agent \
+        -v "$CONFIG:/etc/searxng/settings.yml:ro" \
+        "$IMAGE" >/dev/null 2>&1 || true
+      ;;
+  esac
+
+  # Verify something is starting or running (us or a concurrent call winner).
+  # Accept "created" and "restarting" — the health check below handles readiness.
+  _VERIFY=$(_container_status)
+  case "$_VERIFY" in
+    running|created|restarting) ;;
+    *)
+      echo "Error: Failed to start SearXNG container" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 BASE_URL="http://127.0.0.1:${PORT}"

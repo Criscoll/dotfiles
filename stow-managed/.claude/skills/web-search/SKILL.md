@@ -10,9 +10,9 @@ description: >-
 disable-model-invocation: false
 ---
 
-Search the web using `~/bin/agent_scripts/websearch`, which manages a SearXNG
-Docker container on-demand (start → query → stop). Do not use the built-in
-`WebSearch` tool or `WebFetch` when this is available.
+Search the web using `~/bin/agent_scripts/websearch`, which manages a persistent
+SearXNG Docker container (starts on first use, stays running). Do not use the
+built-in `WebSearch` tool or `WebFetch` when this is available.
 
 **Prerequisite:** Docker at `/usr/bin/docker`. The script manages the container
 lifecycle automatically — no manual Docker steps needed.
@@ -74,10 +74,23 @@ JSON array on stdout; diagnostic messages on stderr:
 webcrawl "https://docs.python.org/3/library/asyncio-eventloop.html"
 ```
 
-## Startup Time
+## Startup Time and Parallel Searches
 
 First call per session: ~10–15s (Docker image pull on first ever run, then container
-startup). The container is stopped and removed after each search — no persistent service.
+startup). The container stays running between searches (persistent service).
+
+**When running multiple searches:** check whether the container is already warm before
+issuing parallel calls. Parallel cold-start calls race to start the container and the
+losers may fail — run one search first if the container is cold.
+
+```bash
+# Check warmth — exits 0 if warm, non-zero if cold
+/usr/bin/docker inspect --format='{{.State.Running}}' searxng-websearch 2>/dev/null \
+  | grep -q "^true$" && echo warm || echo cold
+```
+
+- **Warm**: parallelize freely — container is already up.
+- **Cold**: run one search first (~10–15s warm-up), then parallelize the rest.
 
 ## When to Use / Not Use
 
