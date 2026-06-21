@@ -17,7 +17,7 @@ if [[ -z "$file" || ! -f "$file" ]]; then
 fi
 
 case "$file" in
-  *.ts|*.tsx|*.js|*.jsx|*.mjs)
+  *.ts|*.tsx|*.js|*.jsx|*.mjs|*.svelte)
     if command -v npx >/dev/null 2>&1; then
       npx eslint --fix "$file" 2>&1 || true
     fi
