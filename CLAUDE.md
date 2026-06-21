@@ -365,3 +365,44 @@ Each line is a JSON object with these fields:
 - `reason` — human-readable reason string
 - `duration_ms` — elapsed wall-clock milliseconds
 - `exit_code` — numeric exit code
+
+## Documentation and Ideas Repository
+
+This repo uses two top-level directories for institutional knowledge discovered across sessions:
+
+### `docs/` — Established Conventions
+
+Files in `docs/` capture **settled best practices and conventions** that future agents should follow. These are conclusions reached after research and experience — not speculative proposals. Anything in `docs/` should be treated as an authoritative reference.
+
+Examples: `skill-authoring-best-practices-2026-06-17.md`, `language-skill-conventions.md`.
+
+**What goes in docs/:**
+- Conventions we've established (naming, structure, patterns)
+- Research syntheses that produced a settled recommendation
+- Architecture decisions that future agents need to know
+- Reference material that multiple skills or agents share
+
+**When to add:** After reaching a conclusion through research or experience. If it's still speculative, it belongs in `ideas/`.
+
+### `ideas/` — Researched Proposals, Not Yet Actioned
+
+Files in `ideas/` capture **well-researched proposals for future improvement** that haven't been implemented yet. Each idea doc documents the context, the problem, why it would be good to do, what was discovered during research, and the next steps a future agent would take.
+
+The key word is **well-researched**. A half-baked thought doesn't belong here — an idea doc should have done enough investigation that another agent (or the same agent in a future session) can pick it up and implement with minimal additional context.
+
+Example: `install-svelte-skills.md` — documents the full Svelte skill ecosystem discovered during research, the decision to defer, and exactly what Phase 1/2/3 would involve if reactivated.
+
+**What goes in ideas/:**
+- Feature proposals with research backing
+- Architecture changes scoped enough for an agent to implement
+- Improvements deferred because of timing (waiting for project reactivation, dependency updates, etc.)
+- Cross-cutting improvements that don't fit in a single session
+
+**When to add:** After researching an improvement to the point where the next steps are clear, but before deciding to implement immediately.
+
+### How Agents Should Use These
+
+1. **Before any substantial change**, check if `docs/` contains relevant conventions that constrain implementation.
+2. **When a `docs/` convention exists**, follow it. If it turns out to be wrong, update it rather than working around it.
+3. **When researching a future improvement**, check `ideas/` first. If the idea has been researched before, pick up where the idea doc left off.
+4. **When deferring a researched improvement** (deciding not to implement now), write an idea doc so the context isn't lost. Include enough detail that any agent can resume.
