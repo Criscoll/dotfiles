@@ -10,7 +10,7 @@
  * only a new case arm there; this extension needs no changes.
  */
 
-import { withHookLogging } from "./lib/hook-logger";
+import { withHookLogging, logHook } from "./lib/hook-logger";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -54,8 +54,17 @@ export default function (pi: ExtensionAPI) {
         details: event.details,
         isError: event.isError,
       };
-    } catch {
-      // Script failed silently (tool missing, file gone, etc.) — ignore
+    } catch (e) {
+      logHook({
+        ts: new Date().toISOString(),
+        harness: "pi",
+        hook: "lint-on-edit",
+        event: "tool_result",
+        outcome: "error",
+        reason: String(e),
+        duration_ms: 0,
+        exit_code: 1,
+      });
     }
   }));
 }
