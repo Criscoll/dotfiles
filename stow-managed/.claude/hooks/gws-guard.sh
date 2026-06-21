@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# PreToolUse hook — deny-by-default allow-list for gws-cli invocations.
-# Permits only explicit read+move (Gmail) and read+create+update (Calendar) subcommands.
-# Fails closed: if a segment mentions a gws token but the (service, subcommand) pair
-# cannot be confidently extracted, the command is denied.
+# PreToolUse hook — deny-by-default guard for gws-cli invocations.
+# ALL direct gws-cli calls are blocked. Use wrapper scripts in ~/bin/agent_scripts/ instead.
 # Non-gws commands pass through (exit 0) without inspection.
 
 # Best-effort hook logging. Logger absence must never break the hook.
@@ -34,26 +32,6 @@ deny() {
 if printf '%s' "$command" | grep -qE 'gws-cli/[^ ]*\.enc'; then
     deny "Credential access blocked: gws-cli token/secret files may not be read, copied, or referenced."
 fi
-
-# --- Allow-lists (single source of truth, parallel to gws-guard.ts) ---
-
-GMAIL_ALLOW="list read search labels get-label drafts get-draft threads get-thread \
-list-attachments download-attachment get-vacation get-signature filters \
-get-filter history add-labels remove-labels modify-thread-labels batch-modify \
-mark-read mark-unread create-label"
-
-CALENDAR_ALLOW="calendars list get instances attendees freebusy colors list-acl \
-get-reminders get-default-reminders create update create-recurring quick-add \
-add-attendees remove-attendees rsvp set-reminders set-default-reminders move-event"
-
-# Returns 0 if the word is in the allow-list string, 1 otherwise.
-in_list() {
-    local word="$1" list="$2" w
-    for w in $list; do
-        [ "$w" = "$word" ] && return 0
-    done
-    return 1
-}
 
 # Returns 0 if the token looks like a gws-family invocation token.
 # Matches: gws, gws-cli, gws-cli@<ver>, gws_cli; also "python -m gws" / "python3 -m gws"
@@ -110,79 +88,16 @@ check_segment() {
     # No gws token found in this segment — not a gws invocation, pass through.
     [ $gws_pos -eq -1 ] && return
 
-    # gws token found. Now extract (service, subcommand).
-    # Tokens after gws_pos: skip --flag/-f options and their values.
-    local service="" subcmd=""
+    # gws token found. Check for --help exemption only.
     i=$((gws_pos+1))
     while [ $i -lt $n ]; do
-        local w="${words[$i]}"
-        case "$w" in
-            --help|-h|help)
-                # Help flag / no subcommand — always allowed (read-only meta).
-                return
-                ;;
-            --*=*)
-                # --key=val style flag — skip (no extra word consumed).
-                ;;
-            --*)
-                # --flag that consumes the next word as its value — skip both.
-                i=$((i+1))
-                ;;
-            -*)
-                # Short flag — skip (single char flags don't consume next word here).
-                ;;
-            gmail|calendar)
-                service="$w"
-                break
-                ;;
-            *)
-                # Unexpected word before service token — fail closed.
-                deny "gws command blocked: could not locate a known service (gmail/calendar) in: ${seg}"
-                ;;
+        case "${words[$i]}" in
+            --help|-h|help) return ;;
         esac
         i=$((i+1))
     done
 
-    # No service token found at all.
-    if [ -z "$service" ]; then
-        # Bare `gws` / `gws-cli` with no service — help or bare invocation, allow.
-        return
-    fi
-
-    # Now find the subcommand: first bare word after the service, skipping flags.
-    i=$((i+1))
-    while [ $i -lt $n ]; do
-        local w="${words[$i]}"
-        case "$w" in
-            --*=*) ;;
-            --*) i=$((i+1)) ;;      # value-consuming long flag
-            -*) ;;                   # short flag
-            help|--help|-h)
-                return ;;            # help after service — allowed
-            *)
-                subcmd="$w"
-                break
-                ;;
-        esac
-        i=$((i+1))
-    done
-
-    # No subcommand — bare `gws gmail` / `gws calendar` (lists subcommands) — allow.
-    [ -z "$subcmd" ] && return
-
-    # Check (service, subcommand) against allow-list.
-    case "$service" in
-        gmail)
-            if ! in_list "$subcmd" "$GMAIL_ALLOW"; then
-                deny "gws gmail '$subcmd' is not on the allow-list. Only read+move Gmail commands are permitted. Denied subcommand: $subcmd"
-            fi
-            ;;
-        calendar)
-            if ! in_list "$subcmd" "$CALENDAR_ALLOW"; then
-                deny "gws calendar '$subcmd' is not on the allow-list. Only read+create+update Calendar commands are permitted. Denied subcommand: $subcmd"
-            fi
-            ;;
-    esac
+    deny "Direct gws-cli calls are not allowed. Use the wrapper scripts in ~/bin/agent_scripts/ instead (gmail-list, gmail-search, gmail-read, gmail-labels, gmail-get-metadata, etc.). If no wrapper covers your need: state what you need, confirm no existing wrapper covers it, then ask the user to add a new wrapper script — do not call gws-cli directly."
 }
 
 # Split the command into segments on &&, ||, ;, and |.

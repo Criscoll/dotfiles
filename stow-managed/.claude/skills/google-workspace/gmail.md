@@ -1,19 +1,23 @@
 # Gmail — Allowed Command Surface
 
-All commands use `uvx gws-cli@1.3.0 gmail <subcommand> [flags]`.
-
-The hook allows only the subcommands listed here. Anything else is denied.
+All Gmail operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.3.0 gmail ...` directly.
 
 ## Reading
 
-For list, search, and read, always use the wrapper scripts rather than raw gws-cli. The wrappers strip the JSON security-warning wrapper (~2.7KB per call) and truncate long bodies, cutting token usage by an order of magnitude.
+For all reading operations, use the wrapper scripts. They strip the JSON security-warning wrapper (~2.7KB per call) and truncate long bodies, cutting token usage by an order of magnitude.
 
 ```bash
-# List inbox (default: recent 20) — via token-efficient wrapper
+# List inbox (default: recent 20)
 ~/bin/agent_scripts/gmail-list
 ~/bin/agent_scripts/gmail-list --max 50
 
-# Read a message — via token-efficient wrapper (truncates body to 2000 chars)
+# Note: gmail-list does NOT show a labels column — the Gmail list API returns no label data.
+# To see labels for a message, use gmail-get-metadata.
+
+# Get headers only (From, To, Date, Labels, Subject) — no body
+~/bin/agent_scripts/gmail-get-metadata <message-id>
+
+# Read a message — truncates body to 2000 chars
 ~/bin/agent_scripts/gmail-read <message-id>
 # Full body (no truncation)
 ~/bin/agent_scripts/gmail-read --full <message-id>
@@ -21,39 +25,35 @@ For list, search, and read, always use the wrapper scripts rather than raw gws-c
 # Never pipe with | head -N (no output is produced until the API call completes,
 # so head has nothing to truncate). Always use a 60-second timeout or higher.
 
-# Search — via token-efficient wrapper
+# Search
 ~/bin/agent_scripts/gmail-search "from:someone@example.com subject:invoice"
 ~/bin/agent_scripts/gmail-search "is:unread after:2024/01/01" --max 50
 
-# Labels — via token-efficient wrapper
+# Labels (list all labels/IDs)
 ~/bin/agent_scripts/gmail-labels
 ~/bin/agent_scripts/gmail-labels --all           # include system labels
 ~/bin/agent_scripts/gmail-labels --filter inbox  # filter by name substring
-
-# Get a single label by ID (raw gws-cli, no wrapper needed — single item)
-uvx gws-cli@1.3.0 gmail get-label <label-id>
-
-# Drafts (read-only)
-uvx gws-cli@1.3.0 gmail drafts
-uvx gws-cli@1.3.0 gmail get-draft <draft-id>
-
-# Threads
-uvx gws-cli@1.3.0 gmail threads
-uvx gws-cli@1.3.0 gmail get-thread <thread-id>
-
-# Attachments — use wrapper scripts (see Attachments section below)
-# ~/bin/agent_scripts/gmail-list-attachments <message-id>
-# ~/bin/agent_scripts/gmail-download-attachment <message-id> <attachment-id> <filename>
-
-# Settings (read-only)
-uvx gws-cli@1.3.0 gmail get-vacation
-uvx gws-cli@1.3.0 gmail get-signature
-uvx gws-cli@1.3.0 gmail filters
-uvx gws-cli@1.3.0 gmail get-filter <filter-id>
-
-# History
-uvx gws-cli@1.3.0 gmail history --start-history-id <id>
 ```
+
+**Operations with no wrapper yet** (get-label, drafts, get-draft, threads, get-thread,
+get-vacation, get-signature, filters, get-filter, history): if you need one of these,
+state what you need and ask the user to add a new wrapper script.
+
+**`get-message` is NOT a valid gws-cli subcommand — do not attempt it.**
+
+## gmail-get-metadata — output format
+
+```
+From:    sender@example.com
+To:      you@example.com
+Date:    Mon, 16 Jun 2026 14:23:01 +0000
+Labels:  INBOX, CATEGORY_UPDATES, MyLabel
+Subject: Your invoice is ready
+```
+
+Use this instead of `gmail-read` when you only need metadata (e.g. to check what labels
+a message has). It calls the same `gws-cli gmail read` API but skips body rendering,
+so it's just as slow (30–60 s) but produces far fewer tokens.
 
 ## Gmail search syntax
 
@@ -126,26 +126,9 @@ Note: `gmail-list` and `gmail-search` do **not** show attachment columns — the
 
 ## Moving / Organizing
 
-```bash
-# Apply labels to a message
-uvx gws-cli@1.3.0 gmail add-labels <message-id> INBOX STARRED
-
-# Remove labels (archive = remove INBOX label)
-uvx gws-cli@1.3.0 gmail remove-labels <message-id> INBOX
-
-# Modify labels on a thread
-uvx gws-cli@1.3.0 gmail modify-thread-labels <thread-id> --add LABEL_ID --remove INBOX
-
-# Batch label modification across multiple messages
-uvx gws-cli@1.3.0 gmail batch-modify --add LABEL_ID <msg-id1> <msg-id2>
-
-# Mark read / unread
-uvx gws-cli@1.3.0 gmail mark-read <message-id>
-uvx gws-cli@1.3.0 gmail mark-unread <message-id>
-
-# Create a label
-uvx gws-cli@1.3.0 gmail create-label "My Label"
-```
+Label operations (add-labels, remove-labels, mark-read, mark-unread, modify-thread-labels,
+batch-modify, create-label) have no wrappers yet. Ask the user to add wrapper scripts
+if you need to organize email — do not call gws-cli directly.
 
 ## Common label IDs
 
@@ -159,12 +142,3 @@ uvx gws-cli@1.3.0 gmail create-label "My Label"
 | Unread    | `UNREAD`   |
 
 Custom labels have IDs like `Label_12345` — use `~/bin/agent_scripts/gmail-labels` to list them.
-
-## Workflow: archive a message
-
-```bash
-# 1. Find the message
-~/bin/agent_scripts/gmail-search "subject:foo is:unread"
-# 2. Remove INBOX label (= archive)
-uvx gws-cli@1.3.0 gmail remove-labels <message-id> INBOX
-```

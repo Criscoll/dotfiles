@@ -1,33 +1,13 @@
 /**
- * GWS Guard — deny-by-default allow-list for gws-cli invocations.
+ * GWS Guard — deny-by-default guard for gws-cli invocations.
  *
- * Permits only read+move (Gmail) and read+create+update (Calendar) subcommands.
- * Fails closed: if a segment mentions a gws token but the (service, subcommand)
- * pair cannot be confidently extracted, the command is denied.
+ * ALL direct gws-cli calls are blocked. Use wrapper scripts in ~/bin/agent_scripts/ instead.
  * Non-gws commands pass through without intervention.
- *
- * Allow-lists are kept byte-for-byte parallel to gws-guard.sh.
  */
 
 import { withHookLogging } from "./lib/hook-logger";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-// Single source of truth — keep parallel to gws-guard.sh GMAIL_ALLOW
-const GMAIL_ALLOW = new Set([
-  "list", "read", "search", "labels", "get-label", "drafts", "get-draft",
-  "threads", "get-thread", "list-attachments", "download-attachment",
-  "get-vacation", "get-signature", "filters", "get-filter", "history",
-  "add-labels", "remove-labels", "modify-thread-labels", "batch-modify",
-  "mark-read", "mark-unread", "create-label",
-]);
-
-// Single source of truth — keep parallel to gws-guard.sh CALENDAR_ALLOW
-const CALENDAR_ALLOW = new Set([
-  "calendars", "list", "get", "instances", "attendees", "freebusy", "colors",
-  "list-acl", "get-reminders", "get-default-reminders", "create", "update",
-  "create-recurring", "quick-add", "add-attendees", "remove-attendees", "rsvp",
-  "set-reminders", "set-default-reminders", "move-event",
-]);
 
 function isGwsToken(word: string): boolean {
   return (
@@ -82,49 +62,12 @@ function checkSegment(seg: string): string | null {
 
   if (gwsPos === -1) return null; // no gws token found
 
-  // Find the service token (gmail / calendar), skipping flags
-  let service = "";
-  i = gwsPos + 1;
-  while (i < words.length) {
-    const w = words[i];
-    if (w === "--help" || w === "-h" || w === "help") return null; // help is safe
-    if (/^--[^=]+=/.test(w)) { i++; continue; } // --key=val
-    if (/^--/.test(w)) { i += 2; continue; }     // --flag value
-    if (/^-/.test(w)) { i++; continue; }          // -f
-    if (w === "gmail" || w === "calendar") { service = w; break; }
-    // Unexpected word before service — fail closed
-    return `gws command blocked: could not locate a known service (gmail/calendar) near "${w}"`;
+  // gws token found. Check for --help exemption only.
+  for (let j = gwsPos + 1; j < words.length; j++) {
+    if (words[j] === "--help" || words[j] === "-h" || words[j] === "help") return null;
   }
 
-  if (!service) return null; // bare gws/gws-cli with no service — safe (lists subcommands)
-
-  // Find the subcommand: first bare word after the service, skipping flags
-  let subcmd = "";
-  i++;
-  while (i < words.length) {
-    const w = words[i];
-    if (w === "help" || w === "--help" || w === "-h") return null; // help after service
-    if (/^--[^=]+=/.test(w)) { i++; continue; }
-    if (/^--/.test(w)) { i += 2; continue; }
-    if (/^-/.test(w)) { i++; continue; }
-    subcmd = w;
-    break;
-  }
-
-  if (!subcmd) return null; // no subcommand — bare `gws gmail` lists subcommands, safe
-
-  // Check (service, subcommand) against allow-list
-  if (service === "gmail") {
-    if (!GMAIL_ALLOW.has(subcmd)) {
-      return `gws gmail '${subcmd}' is not on the allow-list. Only read+move Gmail commands are permitted. Denied subcommand: ${subcmd}`;
-    }
-  } else if (service === "calendar") {
-    if (!CALENDAR_ALLOW.has(subcmd)) {
-      return `gws calendar '${subcmd}' is not on the allow-list. Only read+create+update Calendar commands are permitted. Denied subcommand: ${subcmd}`;
-    }
-  }
-
-  return null;
+  return "Direct gws-cli calls are not allowed. Use the wrapper scripts in ~/bin/agent_scripts/ instead (gmail-list, gmail-search, gmail-read, gmail-labels, gmail-get-metadata, etc.). If no wrapper covers your need: state what you need, confirm no existing wrapper covers it, then ask the user to add a new wrapper script — do not call gws-cli directly.";
 }
 
 export default function (pi: ExtensionAPI) {
