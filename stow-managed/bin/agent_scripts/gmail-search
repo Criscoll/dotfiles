@@ -46,8 +46,12 @@ def main():
         print(result.stdout, end="")
         sys.exit(1)
 
-    messages = outer.get("messages", {})
-    data_str = messages.get("data") if isinstance(messages, dict) else None
+    def extract(wrapped):
+        if isinstance(wrapped, dict) and "data" in wrapped:
+            return wrapped["data"]
+        return wrapped
+
+    data_str = extract(outer.get("messages"))
     if not data_str:
         print("No messages found.")
         return

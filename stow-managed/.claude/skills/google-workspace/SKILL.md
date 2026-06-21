@@ -90,6 +90,11 @@ redundant — `gws-guard.sh` already provides structural enforcement at the acti
 (destructive subcommands are blocked before they execute regardless of what the LLM
 decides), making probabilistic content scanning unnecessary.
 
+**JSON format note:** With `security_enabled: false`, gws-cli changes its output format —
+`messages` goes from `{"data": "[...]"}` (a dict with a "data" key) to `"[...]"` (a plain
+JSON string). The wrapper scripts handle both formats via an `extract()` helper; raw
+`gws-cli` consumers must do the same.
+
 Verify scopes were granted:
 ```bash
 uvx gws-cli@1.3.0 account info
