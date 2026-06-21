@@ -17,7 +17,14 @@ def main():
     extra = sys.argv[1:]
     result = subprocess.run(GWS + extra, capture_output=True, text=True)
     if result.returncode != 0:
-        eprint(result.stderr.strip())
+        msg = result.stderr.strip()
+        if result.stdout:
+            try:
+                err = json.loads(result.stdout)
+                msg = err.get("message", msg) or msg
+            except json.JSONDecodeError:
+                pass
+        eprint(msg)
         sys.exit(result.returncode)
 
     try:
