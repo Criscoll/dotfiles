@@ -62,7 +62,20 @@ Use the commit message format native to the repo if one is apparent from `git lo
 <scope>: <imperative short description>
 ```
 
-**One-liner vs. extended message:** default to a one-liner. Add a body only when the WHY is not obvious from the scope and description alone — e.g. a non-obvious constraint, a workaround for a specific bug, or a decision that would surprise a reader. If removing the body wouldn't confuse someone reading `git log`, don't write it.
+**Commit message structure:** default to a short body (1–3 sentences) for every commit. The body should summarise what was changed at a high level and why these files are grouped together as a logical unit. This is lighter than a hand-crafted commit message — skip trade-offs, alternatives considered, or issue references unless they're immediately relevant — but it provides far more context than a bare one-liner.
+
+A one-liner is acceptable only when the change is trivially obvious from the diff alone (e.g. a single typo fix, a one-word rename). When in doubt, add the body.
+
+Subject lines follow the conventions from the `commit-message` skill (see `stow-managed/.claude/skills/commit-message/SKILL.md`): imperative mood, ≤50 characters (72 hard cap), capitalised, no trailing period. Body wraps at 72 characters.
+
+Example:
+```
+fix(websearch): handle concurrent parallel cold-start races
+
+The SearXNG container name check had a race when two skill calls started at
+the same time. Added `|| true` to suppress the "already exists" error so
+one caller's `docker run -d` doesn't fail the other.
+```
 
 Never use `git add -A` or `git add .` — always stage specific files by name to avoid accidentally including unintended files.
 
