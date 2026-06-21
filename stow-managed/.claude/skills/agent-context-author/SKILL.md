@@ -4,7 +4,7 @@ description: >-
   Generate, audit, or restructure agent context files — CLAUDE.md, AGENTS.md,
   agent.md (pi), or any equivalent — for any repository or tool. Covers creation
   from scratch, improvement of existing files, and the split decision (when to break
-  a root file into subdirectory files or .claude/rules/). Auto-invoke BEFORE
+  a root file into subdirectory CLAUDE.md files or .claude/rules/). Auto-invoke BEFORE
   creating or editing any CLAUDE.md, AGENTS.md, agent.md, or equivalent agent
   instruction file, or when the user asks to review or improve an existing one.
   Trigger phrases: "create a CLAUDE.md", "write a CLAUDE.md", "generate CLAUDE.md",
@@ -76,7 +76,7 @@ are load-bearing.
 
 | File | Target | Action if over |
 |---|---|---|
-| Root CLAUDE.md | 60–250 lines | Split into `.claude/rules/` |
+| Root CLAUDE.md | 60–250 lines | Split into subdirectory CLAUDE.md files; use `.claude/rules/` for path-glob scoping (Claude Code only) |
 | Subdirectory CLAUDE.md | 30–100 lines | Trim to essentials |
 | `.claude/rules/*.md` | ≤ 200 per file | Split into more files |
 
@@ -107,7 +107,9 @@ When intent is ambiguous, ask one question to resolve it before proceeding.
    test runner, notable constraints.
 2. Draft the seven required sections. For each rule, write the reason inline.
 3. Apply the length budget. If the draft exceeds 250 lines, move lower-priority
-   sections to `.claude/rules/` before showing the user (see reference file).
+   sections to subdirectory CLAUDE.md files (preferred for cross-harness) or
+   `.claude/rules/` (Claude Code only, path-glob scoping) before showing the user
+   (see reference file).
 4. Apply the freshness test and exclusion list above.
 5. Show the draft. State what was included, what was excluded, and why.
 
@@ -128,8 +130,18 @@ When intent is ambiguous, ask one question to resolve it before proceeding.
 
 ## Workflow C — Split
 
-Split when the root file exceeds ~200 lines, different sections apply to distinct
-paths, or the user scrolls past irrelevant rules mid-session.
+Split when the root file exceeds ~200 lines or distinct sections apply to
+separate parts of the codebase.
+
+**Default: subdirectory CLAUDE.md files** — cross-harness compatible (Claude
+Code lazy-loads natively; pi loads via subdir-context extension). Place a
+CLAUDE.md in the relevant subdirectory; it loads only when the agent first
+touches a file there.
+
+**Use `.claude/rules/` instead** only when:
+- You need path-glob scoping (e.g. apply only to `**/*.test.ts`) — subdirectory
+  CLAUDE.md cannot do this
+- The project is Claude Code-only (no pi users)
 
 Load the reference file for mechanics:
 
@@ -137,7 +149,7 @@ Load the reference file for mechanics:
 cat "$CLAUDE_SKILL_DIR/references/split-and-imports.md"
 ```
 
-Show the proposed directory structure and get confirmation before moving anything.
+Show the proposed structure and get confirmation before moving anything.
 
 ---
 
@@ -162,5 +174,6 @@ pitfalls. Omit sections 5–6 (CONVENTIONS, COMMON TASKS) unless genuinely non-o
 
 ## Load Reference Files When Relevant
 
-- **references/split-and-imports.md** — load when: splitting into `.claude/rules/`,
-  adding path-scoped rules, setting up @imports, or handling multi-tool AGENTS.md
+- **references/split-and-imports.md** — load when: splitting into subdirectory
+  CLAUDE.md files or `.claude/rules/`, adding path-scoped rules, setting up
+  @imports, or handling multi-tool AGENTS.md
