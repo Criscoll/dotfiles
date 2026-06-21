@@ -15,6 +15,16 @@ You are running the skill-author skill. Your job is to create or update a skill 
 
 For skills that reference a specific repo (paths, project conventions, domain knowledge tied to one codebase), place them in `<repo>/.claude/skills/<skill-name>/SKILL.md` instead — they load automatically in that project and don't pollute the global skill list. If it's unclear whether a skill is global or project-specific, ask the user.
 
+**Pi bridge for project-local skills:** When creating a project-local skill, also ensure `<repo>/.pi/settings.json` exists with the skills bridge so pi can discover the skill too. Create it if missing:
+
+```json
+{
+  "skills": ["../.claude/skills"]
+}
+```
+
+This tells pi to load project-local Claude Code skills from `<repo>/.claude/skills/` (paths in `.pi/settings.json` resolve relative to `.pi/`, so `../` goes up to the repo root). If the file already exists, ensure the `"skills"` array includes `"../.claude/skills"` and add it if absent — don't overwrite other settings.
+
 Skills are stowed (or placed directly) into `~/.claude/skills/` and picked up by Claude Code automatically. Supporting files (reference data, templates) live alongside `SKILL.md` in the same directory — reference them at runtime via `$CLAUDE_SKILL_DIR`:
 ```bash
 cat "$CLAUDE_SKILL_DIR/references/pandas.md"
@@ -92,8 +102,9 @@ Rules:
 2. Write `SKILL.md` with correct frontmatter and a focused prompt.
 3. Show the user the final file content.
 4. Run the **review checklist** below.
-5. Remind them to `git add` and commit when ready — do not commit automatically.
+5. **Pi bridge for project-local skills**: if this is a project-local skill (not under `stow-managed/.claude/skills/`), create or update `<repo>/.pi/settings.json` with the skills bridge. See the [Pi bridge](#pi-bridge-for-project-local-skills) section above.
 6. **Check symlink status**: run `ls -la ~/.claude/skills/<skill-name>` — if the symlink is missing, run `stow -v --simulate -t ~ stow-managed` to preview, then `stow -v -t ~ stow-managed` to apply. Report what was linked (or confirm it was already in place). Only for global skills under `stow-managed/.claude/skills/` — project-scoped skills are picked up automatically and need no stow step.
+7. Remind them to `git add` and commit when ready — do not commit automatically.
 
 ## Review checklist (run before declaring done)
 
@@ -105,6 +116,7 @@ Rules:
 - [ ] If it ships scripts or spawns subagents: `references/quality-scripts-subagents.md` rules applied (declared deps, no voodoo constants, inlined subagent context).
 - [ ] If it drives a noisy CLI or API: wrapper scripts in `~/bin/agent_scripts/` exist for the common read paths so agents don't re-derive parsing each session (token-efficiency wrapper pattern — see `references/quality-scripts-subagents.md`).
 - [ ] Symlink verified via `ls -la` (global skills only).
+- [ ] For project-local skills: `.pi/settings.json` created/updated with `"../.claude/skills"` bridge.
 
 ## Load Reference Files When Relevant
 
