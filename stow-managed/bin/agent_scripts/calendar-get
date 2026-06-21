@@ -1,0 +1,110 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import json
+import subprocess
+import sys
+
+GWS = ["uvx", "gws-cli@1.3.0", "calendar", "get"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    args = sys.argv[1:]
+    full = False
+    limit = 2000
+    event_id = None
+    extra = []
+
+    i = 0
+    while i < len(args):
+        if args[i] == "--full":
+            full = True
+            i += 1
+        elif args[i] == "--limit" and i + 1 < len(args):
+            limit = int(args[i + 1])
+            i += 2
+        elif args[i] == "--calendar" and i + 1 < len(args):
+            extra += ["--calendar", args[i + 1]]
+            i += 2
+        else:
+            event_id = args[i]
+            i += 1
+
+    if not event_id:
+        eprint("Usage: calendar-get [--full] [--limit N] [--calendar <id>] <event-id>")
+        sys.exit(2)
+
+    result = subprocess.run(GWS + [event_id] + extra, capture_output=True, text=True)
+    if result.returncode != 0:
+        eprint(result.stderr.strip())
+        sys.exit(result.returncode)
+
+    try:
+        outer = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        eprint("Unexpected non-JSON output:")
+        print(result.stdout, end="")
+        sys.exit(1)
+
+    # gws-cli returns a flat JSON object with event fields
+    status = outer.get("status", "")
+    summary = outer.get("summary", "(no title)")
+    event_id_out = outer.get("event_id", event_id)
+    calendar_id = outer.get("calendar_id", "")
+    start_str = outer.get("start", "")
+    end_str = outer.get("end", "")
+    location = outer.get("location", "")
+    description = outer.get("description", "") or ""
+    html_link = outer.get("html_link", "")
+
+    # Parse attendees — gws-cli returns them as a JSON-stringified array
+    attendees = []
+    raw_attendees = outer.get("attendees", "[]")
+    if raw_attendees:
+        if isinstance(raw_attendees, str):
+            try:
+                attendees = json.loads(raw_attendees)
+            except json.JSONDecodeError:
+                attendees = []
+        else:
+            attendees = raw_attendees
+
+    print(f"Event ID:    {event_id_out}")
+    if calendar_id:
+        print(f"Calendar:    {calendar_id}")
+    print(f"Summary:     {summary}")
+    print(f"Start:       {start_str}")
+    print(f"End:         {end_str}")
+    if location:
+        print(f"Location:    {location}")
+    if html_link:
+        print(f"Link:        {html_link}")
+    if status:
+        print(f"Status:      {status}")
+
+    if description:
+        desc_clean = description.replace("\r", "")
+        if not full and len(desc_clean) > limit:
+            desc_clean = desc_clean[:limit].rstrip() + "\n[…truncated, use --full to show all]"
+        print("\nDescription:")
+        print(desc_clean)
+
+    if attendees:
+        print(f"\nAttendees ({len(attendees)}):")
+        for att in attendees:
+            email = att.get("email", "")
+            resp = att.get("responseStatus", "needsAction")
+            name = att.get("displayName", "")
+            name_str = f" ({name})" if name else ""
+            print(f"  {email}{name_str}  [{resp}]")
+
+
+if __name__ == "__main__":
+    main()

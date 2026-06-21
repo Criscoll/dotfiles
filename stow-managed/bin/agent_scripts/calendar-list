@@ -1,0 +1,78 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import json
+import subprocess
+import sys
+
+GWS = ["uvx", "gws-cli@1.3.0", "calendar", "list"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    extra = sys.argv[1:]
+    show_json = "--json" in extra
+
+    result = subprocess.run(GWS + extra, capture_output=True, text=True)
+    if result.returncode != 0:
+        eprint(result.stderr.strip())
+        sys.exit(result.returncode)
+
+    try:
+        outer = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        eprint("Unexpected non-JSON output:")
+        print(result.stdout, end="")
+        sys.exit(1)
+
+    # Parse events — gws-cli returns events as a JSON-stringified array
+    raw_events = outer.get("events")
+    if not raw_events:
+        print("No events found.")
+        return
+
+    if isinstance(raw_events, str):
+        try:
+            events = json.loads(raw_events)
+        except json.JSONDecodeError:
+            eprint("Failed to parse events data.")
+            sys.exit(1)
+    else:
+        events = raw_events
+
+    if not events:
+        print("No events found.")
+        return
+
+    if show_json:
+        print(json.dumps(events, indent=2))
+        return
+
+    for ev in events:
+        summary = ev.get("summary", "(no title)")
+        event_id = ev.get("id", "")
+        start_str = ev.get("start", "")
+        end_str = ev.get("end", "")
+        location = ev.get("location", "")
+
+        # Format time range
+        if "T" in start_str:
+            time_fmt = f"{start_str} -- {end_str}"
+        else:
+            time_fmt = start_str  # all-day, just show the date
+
+        parts = [time_fmt, summary]
+        if location:
+            parts.append(location)
+        parts.append(event_id)
+        print(" | ".join(parts))
+
+
+if __name__ == "__main__":
+    main()

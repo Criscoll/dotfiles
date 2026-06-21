@@ -1,120 +1,82 @@
 # Calendar — Allowed Command Surface
 
-All commands use `uvx gws-cli@1.3.0 calendar <subcommand> [flags]`.
+All calendar operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.3.0 calendar ...` directly.
 
-The hook allows only the subcommands listed here. Anything else is denied.
 Default calendar is the authenticated account's primary calendar.
 
 ## Reading
 
 ```bash
-# List calendars in the account
-uvx gws-cli@1.3.0 calendar calendars
+# List upcoming events (primary calendar, default: 10 most recent)
+~/bin/agent_scripts/calendar-list
+~/bin/agent_scripts/calendar-list --max 50
+~/bin/agent_scripts/calendar-list --calendar <calendar-id> --max 50
 
-# List upcoming events (primary calendar)
-uvx gws-cli@1.3.0 calendar list
-uvx gws-cli@1.3.0 calendar list --calendar <calendar-id> --max 50
+# Get a specific event — truncates description to 2000 chars
+~/bin/agent_scripts/calendar-get <event-id>
+# Full description (no truncation)
+~/bin/agent_scripts/calendar-get --full <event-id>
+# On a specific calendar
+~/bin/agent_scripts/calendar-get <event-id> --calendar <calendar-id>
 
-# Get a specific event
-uvx gws-cli@1.3.0 calendar get <event-id>
-uvx gws-cli@1.3.0 calendar get <event-id> --calendar <calendar-id>
+# Time-range listing
+~/bin/agent_scripts/calendar-list --from 2024-01-15T09:00:00 --to 2024-01-15T17:00:00
 
-# Recurring event instances
-uvx gws-cli@1.3.0 calendar instances <recurring-event-id>
-
-# Attendees of an event
-uvx gws-cli@1.3.0 calendar attendees <event-id>
-
-# Free/busy query
-uvx gws-cli@1.3.0 calendar freebusy --time-min 2024-01-15T09:00:00Z --time-max 2024-01-15T17:00:00Z
-
-# Colors available for events
-uvx gws-cli@1.3.0 calendar colors
-
-# ACL (read-only — list who has access)
-uvx gws-cli@1.3.0 calendar list-acl --calendar <calendar-id>
-
-# Reminders
-uvx gws-cli@1.3.0 calendar get-reminders <event-id>
-uvx gws-cli@1.3.0 calendar get-default-reminders
+# Free-text search
+~/bin/agent_scripts/calendar-list --query "team lunch"
 ```
+
+**Operations with no wrapper yet** (calendars list, instances, attendees, freebusy, colors, list-acl, get-reminders, get-default-reminders): if you need one of these, state what you need and confirm no existing wrapper covers it, then ask the user to add a new wrapper script.
 
 ## Creating events
 
 ```bash
-# Create a single event
-uvx gws-cli@1.3.0 calendar create \
-  --summary "Team sync" \
-  --start 2024-01-15T10:00:00 \
-  --end 2024-01-15T11:00:00
+# Create a single event (summary, start, end are positional)
+~/bin/agent_scripts/calendar-create "Team sync" 2024-01-15T10:00:00 2024-01-15T11:00:00
+
+# With timezone offset
+~/bin/agent_scripts/calendar-create "Team sync" 2024-01-15T10:00:00+01:00 2024-01-15T11:00:00+01:00
 
 # All-day event
-uvx gws-cli@1.3.0 calendar create \
-  --summary "Conference" \
-  --start 2024-01-15 \
-  --end 2024-01-16 \
-  --all-day
+~/bin/agent_scripts/calendar-create "Conference" 2024-01-15 2024-01-16 --all-day
 
 # With location and description
-uvx gws-cli@1.3.0 calendar create \
-  --summary "Lunch" \
-  --start 2024-01-15T12:00:00 \
-  --end 2024-01-15T13:00:00 \
+~/bin/agent_scripts/calendar-create "Lunch" 2024-01-15T12:00:00 2024-01-15T13:00:00 \
   --location "Restaurant XYZ" \
   --description "Monthly team lunch"
 
 # On a specific calendar
-uvx gws-cli@1.3.0 calendar create \
-  --calendar <calendar-id> \
-  --summary "Event" \
-  --start 2024-01-15T10:00:00 \
-  --end 2024-01-15T11:00:00
+~/bin/agent_scripts/calendar-create "Event" 2024-01-15T10:00:00 2024-01-15T11:00:00 \
+  --calendar <calendar-id>
 
-# Quick add (natural language)
-uvx gws-cli@1.3.0 calendar quick-add "Lunch with Alice tomorrow at noon"
+# With attendees (comma-separated emails)
+~/bin/agent_scripts/calendar-create "Meeting" 2024-01-15T10:00:00 2024-01-15T11:00:00 \
+  --attendees "alice@example.com,bob@example.com"
 
-# Recurring event
-uvx gws-cli@1.3.0 calendar create-recurring \
-  --summary "Weekly standup" \
-  --start 2024-01-15T09:00:00 \
-  --end 2024-01-15T09:30:00 \
-  --rrule "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
+# Quick add, recurring events: not yet wrapped (use raw gws-cli is blocked)
 ```
 
 ## Updating events
 
 ```bash
 # Update title, time, or other fields
-uvx gws-cli@1.3.0 calendar update <event-id> \
+~/bin/agent_scripts/calendar-update <event-id> \
   --summary "Updated title" \
   --start 2024-01-15T11:00:00 \
   --end 2024-01-15T12:00:00
 
-# Move event to a different calendar
-uvx gws-cli@1.3.0 calendar move-event <event-id> --destination <calendar-id>
+# Update description or location
+~/bin/agent_scripts/calendar-update <event-id> \
+  --description "New notes" \
+  --location "New place"
 
-# Add/remove attendees
-uvx gws-cli@1.3.0 calendar add-attendees <event-id> alice@example.com bob@example.com
-uvx gws-cli@1.3.0 calendar remove-attendees <event-id> alice@example.com
-
-# RSVP (accept/decline/tentative)
-uvx gws-cli@1.3.0 calendar rsvp <event-id> --status accepted
-uvx gws-cli@1.3.0 calendar rsvp <event-id> --status declined
-uvx gws-cli@1.3.0 calendar rsvp <event-id> --status tentative
-
-# Set reminders on an event
-uvx gws-cli@1.3.0 calendar set-reminders <event-id> --minutes 10 --minutes 30
-
-# Set default reminders for a calendar
-uvx gws-cli@1.3.0 calendar set-default-reminders --calendar <calendar-id> --minutes 15
+# Move event to a different calendar — NOT wrapped (use raw gws-cli is blocked)
 ```
 
 ## Notes
 
-- Always use `send_updates: "none"` equivalent if a flag exists — avoid sending
-  notifications to attendees for agent-initiated operations unless the user requests it.
-- For calendar-triage style annotation, use `update` to append ✅ or ❌ to the
-  event `summary` field only. Never modify recurring event masters; always work
-  with the specific instance's event ID.
-- Time formats: ISO 8601 (`2024-01-15T10:00:00`) for timed events;
-  `2024-01-15` (date-only) for all-day events.
+- **Never send notifications to attendees** unless the user explicitly requests it. There's no `send_updates` flag exposed by the wrapper — avoid operations that notify attendees unless the user asks for it.
+- For calendar-triage style annotation, use `update` to append ✅ or ❌ to the event summary only. Never modify recurring event masters; always work with the specific instance's event ID.
+- Time formats: ISO 8601 (`2024-01-15T10:00:00`) for timed events; `2024-01-15` (date-only) for all-day events. Timed events should include timezone offset (e.g. `+01:00`) to avoid "Missing time zone definition" errors.
+- `calendar-list` output format: `start_datetime | summary | location | event_id` (one line per event). All-day events show just the date; timed events show `start -- end`.
+- `calendar-list --json` prints raw JSON for all events (useful for programmatic access).

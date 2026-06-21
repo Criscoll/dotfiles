@@ -2,7 +2,8 @@
 name: google-workspace
 description: >-
   Read Gmail (list/search/read/label-move), download and view email attachments
-  (PDFs, etc.), and manage Calendar (list/get/create/update) via gws-cli.
+  (PDFs, etc.), and manage Calendar (list/get/create/update) via gws-cli wrapper
+  scripts in `~/bin/agent_scripts/`.
   Enforced at the harness layer by a deny-by-default allow-list hook —
   send, delete, and destructive Calendar operations are structurally blocked and
   cannot be invoked regardless of how the command is phrased.
@@ -30,9 +31,10 @@ Before doing any real work, verify gws-cli is authenticated:
 If this errors with an auth/token error, point the user to the per-machine setup
 section below rather than continuing.
 
-For list, search, and read operations, always use the wrapper scripts in `~/bin/agent_scripts/`
-rather than raw `gws-cli`. The wrappers unwrap the outer JSON envelope and truncate
-long bodies, cutting token usage by an order of magnitude.
+For Gmail list, search, and read operations and Calendar list, get, create, and update
+operations, always use the wrapper scripts in `~/bin/agent_scripts/` rather than raw
+`gws-cli`. The wrappers unwrap the outer JSON envelope, truncate long bodies, and format
+output as compact one-line-per-item listings, cutting token usage by an order of magnitude.
 
 ## Load the reference files
 
