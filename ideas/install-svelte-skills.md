@@ -1,7 +1,19 @@
 # Install Svelte Skills & Update skill-author for Language Skills
 
 Date: 2026-06-21
-Status: Researched, not actioned
+Status: Implemented 2026-06-21
+
+## Outcome
+
+- **Phase 1:** Created `stow-managed/.claude/skills/svelte-knowledge/` as a single unified skill (SKILL.md + 3 reference files: sveltekit-structure.md, sveltekit-data-flow.md, svelte-deployment.md). Content synthesised from spences10/skills source. Stowed and live.
+- **Phase 2:** Added `stow-managed/.claude/skills/skill-author/references/language-skills.md` and wired it into skill-author/SKILL.md's load table.
+- **Phase 3:** Added negative triggers and `<!-- last-verified -->` to python-knowledge and typescript-knowledge SKILL.md files.
+
+Open questions answered by implementation:
+- MCP (`@sveltejs/mcp`): not installed — SKILL.md-only approach is sufficient
+- Vendored vs `gh skill install`: vendored (content synthesised into our own files)
+- `svelte-code-writer`: skipped — wraps MCP CLI which we don't use
+- Fork strategy: de facto fork (copied content into repo, no upstream sync)
 
 ---
 

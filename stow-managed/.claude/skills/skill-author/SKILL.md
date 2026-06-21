@@ -113,3 +113,4 @@ Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do
 - **references/description-and-triggers.md** — load when: writing or revising a skill's `description` or trigger phrases, choosing auto-invoke vs explicit-only, or testing trigger accuracy.
 - **references/instruction-design.md** — load when: writing the SKILL.md body, deciding how rigid an instruction should be, setting degrees of freedom, or naming the skill.
 - **references/quality-scripts-subagents.md** — load when: the skill ships scripts, spawns subagents, or needs workflow checklists, validator feedback loops, or output-format templates.
+- **references/language-skills.md** — load when: the skill being authored covers a programming language, framework, library, or technology stack (e.g. Python, TypeScript, Svelte, React, Go).

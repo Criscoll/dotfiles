@@ -1,7 +1,14 @@
 ---
 name: typescript-knowledge
 description: >-
-  Apply TypeScript best practices when reading, writing, debugging, or understanding TypeScript/JavaScript code — covers strict mode, type system, build toolchain, and linting. Auto-invoke BEFORE writing or running any .ts, .tsx, .js, .jsx, or .mjs file, or executing any eslint, tsc, npx, or node command. Trigger phrases: "typescript", "ts", "tsx", "javascript", "js", "eslint", "tsc", "typeerror", "type guard", "interface", "type alias", "npx", "node", "strict mode", "flat config", "any type", "unknown type".
+  Apply TypeScript best practices when reading, writing, debugging, or understanding
+  TypeScript/JavaScript code — covers strict mode, type system, build toolchain, and
+  linting. Auto-invoke BEFORE writing or running any .ts, .tsx, .js, .jsx, or .mjs
+  file, or executing any eslint, tsc, npx, or node command. Not for Python, Go, Rust,
+  or other non-JS/TS languages. Not for .svelte files (use svelte-knowledge instead).
+  Trigger phrases: "typescript", "ts", "tsx", "javascript", "js", "eslint", "tsc",
+  "typeerror", "type guard", "interface", "type alias", "npx", "node", "strict mode",
+  "flat config", "any type", "unknown type".
 disable-model-invocation: false
 ---
 
@@ -39,3 +46,5 @@ Never use: global `npm install -g`, `ts-node`, `tsx` (runtime), or `npm link`.
 Read these files using the Bash tool (`cat "$CLAUDE_SKILL_DIR/<file>"`). Do not guess their contents — read them.
 
 - **references/eslint.md** — load when: ESLint is mentioned, flat config is being set up or modified, lint rules are being discussed, or lint errors appear.
+
+<!-- last-verified: 2026-06-21 typescript-5.x eslint-10.5.0 -->

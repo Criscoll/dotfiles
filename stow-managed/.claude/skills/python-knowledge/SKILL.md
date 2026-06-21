@@ -1,7 +1,13 @@
 ---
 name: python-knowledge
 description: >-
-  Apply Python best practices when reading, writing, debugging, or understanding Python code — covers build toolchain, package management, and environment setup. Auto-invoke BEFORE writing or running any Python code, reading/editing any .py or .pyi file, or executing any uv/pip/poetry/virtualenv command. Trigger phrases: "python", "pip install", "virtualenv", "pyproject.toml", "requirements.txt", ".py file", ".pyi", "uv", "uv run", "poetry", "fastapi", "django", "flask", "pydantic", "pytest", "ruff", "mypy".
+  Apply Python best practices when reading, writing, debugging, or understanding Python
+  code — covers build toolchain, package management, and environment setup. Auto-invoke
+  BEFORE writing or running any Python code, reading/editing any .py or .pyi file, or
+  executing any uv/pip/poetry/virtualenv command. Not for TypeScript, JavaScript, Go,
+  or other non-Python languages. Trigger phrases: "python", "pip install", "virtualenv",
+  "pyproject.toml", "requirements.txt", ".py file", ".pyi", "uv", "uv run", "poetry",
+  "fastapi", "django", "flask", "pydantic", "pytest", "ruff", "mypy".
 disable-model-invocation: false
 ---
 
@@ -35,3 +41,5 @@ Read these files using the Bash tool (`cat "$CLAUDE_SKILL_DIR/<file>"`). Do not 
 - **references/toolchain.md** — load when: starting a new project, migrating from `requirements.txt`/`setup.py`, setting up dev tools, or any question about uv beyond the table above.
 - **references/typing.md** — load when: mypy is mentioned, type annotations or type hints are being added or debugged, strict mode errors appear, `.pyi` stub files are involved, or the user asks about type checking setup.
 - **references/pandas.md** — load when: pandas, DataFrame, Series, `read_csv`, `iterrows`, or CSV files from external sources are involved.
+
+<!-- last-verified: 2026-06-21 python-3.12 uv-0.x ruff-0.x mypy-1.x -->
