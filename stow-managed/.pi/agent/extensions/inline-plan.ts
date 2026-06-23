@@ -11,27 +11,32 @@
  *                    agent explores and emits a markdown plan wrapped in
  *                    <!--PLAN--> ... <!--/PLAN--> markers, re-emitting the full plan
  *                    on every refinement.
+ *   /plan load       Open the plan browser to resume a saved plan (or start a new one).
  *   (watch in chat)  The agent's thinking + tool calls stream normally.
- *   Alt+P            Toggle the plan overlay: read the rendered plan, visually select
- *                    lines, leave comments, then:
+ *   Alt+P            (not in plan mode) Open the plan browser: pick a saved plan to
+ *                    resume, or choose "✦ New plan" to start fresh. Type to filter.
+ *   Alt+P            (in plan mode) Toggle the plan overlay: read the rendered plan,
+ *                    visually select lines, leave comments, then:
  *                      v  visual select lines
  *                      c  comment on cursor/selection
  *                      s  submit comments  -> modal to review then send; agent revises
  *                      a  accept           -> model select + fresh-session handoff
  *                      /  section search + jump
  *                      y  copy plan path to editor
+ *                      q  exit plan mode immediately (abort, full tools restored)
  *                      esc close           -> back to chat to watch the agent work
  *   Freeform refine  Anything typed in the normal chat input while in plan mode is
  *                    treated as a refinement request by the agent.
  *   /plan            (no args, while enabled) disable plan mode, restore full tools.
+ *                    Status bar always shows "/plan to exit" as a reminder.
  *
  * Modeled on pi's official plan-mode example pattern. Single file, zero npm deps.
  */
 
 import { withHookLogging } from "./lib/hook-logger";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { Type } from "typebox";
 
@@ -93,6 +98,11 @@ Output rules (critical — only once you are ready to emit a plan):
 - Write ## Approach before ## Constraints: explain the solution strategy and key
   trade-offs in 3–5 sentences, not a step list. For ## Constraints, include only
   facts that constrain or explain a decision — each bullet must state why it is listed.
+- Include a ## Agent Tooling section after ## Constraints listing every skill,
+  pi extension, or tool the implementing agent should explicitly invoke. Omit
+  this section only if there are genuinely none. Each entry: one line, name +
+  why (e.g. "typescript-knowledge skill — executor must know TS patterns for
+  this codebase").
 - Use this markdown structure for the plan argument:
   # Plan: <short title>
   ## Goal
@@ -104,6 +114,10 @@ Output rules (critical — only once you are ready to emit a plan):
   ## Constraints
   <only facts that constrain or explain a decision — each bullet states why it is
    listed. Omit background noise.>
+  ## Agent Tooling
+  - <skill/extension/tool name> — why the executor needs it
+  - ...
+  (Omit section only if no skills or extensions are relevant.)
   ## Steps
   - [ ] **<step title>** — what to do, why it serves the goal, and any non-obvious
      risk. Files: path/a.ts, path/b.ts
@@ -140,7 +154,13 @@ Output rules (critical — only once you are ready to emit a plan):
    working. The executor runs in a fresh session with no memory of this chat — if
    you don't list it here, it won't know to update it.)
 - You may write a short explanation in chat, but the authoritative plan must be
-  submitted via write_plan.`;
+  submitted via write_plan.
+
+CRITICAL — WRITE REQUESTS:
+- If the user asks you to write, create, edit, or save any file, respond IMMEDIATELY with:
+  "I'm in plan mode (read-only tools only) — I can't write files right now. Type /plan to exit plan mode and I'll do that immediately."
+- Do NOT loop on bash investigation, do NOT call write_plan for non-plan tasks, and do NOT draft a plan about writing the file.
+- If the user wants to stop planning and take direct action, they can type /plan to exit plan mode at any time.`;
 }
 
 // ─── Plan Extraction ──────────────────────────────────────────────────────────
@@ -214,12 +234,52 @@ function savePlanFile(plan: string, goal: string): string {
 	return file;
 }
 
+// ─── Plan Library Metadata ────────────────────────────────────────────────────
+
+interface PlanMeta {
+	file: string;
+	title: string;
+	goalSummary: string;
+	date: Date;
+}
+
+function extractPlanTitle(md: string): string | null {
+	const m = md.match(/^#\s+Plan:\s*(.+)$/m);
+	return m ? m[1].trim() : null;
+}
+
+function extractPlanGoal(md: string): string | null {
+	const m = md.match(/^##\s+Goal\s*\n+([\s\S]+?)(?=\n##|\n#|$)/m);
+	if (!m) return null;
+	return m[1].replace(/\n+/g, " ").trim().slice(0, 100);
+}
+
+function listSavedPlans(): PlanMeta[] {
+	const dir = join(homedir(), ".pi", "plans");
+	let files: string[];
+	try { files = readdirSync(dir).filter(f => f.endsWith(".md")); }
+	catch { return []; }
+	const results: PlanMeta[] = [];
+	for (const f of files) {
+		try {
+			const full = join(dir, f);
+			const md = readFileSync(full, "utf8");
+			const stat = statSync(full);
+			const title = extractPlanTitle(md) ??
+				(basename(f, ".md").replace(/^[\dT:-]+[-]?/, "").replace(/-/g, " ").trim() || f);
+			results.push({ file: full, title, goalSummary: extractPlanGoal(md) ?? "", date: stat.mtime });
+		} catch { /* skip corrupt files */ }
+	}
+	return results.sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
 type OverlayResult =
 	| { action: "submit"; comments: Comment[] }
 	| { action: "accept"; model: string | null; newSession: boolean }
-	| { action: "close" };
+	| { action: "close" }
+	| { action: "abort" };
 
 function viewportRows(tui: { rows?: number; height?: number }): number {
 	const h =
@@ -578,7 +638,7 @@ function openPlanOverlay(ctx: any, plan: string, goal: string, planFile: string)
 
 					const scrollInfo =
 						mdLines.length > maxVisible ? `  ${scrollOffset + 1}-${end}/${mdLines.length}` : "";
-					const hintLine = theme.fg("dim", `j/k cursor · [/] section · / search · v select · c annotate · d del · y copy · s submit · a accept · esc close${scrollInfo}`);
+					const hintLine = theme.fg("dim", `j/k cursor · [/] section · / search · v select · c annotate · d del · y copy · s submit · a accept · q exit · esc close${scrollInfo}`);
 
 					if (mode === "edit") {
 						out.push(rule());
@@ -633,6 +693,11 @@ function openPlanOverlay(ctx: any, plan: string, goal: string, planFile: string)
 					}
 
 					// view mode
+					if (data === "q" || data === "Q") {
+						done({ action: "abort" });
+						return;
+					}
+
 					if (matchesKey(data, Key.escape) || matchesKey(data, "alt+p")) {
 						countBuffer = "";
 						pendingG = false;
@@ -804,22 +869,48 @@ function openPlanOverlay(ctx: any, plan: string, goal: string, planFile: string)
 
 // ─── Model Selection ──────────────────────────────────────────────────────────
 
+function getPiEnabledPatterns(): string[] {
+	try {
+		const raw = readFileSync(join(homedir(), ".pi", "agent", "settings.json"), "utf8");
+		const parsed = JSON.parse(raw) as Record<string, unknown>;
+		return Array.isArray(parsed.enabledModels) ? parsed.enabledModels as string[] : [];
+	} catch { return []; }
+}
+
+function isEnabledModel(label: string, patterns: string[]): boolean {
+	const id = label.includes("/") ? label.slice(label.indexOf("/") + 1) : label;
+	return patterns.some(p => {
+		if (!p.includes("*")) return label === p || id === p;
+		const re = new RegExp("^" + p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
+		return re.test(label) || re.test(id);
+	});
+}
+
 async function openModelSelector(ctx: any): Promise<string | null> {
 	const available: any[] = await ctx.modelRegistry.getAvailable();
 	const currentLabel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : null;
+	const patterns = getPiEnabledPatterns();
 
-	const items: SelectItem[] = available.map((m: any) => {
+	const toItem = (m: any): SelectItem => {
 		const label = `${m.provider}/${m.id}`;
 		return {
 			value: label,
 			label: m.label ?? m.id,
 			description: m.provider + (label === currentLabel ? "  · current" : ""),
 		};
-	});
+	};
+
+	const scopedItems: SelectItem[] = available
+		.filter(m => isEnabledModel(`${m.provider}/${m.id}`, patterns))
+		.map(toItem);
+	const allItems: SelectItem[] = available.map(toItem);
+	const hasScopedModels = patterns.length > 0 && scopedItems.length > 0;
 
 	return ctx.ui.custom<string | null>(
 		(tui: any, theme: any, _kb: any, done: (r: string | null) => void) => {
+			let showAll = !hasScopedModels;
 			let searchQuery = "";
+			let items: SelectItem[] = showAll ? allItems : scopedItems;
 			let filteredItems = [...items];
 			let searching = false;
 
@@ -864,16 +955,23 @@ async function openModelSelector(ctx: any): Promise<string | null> {
 						: searchQuery
 							? theme.fg("accent", `/${searchQuery}`) + theme.fg("dim", "  · / to edit")
 							: theme.fg("dim", "/ to search");
+					const modeLabel = hasScopedModels
+						? theme.fg("dim", showAll ? " (all)" : " (scoped)")
+						: "";
 					out.push(row(
-						theme.fg("accent", theme.bold("Select model:")) +
-						theme.fg("muted", "  ") + searchDisplay,
+						theme.fg("accent", theme.bold("Select model")) +
+						modeLabel + theme.fg("muted", ":  ") + searchDisplay,
 					));
 					out.push(border(`├${"─".repeat(w - 2)}┤`));
 					for (const l of selectList.render(inner)) out.push(row(l));
 					out.push(border(`├${"─".repeat(w - 2)}┤`));
 					const hint = searching
 						? theme.fg("dim", "type to filter · backspace clear · enter/esc done")
-						: theme.fg("dim", "j/k navigate · l/enter select · / search · esc cancel");
+						: hasScopedModels
+							? theme.fg("dim", showAll
+								? "j/k · l select · / search · tab scoped · esc cancel"
+								: "j/k · l select · / search · tab all · esc cancel")
+							: theme.fg("dim", "j/k navigate · l/enter select · / search · esc cancel");
 					out.push(row(hint));
 					out.push(border(`└${"─".repeat(w - 2)}┘`));
 					return out;
@@ -882,6 +980,16 @@ async function openModelSelector(ctx: any): Promise<string | null> {
 				invalidate() {},
 
 				handleInput(data: string) {
+					if (data === "\t" && hasScopedModels) {
+						showAll = !showAll;
+						items = showAll ? allItems : scopedItems;
+						searchQuery = "";
+						searching = false;
+						filteredItems = [...items];
+						selectList = buildList();
+						tui.requestRender();
+						return;
+					}
 					if (searching) {
 						if (matchesKey(data, Key.escape) || data === "\r") {
 							searching = false;
@@ -963,6 +1071,162 @@ async function openExecutionMenu(ctx: any, modelLabel: string): Promise<Executio
 	);
 }
 
+// ─── Plan Browser ─────────────────────────────────────────────────────────────
+
+type PlanBrowserResult = { action: "load"; meta: PlanMeta } | { action: "new" } | null;
+
+function openPlanBrowser(ctx: any): Promise<PlanBrowserResult> {
+	return ctx.ui.custom<PlanBrowserResult>(
+		(tui: any, theme: any, _kb: any, done: (r: PlanBrowserResult) => void) => {
+			let plans = listSavedPlans();
+			let filteredPlans = [...plans];
+			let selectedIdx = 0;
+			let searchQuery = "";
+			let searching = false;
+			let confirmDeleteFile: string | null = null;
+
+			const NEW_VALUE = "__new__";
+
+			const buildItems = (): SelectItem[] => [
+				{ value: NEW_VALUE, label: "✦ New plan", description: "Start a fresh planning session" },
+				...filteredPlans.map(p => ({
+					value: p.file,
+					label: p.title,
+					description: p.date.toLocaleDateString() + (p.goalSummary ? " · " + p.goalSummary : ""),
+				})),
+			];
+
+			const buildList = () => {
+				const items = buildItems();
+				const sl = new SelectList(items, Math.min(Math.max(items.length, 1), 15), {
+					selectedPrefix: (t: string) => theme.fg("accent", t),
+					selectedText: (t: string) => theme.fg("accent", t),
+					description: (t: string) => theme.fg("muted", t),
+					scrollInfo: (t: string) => theme.fg("dim", t),
+					noMatch: (t: string) => theme.fg("warning", t),
+				});
+				sl.onSelect = (item: SelectItem) => {
+					if (item.value === NEW_VALUE) { done({ action: "new" }); return; }
+					const meta = plans.find(p => p.file === item.value);
+					if (meta) done({ action: "load", meta });
+				};
+				sl.onCancel = () => done(null);
+				return sl;
+			};
+
+			let selectList = buildList();
+
+			const updateFilter = (q: string) => {
+				searchQuery = q;
+				const ql = q.toLowerCase();
+				filteredPlans = q
+					? plans.filter(p => p.title.toLowerCase().includes(ql) || p.goalSummary.toLowerCase().includes(ql))
+					: [...plans];
+				selectedIdx = 0;
+				selectList = buildList();
+			};
+
+			return {
+				render(w: number): string[] {
+					const border = (s: string) => theme.fg("border", s);
+					const inner = w - 4;
+					const out: string[] = [];
+					const row = (content: string) => {
+						const clipped = truncateToWidth(content, inner);
+						const pad = Math.max(0, inner - visibleWidth(clipped));
+						return border("│ ") + clipped + " ".repeat(pad) + border(" │");
+					};
+
+					out.push(border(`┌${"─".repeat(w - 2)}┐`));
+					const searchDisplay = searching
+						? theme.fg("accent", `/${searchQuery}`) + theme.fg("dim", "█")
+						: searchQuery
+							? theme.fg("accent", `/${searchQuery}`) + theme.fg("dim", "  · / to edit")
+							: "";
+					out.push(row(
+						theme.fg("accent", theme.bold("Plans")) +
+						theme.fg("muted", `  ${plans.length} saved`) +
+						(searchDisplay ? theme.fg("dim", "  ") + searchDisplay : ""),
+					));
+					out.push(border(`├${"─".repeat(w - 2)}┤`));
+
+					if (confirmDeleteFile) {
+						const name = truncateToWidth(basename(confirmDeleteFile, ".md"), inner - 22);
+						out.push(row(theme.fg("warning", `Delete "${name}"? `) + theme.fg("dim", "y confirm · n cancel")));
+					} else {
+						for (const l of selectList.render(inner)) out.push(row(l));
+						out.push(border(`├${"─".repeat(w - 2)}┤`));
+						const hint = searching
+							? theme.fg("dim", "type to filter · backspace clear · enter/esc done")
+							: theme.fg("dim", "j/k navigate · l/enter open · d delete · / filter · esc cancel");
+						out.push(row(hint));
+					}
+
+					out.push(border(`└${"─".repeat(w - 2)}┘`));
+					return out;
+				},
+
+				invalidate() {},
+
+				handleInput(data: string) {
+					if (confirmDeleteFile) {
+						if (data === "y" || data === "Y") {
+							const fileToDelete = confirmDeleteFile;
+							try { unlinkSync(fileToDelete); } catch { /* ignore */ }
+							plans = listSavedPlans();
+							confirmDeleteFile = null;
+							updateFilter(searchQuery);
+						} else {
+							confirmDeleteFile = null;
+						}
+						tui.requestRender();
+						return;
+					}
+
+					if (searching) {
+						if (matchesKey(data, Key.escape) || data === "\r") {
+							searching = false;
+						} else if (data === "\x7f" || data === "\x08") {
+							updateFilter(searchQuery.slice(0, -1));
+						} else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+							updateFilter(searchQuery + data);
+						}
+						tui.requestRender();
+						return;
+					}
+
+					if (data === "/") { searching = true; tui.requestRender(); return; }
+
+					if (data === "d" || data === "D") {
+						const items = buildItems();
+						const item = items[selectedIdx];
+						if (item && item.value !== NEW_VALUE) {
+							confirmDeleteFile = item.value;
+							tui.requestRender();
+						}
+						return;
+					}
+
+					if (data === "j" || matchesKey(data, Key.down)) {
+						const total = 1 + filteredPlans.length;
+						selectedIdx = Math.min(selectedIdx + 1, total - 1);
+						selectList.handleInput("\x1b[B");
+					} else if (data === "k" || matchesKey(data, Key.up)) {
+						selectedIdx = Math.max(selectedIdx - 1, 0);
+						selectList.handleInput("\x1b[A");
+					} else if (data === "l") {
+						selectList.handleInput("\r");
+					} else {
+						selectList.handleInput(data);
+					}
+					tui.requestRender();
+				},
+			};
+		},
+		{ overlay: true, overlayOptions: { width: "65%", maxHeight: "80%", anchor: "center", minWidth: 52 } },
+	);
+}
+
 // ─── Extension Entry Point ────────────────────────────────────────────────────
 
 export default function inlinePlanExtension(pi: ExtensionAPI): void {
@@ -982,7 +1246,7 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 
 	function updateStatus(ctx: ExtensionContext): void {
 		if (planModeEnabled) {
-			const hint = latestPlan ? "Alt+P to review" : currentGoal ? "exploring…" : "describe your goal";
+			const hint = latestPlan ? "Alt+P to review · /plan to exit" : currentGoal ? "exploring… · /plan to exit" : "describe your goal";
 			const goal = currentGoal.length > 50 ? currentGoal.slice(0, 47) + "…" : currentGoal || "(no goal yet)";
 			ctx.ui.setStatus("inline-plan", ctx.ui.theme.fg("warning", `⏸ plan · ${hint}`));
 			ctx.ui.setWidget("inline-plan", [
@@ -1044,7 +1308,6 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 			// Store the handoff and pre-fill the editor with /plan execute so the user can
 			// submit it from a command handler that has access to ctx.newSession.
 			pendingHandoff = { plan, model: selectedModel, goal: currentGoal };
-			handoffPending = true;
 			disablePlanMode(ctx);
 			ctx.ui.setEditorText("/plan execute");
 			ctx.ui.notify("Press Enter to open plan in a new session.", "info");
@@ -1085,8 +1348,10 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 			persistState();
 			onPlanRefreshCallback?.();
 			onPlanRefreshCallback = null;
+			const planTitle = extractPlanTitle(params.plan);
+			const titleHint = planTitle ? ` ("${planTitle}")` : "";
 			return {
-				content: [{ type: "text", text: `Plan saved → ${latestPlanFile.replace(homedir(), "~")}. Use Alt+P to review.` }],
+				content: [{ type: "text", text: `Plan saved → ${latestPlanFile.replace(homedir(), "~")}${titleHint}. Use Alt+P to review.` }],
 				details: { plan: params.plan, file: latestPlanFile },
 			};
 		},
@@ -1149,6 +1414,19 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 				return;
 			}
 
+			// /plan load — open the plan browser to resume a saved plan
+			if (goal === "load") {
+				const result = await openPlanBrowser(ctx);
+				if (!result) return;
+				if (result.action === "new") {
+					enablePlanMode(ctx, "");
+					ctx.ui.notify("Plan mode on. Describe what you want to build.", "info");
+				} else {
+					await resumePlan(ctx, result.meta);
+				}
+				return;
+			}
+
 			if (planModeEnabled && !goal) {
 				disablePlanMode(ctx);
 				ctx.ui.notify("Plan mode off — full tool access restored.", "info");
@@ -1165,13 +1443,57 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 		},
 	});
 
+	// ── Resume a saved plan ───────────────────────────────────────────────────────
+	async function resumePlan(ctx: any, meta: PlanMeta): Promise<void> {
+		let md: string;
+		try { md = readFileSync(meta.file, "utf8"); }
+		catch {
+			ctx.ui.notify(`Could not read plan file: ${meta.file}`, "error");
+			return;
+		}
+		const goal = extractPlanGoal(md) ?? "";
+		enablePlanMode(ctx, goal);
+		// enablePlanMode clears latestPlan/latestPlanFile — restore them immediately
+		latestPlan = md;
+		latestPlanFile = meta.file;
+		planInMotion = true;
+		updateStatus(ctx);
+		const result = await openPlanOverlay(ctx, latestPlan, goal, latestPlanFile);
+		if (!result || result.action === "close") return;
+		if (result.action === "submit") {
+			const refine = composeRefine(result.comments);
+			const planUpdated = new Promise<void>(resolve => { onPlanRefreshCallback = resolve; });
+			try { pi.sendUserMessage(refine); }
+			catch { pi.sendUserMessage(refine, { deliverAs: "followUp" }); }
+			await ctx.ui.custom<void>((tui: any, theme: any, _kb: any, done: (r: void) => void) => {
+				const loader = new BorderedLoader(tui, theme, "Reviewing comments…");
+				loader.onAbort = () => done(undefined);
+				planUpdated.then(() => done(undefined));
+				return loader;
+			});
+			ctx.ui.notify("Plan updated — Alt+P to review.", "info");
+		} else if (result.action === "accept") {
+			await acceptAndHandoff(ctx, latestPlan, result.model, result.newSession);
+		} else if (result.action === "abort") {
+			disablePlanMode(ctx);
+			ctx.ui.notify("Plan mode off — full tool access restored.", "info");
+		}
+	}
+
 	// ── Toggle the plan review overlay ───────────────────────────────────────────
 	pi.registerShortcut(TOGGLE_SHORTCUT, {
 		description: "Toggle plan mode / review the current plan (inline-plan) — Alt+P",
 		handler: async (ctx) => {
 			if (!planModeEnabled) {
-				enablePlanMode(ctx, "");
-				ctx.ui.notify("Plan mode on. Describe what you want to build (Alt+P again to exit).", "info");
+				if (ctx.mode !== "tui") return;
+				const result = await openPlanBrowser(ctx);
+				if (!result) return;
+				if (result.action === "new") {
+					enablePlanMode(ctx, "");
+					ctx.ui.notify("Plan mode on. Describe what you want to build.", "info");
+				} else {
+					await resumePlan(ctx, result.meta);
+				}
 				return;
 			}
 			if (!planInMotion) {
@@ -1207,6 +1529,9 @@ export default function inlinePlanExtension(pi: ExtensionAPI): void {
 				ctx.ui.notify("Plan updated — Alt+P to review.", "info");
 			} else if (result.action === "accept") {
 				await acceptAndHandoff(ctx, latestPlan, result.model, result.newSession);
+			} else if (result.action === "abort") {
+				disablePlanMode(ctx);
+				ctx.ui.notify("Plan mode off — full tool access restored.", "info");
 			}
 		},
 	});
