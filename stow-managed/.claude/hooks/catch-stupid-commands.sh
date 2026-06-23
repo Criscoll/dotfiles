@@ -30,6 +30,18 @@ command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/nul
 # Set required_tool to '' when the alternative needs no new tool.
 # Rules are skipped (command allowed through) when required_tool is absent on $PATH.
 rules=(
+    # rg -r used as recursive flag — actually means --replace; rg recurses by default
+    'rg[[:space:]]+-[a-zA-Z]*r[a-zA-Z]*([[:space:]]|$)'
+    "rg -r means --replace, not recursive. rg recurses directories by default — no flag needed. Use: rg <pattern> [path]"
+    ''
+    ''
+
+    # rg with \| alternation (grep BRE syntax) — rg uses | for alternation, not \|
+    'rg[[:space:]]+.*\\\|'
+    "rg uses | for alternation (not \\|). Use: rg 'pat1|pat2' [path]  or  rg -e 'pat1' -e 'pat2' [path]"
+    ''
+    ''
+
     # grep -r / -R / combined flags (e.g. -rn, -rl, -ri): ripgrep is faster and respects .gitignore
     'grep[[:space:]]+-[a-zA-Z]*[rR][a-zA-Z]*([[:space:]]|$)'
     "grep -r is slow and does not respect .gitignore. Use rg instead: rg <pattern> [path]"

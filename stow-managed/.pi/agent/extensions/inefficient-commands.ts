@@ -30,6 +30,22 @@ interface Rule {
 }
 
 const rules: Rule[] = [
+  // rg -r used as recursive flag — actually means --replace in rg; rg is recursive by default
+  {
+    pattern: /\brg\s+-[a-zA-Z]*r[a-zA-Z]*(?:\s|$)/,
+    suggestion: "rg -r means --replace, not recursive. rg recurses directories by default — no flag needed. Use: rg <pattern> [path]",
+    exception: null,
+    requiredTool: null,
+  },
+
+  // rg with \\| alternation (grep BRE syntax) — rg uses plain | for alternation
+  {
+    pattern: /\brg\b.*\\\|/,
+    suggestion: "rg uses | for alternation (not \\|). Use: rg 'pat1|pat2' [path]  or  rg -e 'pat1' -e 'pat2' [path]",
+    exception: null,
+    requiredTool: null,
+  },
+
   // grep -r / -R / combined flags (e.g. -rn, -rl, -ri): ripgrep is faster and respects .gitignore
   {
     pattern: /grep\s+-[a-zA-Z]*[rR][a-zA-Z]*(?:\s|$)/,
@@ -117,6 +133,10 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName !== "bash") return;
 
     const command = event.input.command as string;
+
+    // Skip commands already processed by rtk — re-checking them produces false positives
+    // (e.g. "rtk grep -r" would match the grep-r rule even though it's already optimised).
+    if (command.startsWith("rtk ")) return;
     const { matched, suggestion } = checkCommand(command);
     if (!matched) return;
 

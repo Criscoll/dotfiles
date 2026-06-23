@@ -76,6 +76,24 @@ claude mcp add --transport sse --scope user playwright http://localhost:8931/sse
 
 `fd` and similar tools respect `.gitignore` by default. If a file the user references cannot be found, check whether it is gitignored before concluding it doesn't exist. Use `fd --no-ignore` or check `.gitignore` directly to diagnose.
 
+## Commit Hashes in Prompts
+
+When a commit hash appears anywhere in the user's prompt (inline, in pasted terminal output, or quoted), run `git show <hash>` immediately to inspect the actual diff before answering any question about it. Don't explore the codebase generically when the most direct evidence is the commit itself.
+
+## Search Tool Environment
+
+**rtk rewrites search commands for token efficiency.** Both Claude Code and pi run an `rtk hook` layer that silently rewrites commands before they execute:
+- `rg` → `rtk grep`  (uses ripgrep internally, but `-l` falls back to system grep — fails on dirs)
+- `git status` → `rtk git status`, `ls` → `rtk ls`, etc.
+
+**How to spot rtk influence in errors:** If you see `/usr/bin/grep: <path>: Is a directory` from an `rg -l` invocation, rtk's `-l` delegation to system grep is the cause — use `rg <pattern> <path>` (without `-l`) for directory searches.
+
+**Correct rg usage** (applies in both harnesses):
+- Recursive by default — never use `-r` (that means `--replace`)
+- Alternation: `rg 'foo|bar' path/` not `rg 'foo\|bar' path/`
+- File-type filter: `--type ts` not `--include '*.ts'`
+- Multiple patterns: `-e 'pat1' -e 'pat2'` or `'pat1|pat2'`
+
 ## What Not to Do
 
 - Don't add features, refactors, or improvements beyond what was asked
@@ -83,3 +101,4 @@ claude mcp add --transport sse --scope user playwright http://localhost:8931/sse
 - Don't create helpers or abstractions for one-time operations
 - Don't handle error cases that can't happen; trust internal guarantees
 - Don't commit without being explicitly asked
+- Don't write auto-memories. Memories are opaque and don't transfer to other agent harnesses (pi, etc.). Put durable guidance in CLAUDE.md instead.

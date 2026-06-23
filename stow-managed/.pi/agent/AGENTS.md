@@ -48,6 +48,20 @@ Run one test, watch it pass, then move to the next. Don't batch untested changes
 - Use `file:line` references when pointing to code
 - Prefer editing existing files over creating new ones
 
+## Search Tool Environment
+
+**rtk rewrites search commands for token efficiency.** Both Claude Code and pi run an `rtk hook` layer that silently rewrites commands before they execute:
+- `rg` → `rtk grep`  (uses ripgrep internally, but `-l` falls back to system grep — fails on dirs)
+- `git status` → `rtk git status`, `ls` → `rtk ls`, etc.
+
+**How to spot rtk influence in errors:** If you see `/usr/bin/grep: <path>: Is a directory` from an `rg -l` invocation, rtk's `-l` delegation to system grep is the cause — use `rg <pattern> <path>` (without `-l`) for directory searches.
+
+**Correct rg usage** (applies in both harnesses):
+- Recursive by default — never use `-r` (that means `--replace`)
+- Alternation: `rg 'foo|bar' path/` not `rg 'foo\|bar' path/`
+- File-type filter: `--type ts` not `--include '*.ts'`
+- Multiple patterns: `-e 'pat1' -e 'pat2'` or `'pat1|pat2'`
+
 ## What Not to Do
 
 - Don't add features, refactors, or improvements beyond what was asked
