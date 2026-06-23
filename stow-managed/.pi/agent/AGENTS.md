@@ -62,6 +62,17 @@ Run one test, watch it pass, then move to the next. Don't batch untested changes
 - File-type filter: `--type ts` not `--include '*.ts'`
 - Multiple patterns: `-e 'pat1' -e 'pat2'` or `'pat1|pat2'`
 
+## OpenRouter PII Redactions
+
+When using OpenRouter as the provider, a PII guardrail runs on every message and silently replaces values that match certain patterns with placeholders. Currently enabled:
+
+| Pattern | Placeholder |
+|---|---|
+| Credit card numbers | `[CREDIT_CARD]` |
+| Social security numbers | `[SSN]` |
+
+Other redaction types (email, phone, etc.) are available in OpenRouter but are **not enabled** on this account.
+
 ## What Not to Do
 
 - Don't add features, refactors, or improvements beyond what was asked

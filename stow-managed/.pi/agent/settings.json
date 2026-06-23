@@ -6,7 +6,7 @@
   "lastChangelogVersion": "0.79.1",
   "hideThinkingBlock": true,
   "defaultProvider": "openrouter",
-  "defaultModel": "qwen/qwen3.6-27b",
+  "defaultModel": "deepseek/deepseek-v4-pro",
   "defaultThinkingLevel": "high",
   "enabledModels": [
     "openrouter/deepseek/deepseek-v4-flash",
