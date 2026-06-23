@@ -1,8 +1,14 @@
 #!/bin/sh
 set -e
 
-MODEL="openrouter/moonshotai/kimi-k2.6"
+MODEL="openrouter/qwen/qwen3-vl-8b-instruct"
+MODEL_EXPLICIT=false
 THINKING="off"
+
+# File size thresholds for auto-escalation (bytes)
+WARN_THRESHOLD=153600      # 150KB — warn about possible slowness
+SWITCH_THRESHOLD=184320    # 180KB — auto-switch to stronger model
+FALLBACK_MODEL="openrouter/qwen/qwen3-vl-32b-instruct"
 
 usage() {
   echo "Usage: vision-read [--model <pattern>] [--thinking <level>] <image-file> [context...]"
@@ -14,7 +20,7 @@ usage() {
   echo "  ~/bin/agent_scripts/vision-read \"\$SCREENSHOT\" 'inspecting for visual bugs'"
   echo ""
   echo "Options:"
-  echo "  --model <pattern>     Pi model pattern (default: openrouter/moonshotai/kimi-k2.6)"
+  echo "  --model <pattern>     Pi model pattern (default: openrouter/qwen/qwen3-vl-8b-instruct)"
   echo "  --thinking <level>    Thinking level: off, minimal, low, medium, high, xhigh (default: off)"
   echo ""
   echo "Context shapes what the model looks for:"
@@ -35,7 +41,7 @@ usage() {
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --model)    MODEL="$2"; shift 2 ;;
+    --model)    MODEL="$2"; MODEL_EXPLICIT=true; shift 2 ;;
     --thinking) THINKING="$2"; shift 2 ;;
     --help|-h)  usage ;;
     --)         shift; break ;;
@@ -57,6 +63,16 @@ CONTEXT="$*"
 if [ ! -f "$IMAGE" ]; then
   echo "Error: file not found: $IMAGE" >&2
   exit 1
+fi
+
+# Check file size and escalate if needed
+FILE_SIZE=$(wc -c < "$IMAGE")
+
+if [ "$FILE_SIZE" -ge "$SWITCH_THRESHOLD" ] && [ "$MODEL_EXPLICIT" = "false" ]; then
+  echo "vision-read: Image is $(echo "scale=1; $FILE_SIZE / 1024" | bc)KB — auto-switching to $FALLBACK_MODEL" >&2
+  MODEL="$FALLBACK_MODEL"
+elif [ "$FILE_SIZE" -ge "$WARN_THRESHOLD" ]; then
+  echo "vision-read: Image is $(echo "scale=1; $FILE_SIZE / 1024" | bc)KB — may be slow with $MODEL; use --model for a stronger model if it times out" >&2
 fi
 
 if [ -z "$CONTEXT" ]; then
