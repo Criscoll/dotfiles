@@ -73,6 +73,38 @@ Default calendar is the authenticated account's primary calendar.
 # Move event to a different calendar — NOT wrapped (use raw gws-cli is blocked)
 ```
 
+## Batch updating events (use for 5+ events)
+
+Single `calendar-update` calls take ~5–6 s each (uvx startup + API). For bulk triage or carry-forward work, use the batch wrapper instead — it runs all updates concurrently and completes 70 events in ~40 s instead of ~400 s.
+
+```bash
+# Write a JSON file of updates first, then run the batch wrapper
+cat > /tmp/calendar-updates.json << 'EOF'
+[
+  {"id": "event-id-1", "summary": "- Reflection text"},
+  {"id": "event-id-2", "summary": "Task ❌"},
+  {"id": "event-id-3", "summary": "Carried forward task", "start": "2026-06-28", "end": "2026-06-29"}
+]
+EOF
+
+~/bin/agent_scripts/calendar-batch-update /tmp/calendar-updates.json
+
+# With a custom concurrency limit (default: 10)
+~/bin/agent_scripts/calendar-batch-update /tmp/calendar-updates.json --concurrency 5
+```
+
+**Supported fields per update object:**
+- `id` — (required) event ID
+- `summary` — new title
+- `start` — new start (ISO 8601, date or datetime)
+- `end` — new end (ISO 8601, date or datetime)
+- `description` — new description
+- `location` — new location
+
+Only include fields that need to change; omitted fields are left as-is.
+
+**Rule:** Use `calendar-batch-update` whenever you have 5 or more updates to make. Use `calendar-update` for 1–4 individual updates where ad-hoc is cleaner.
+
 ## Notes
 
 - **Never send notifications to attendees** unless the user explicitly requests it. There's no `send_updates` flag exposed by the wrapper — avoid operations that notify attendees unless the user asks for it.

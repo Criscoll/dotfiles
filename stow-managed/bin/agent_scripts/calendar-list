@@ -57,6 +57,8 @@ def main():
                 val = _qualify_date(val, is_from)
             converted.append(f"{prefix}={val}")
             i += 1
+        elif arg == "--json":
+            i += 1  # wrapper-only flag — strip before forwarding to gws-cli
         else:
             converted.append(arg)
             i += 1
