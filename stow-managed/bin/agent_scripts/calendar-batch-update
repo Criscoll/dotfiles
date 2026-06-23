@@ -8,28 +8,32 @@
 calendar-batch-update: Apply multiple calendar updates concurrently.
 
 Usage:
-  calendar-batch-update <updates.json> [--concurrency N]
+  calendar-batch-update <updates.json> [--concurrency N] [--calendar <id>]
   calendar-batch-update --help
 
 Input: path to a JSON file containing an array of update objects.
 Each object must have "id"; all other fields are optional:
 
   [
-    {"id": "event-id-1", "summary": "New title", "start": "2026-06-28", "end": "2026-06-29"},
-    {"id": "event-id-2", "summary": "- Reflection text"},
+    {"id": "event-id-1", "summary": "New title", "start": "2026-06-28"},
+    {"id": "event-id-2", "calendar": "alt-calendar-id", "summary": "- Note"},
     {"id": "event-id-3", "start": "2026-06-28T10:00:00+10:00", "end": "2026-06-28T11:00:00+10:00"}
   ]
 
 Supported per-update fields:
   id          (required) event id
+  calendar    calendar id (overrides --calendar for this event)
   summary     new title
   start       new start datetime (ISO 8601)
   end         new end datetime (ISO 8601)
   description new description
   location    new location
 
-Runs up to --concurrency (default 10) updates in parallel.
-Prints one line per event as it completes; exits non-zero if any fail.
+Options:
+  --calendar <id>  Default calendar for all events (overridable per event)
+  --concurrency N  Parallelism limit (default 10)
+
+Runs updates in parallel. Prints one line per event; exits non-zero if any fail.
 """
 
 import asyncio
@@ -53,12 +57,24 @@ def eprint(*args: object, **kwargs: object) -> None:
     print(*args, file=sys.stderr, **kwargs)
 
 
-async def update_one(semaphore: asyncio.Semaphore, update: dict[str, str]) -> dict[str, object]:
+def _truncate_id(eid: str, max_len: int = 30) -> str:
+    """Truncate long event IDs for concise output."""
+    if len(eid) <= max_len:
+        return eid
+    return eid[:12] + "..." + eid[-4:]
+
+
+async def update_one(semaphore: asyncio.Semaphore, update: dict[str, str], default_cal: str | None) -> dict[str, object]:
     event_id: str = update["id"]
     cmd = GWS + [event_id]
     for field, flag in FIELD_FLAGS.items():
         if field in update:
             cmd += [flag, update[field]]
+
+    # Per-event calendar overrides batch default
+    cal = update.get("calendar") or default_cal
+    if cal:
+        cmd += ["--calendar", cal]
 
     async with semaphore:
         proc = await asyncio.create_subprocess_exec(
@@ -101,10 +117,14 @@ async def main() -> None:
 
     concurrency = DEFAULT_CONCURRENCY
     path_arg: str | None = None
+    default_cal: str | None = None
     i = 0
     while i < len(args):
         if args[i] in ("--concurrency", "-n") and i + 1 < len(args):
             concurrency = int(args[i + 1])
+            i += 2
+        elif args[i] == "--calendar" and i + 1 < len(args):
+            default_cal = args[i + 1]
             i += 2
         else:
             path_arg = args[i]
@@ -128,19 +148,30 @@ async def main() -> None:
     eprint(f"Processing {total} updates (concurrency={concurrency})...")
 
     semaphore = asyncio.Semaphore(concurrency)
-    tasks = [update_one(semaphore, u) for u in updates]
+    tasks = [update_one(semaphore, u, default_cal) for u in updates]
     results: list[dict[str, object]] = await asyncio.gather(*tasks)
 
     ok = 0
     fail = 0
     for r in results:
+        tid = _truncate_id(r["id"])
+        summary = r.get("summary", "") or "(no summary change)"
         if r["ok"]:
             ok += 1
-            summary = r.get("summary", "") or "(no summary change)"
-            print(f"✓ {r['id']}  {summary}")
+            print(f"✓ {tid}  {summary}")
         else:
             fail += 1
-            print(f"✗ {r['id']}  ERROR: {r['error']}")
+            print(f"✗ {tid}  {summary}  [{r['error']}]")
+
+    if fail:
+        # Detect common failure patterns
+        errors = [r.get("error", "") for r in results if not r["ok"]]
+        not_found = sum(1 for e in errors if "Not Found" in e)
+        bad_req = sum(1 for e in errors if "Bad Request" in e)
+        if not_found > fail // 2:
+            eprint("| Hint: most failures are 'Not Found' — events may be on a non-primary calendar. Set --calendar <id> or add 'calendar' field per event in the JSON.")
+        elif bad_req > fail // 2:
+            eprint("| Hint: most failures are 'Bad Request' — check event IDs and field values.")
 
     eprint(f"\nDone: {ok}/{total} succeeded" + (f", {fail} failed" if fail else ""))
 

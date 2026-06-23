@@ -1,0 +1,84 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import json
+import subprocess
+import sys
+
+GWS = ["uvx", "gws-cli@1.3.0", "calendar", "calendars"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    extra = sys.argv[1:]
+    show_json = "--json" in extra
+
+    if any(a in extra for a in ("-h", "--help")):
+        result = subprocess.run(GWS + ["--help"], capture_output=True, text=True)
+        print(result.stdout, end="")
+        print(result.stderr, file=sys.stderr, end="")
+        sys.exit(result.returncode)
+
+    result = subprocess.run(GWS, capture_output=True, text=True)
+    if result.returncode != 0:
+        msg = result.stderr.strip()
+        if result.stdout:
+            try:
+                err = json.loads(result.stdout)
+                msg = err.get("message", msg) or msg
+            except json.JSONDecodeError:
+                pass
+        eprint(msg)
+        sys.exit(result.returncode)
+
+    try:
+        outer = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        eprint("Unexpected non-JSON output:")
+        print(result.stdout, end="")
+        sys.exit(1)
+
+    if isinstance(outer, dict) and outer.get("status") == "error":
+        eprint(outer.get("message", "Unknown error"))
+        sys.exit(1)
+
+    # Unwrap: gws-cli may return the array directly or nested under a key
+    if isinstance(outer, list):
+        calendars = outer
+    elif isinstance(outer, dict):
+        raw = outer.get("calendars", outer)
+        if isinstance(raw, str):
+            try:
+                calendars = json.loads(raw)
+            except json.JSONDecodeError:
+                eprint("Failed to parse calendars data.")
+                sys.exit(1)
+        elif isinstance(raw, list):
+            calendars = raw
+        else:
+            eprint("Unexpected calendars format.")
+            sys.exit(1)
+    else:
+        eprint("Unexpected response format.")
+        sys.exit(1)
+
+    if show_json:
+        print(json.dumps(calendars, indent=2))
+        return
+
+    for cal in calendars:
+        name = cal.get("summary", "(unnamed)")
+        cal_id = cal.get("id", "")
+        primary = cal.get("primary", False)
+        suffix = " (primary)" if primary else ""
+        print(f"{name} | {cal_id}{suffix}")
+
+
+if __name__ == "__main__":
+    main()

@@ -7,6 +7,12 @@ Default calendar is the authenticated account's primary calendar.
 ## Reading
 
 ```bash
+# List all accessible calendars (names + IDs)
+~/bin/agent_scripts/calendar-calendars
+~/bin/agent_scripts/calendar-calendars --json
+```
+
+```bash
 # List upcoming events (primary calendar, default: 10 most recent)
 ~/bin/agent_scripts/calendar-list
 ~/bin/agent_scripts/calendar-list --max 50
@@ -26,7 +32,7 @@ Default calendar is the authenticated account's primary calendar.
 ~/bin/agent_scripts/calendar-list --query "team lunch"
 ```
 
-**Operations with no wrapper yet** (calendars list, instances, attendees, freebusy, colors, list-acl, get-reminders, get-default-reminders): if you need one of these, state what you need and confirm no existing wrapper covers it, then ask the user to add a new wrapper script.
+**Operations with no wrapper yet** (instances, attendees, freebusy, colors, list-acl, get-reminders, get-default-reminders): if you need one of these, state what you need and confirm no existing wrapper covers it, then ask the user to add a new wrapper script.
 
 ## Creating events
 
@@ -89,19 +95,32 @@ EOF
 
 ~/bin/agent_scripts/calendar-batch-update /tmp/calendar-updates.json
 
+# All events on the same non-primary calendar
+~/bin/agent_scripts/calendar-batch-update /tmp/calendar-updates.json \
+  --calendar "8ea572bf0778ac8c77c8417ee697bc7b94f70e1d7763984dfe64e4e5fddf02fe@group.calendar.google.com"
+
 # With a custom concurrency limit (default: 10)
 ~/bin/agent_scripts/calendar-batch-update /tmp/calendar-updates.json --concurrency 5
 ```
 
 **Supported fields per update object:**
 - `id` — (required) event ID
+- `calendar` — (optional) calendar ID; overrides `--calendar` for this event
 - `summary` — new title
 - `start` — new start (ISO 8601, date or datetime)
 - `end` — new end (ISO 8601, date or datetime)
 - `description` — new description
 - `location` — new location
 
-Only include fields that need to change; omitted fields are left as-is.
+Only include fields that need to change; omitted fields are left as-is. Events in different calendars can be batched together by setting `calendar` per event:
+
+```json
+[
+  {"id": "event-in-primary", "summary": "Updated ✅"},
+  {"id": "event-in-chores", "calendar": "<chores-cal-id>", "summary": "Updated ✅"},
+  {"id": "event-in-exercise", "calendar": "<exercise-cal-id>", "summary": "Updated ✅"}
+]
+```
 
 **Rule:** Use `calendar-batch-update` whenever you have 5 or more updates to make. Use `calendar-update` for 1–4 individual updates where ad-hoc is cleaner.
 

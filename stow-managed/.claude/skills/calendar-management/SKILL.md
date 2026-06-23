@@ -109,6 +109,29 @@ Missed (date-bound):  "Book dental appointment ❌"  (update summary, leave date
 Carried forward:      "Book dental appointment"     (move date only, no symbol change)
 ```
 
+## Multi-calendar awareness
+
+**This account has multiple calendars, not just Primary.** Triage covers all of the following — for each one, run the same `calendar-list --from ... --to ... --calendar <id>` pass you'd do for the primary:
+
+| Calendar | ID |
+|---|---|
+| 00. Personal Calendar (primary) | `cristiand2021@gmail.com` |
+| 01. Important Events | `8ea572bf0778ac8c77c8417ee697bc7b94f70e1d7763984dfe64e4e5fddf02fe@group.calendar.google.com` |
+| 02. Chores | `family13688561606332080761@group.calendar.google.com` |
+| 03. Capture / Reminders | `a6560fd6074976a9364691677a204c5c14ce4ad3a94b766e8a6175955b3bd162@group.calendar.google.com` |
+| 04. Exercise | `7d2ad28a9792ca5bb5b6beb17fdd3c0494742f55f23a7cc9b938598c3649df31@group.calendar.google.com` |
+| 05. Goals | `d7e8d2283058b1cf4501917e8a924a8d623fbcc595f5e7f1abc80cd88d823997@group.calendar.google.com` |
+| 06. Time Tracker | `2d2d09f71b92dcdb2004d2b51f846ba560d4dfdad5b115b40c416ae96a09c8c0@group.calendar.google.com` |
+| Holidays and Travel | `7a434e3ead1496b607442447dd7d39fe4b697d55e24955c7137981755aa8816a@group.calendar.google.com` |
+| Ideal Week | `eaed83e2a9692f2774cff6bec93f43e6b1b7833394ce0f7b1abceb5486f57aee@group.calendar.google.com` |
+| Holidays in Australia | `en.australian#holiday@group.v.calendar.google.com` |
+
+**Not in triage scope** (skip these entirely):
+- `mimitran1305@gmail.com` — Mimi's personal calendar, shared with this account
+- `CliMi` — joint calendar, not for solo triage
+
+The `--calendar <id>` flag is accepted by `calendar-list`, `calendar-get`, `calendar-create`, and `calendar-update`.
+
 ## Relationship to other skills
 
 This skill works alongside the **google-workspace** skill for calendar I/O operations. The google-workspace skill covers *how* to use the wrapper scripts (`calendar-list`, `calendar-update`, `calendar-create`); this skill covers *what* to write when using them (conventions for summaries, dates, and task states). When doing calendar work, load this skill for the conventions and the google-workspace skill for the command surface.

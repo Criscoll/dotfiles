@@ -14,6 +14,18 @@ If auth errors, stop and tell the user.
 
 ---
 
+## List available calendars
+
+```bash
+# Enumerate all calendars and their IDs (run this before referencing any secondary calendar)
+~/bin/agent_scripts/calendar-calendars
+~/bin/agent_scripts/calendar-calendars --json
+```
+
+`calendar-list`, `calendar-get`, `calendar-create`, and `calendar-update` all accept `--calendar <id>` to target a non-primary calendar.
+
+---
+
 ## Base commands
 
 ```bash
