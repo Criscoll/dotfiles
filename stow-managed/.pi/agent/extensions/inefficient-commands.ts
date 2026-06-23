@@ -21,6 +21,19 @@ const scriptPath = resolveHome("~/bin/agent_scripts/check-inefficient-command.sh
 
 export default function (pi: ExtensionAPI) {
   pi.on("tool_call", withHookLogging("inefficient-commands", "tool_call", async (event, ctx) => {
+    if (event.toolName === "grep") {
+      return {
+        block: true,
+        reason: "grep is slow and does not respect .gitignore. Use rg instead via bash: rg <pattern> [path]",
+      };
+    }
+    if (event.toolName === "find") {
+      return {
+        block: true,
+        reason: "find is slow. Use fd instead via bash: fd <pattern> [path]",
+      };
+    }
+
     if (event.toolName !== "bash") return;
 
     const command = event.input.command as string;
