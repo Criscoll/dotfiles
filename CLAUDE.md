@@ -116,83 +116,7 @@ Example `~/.claude/settings.local.json`:
 }
 ```
 
-## Binary & Application Installation
-
-Third-party apps and binaries that are installed per-machine (AppImages, tarballs, compiled binaries) follow a consistent two-part pattern:
-
-- **`~/opt/`** — the actual binary or app directory lives here. Never tracked in this repo. Each machine installs what it needs.
-- **`stow-managed/bin/`** — a thin wrapper script per binary, tracked in this repo. `~/bin/` is a stow-managed symlink to this directory and is in `$PATH` via `.zshrc`.
-
-Example wrapper (`stow-managed/bin/nvim`):
-```sh
-#!/bin/sh
-exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
-```
-
-**Current wrappers and their expected binary paths:**
-
-| Wrapper | Expected binary |
-|---|---|
-| `nvim` | `~/opt/nvim` |
-| `hx` | `~/opt/helix/hx` |
-| `go` | `~/opt/go/bin/go` |
-| `gofmt` | `~/opt/go/bin/gofmt` |
-| `alacritty` | `~/opt/alacritty` |
-| `pi` | `~/opt/pi/pi` |
-| `rtk` | `~/opt/rtk` |
-
-**Important for agents:** The paths above are conventions, not guarantees. If a wrapper-backed command fails on a specific machine, verify the binary actually exists at the expected location before assuming the wrapper is wrong:
-```bash
-ls ~/opt/nvim-linux-x86_64.appimage    # does the binary exist?
-~/bin/nvim --version      # does the wrapper resolve correctly?
-```
-
-If the binary is installed somewhere else on a particular machine, update that machine's `~/.zshrc.local` with a direct PATH entry rather than changing the shared wrapper.
-
-**Do not add per-app PATH entries to `.zshrc`.** Machine-specific PATH additions (custom builds, CUDA, LM Studio, etc.) belong in `~/.zshrc.local`.
-
-### Agent-Only Scripts (`stow-managed/bin/agent_scripts/`)
-
-Scripts intended for use **only by an agent** (not by the user directly in a shell) live in `stow-managed/bin/agent_scripts/`. Because `~/bin/` is a directory symlink to `stow-managed/bin/`, this subdirectory is automatically accessible as `~/bin/agent_scripts/` without re-running stow — no `$PATH` entry needed or wanted.
-
-Agent skill READMEs reference these scripts by full path (`~/bin/agent_scripts/script-name`) to keep them out of the user's tab-complete while still being unambiguously callable by an agent.
-
-The distinction from `stow-managed/bin/` (user-facing wrappers): scripts in `agent_scripts/` may require agent context to be useful, block on user interaction mid-run, or produce output formatted for agent consumption rather than human reading.
-
-## Script Dependency Management
-
-Unlike system tools (documented in the wrappers table above), scripts tracked in this repo may have their own library dependencies. The rule: **dependencies must be declared in the repo itself**, not assumed to be globally installed. This lets a new machine onboard by reading the repo rather than tribal knowledge.
-
-### Python scripts — PEP 723 inline metadata (`uv run`)
-
-Python scripts use [PEP 723](https://peps.python.org/pep-0723/) inline dependency blocks and run via `uv`:
-
-```python
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.10"
-# dependencies = ["playwright==1.60.0"]
-# ///
-```
-
-`uv` reads this block, installs dependencies into an isolated cache (`~/.cache/uv`), and runs the script — no venv, no global pip install, no manual setup step needed on a new machine. First run is slightly slower; subsequent runs use the cache.
-
-**Always pin to an exact version (`==`) — never use `>=`, `~=`, or unpinned ranges.** Loose bounds allow a future compromised release to be pulled in silently on a new machine or after a cache eviction. When intentionally upgrading a dependency, update the pinned version in every script that uses it and test before committing.
-
-**Prerequisite:** `uv` itself must be installed. Install it once per machine:
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-All Python scripts under `stow-managed/bin/` and `stow-managed/bin/agent_scripts/` should follow this pattern. Exception: `webcrawl` predates this convention and uses a global `crawl4ai` install — leave it as-is unless revisiting it specifically.
-
-### Node scripts — `package.json` in the script directory
-
-Node scripts that live in a dedicated directory should declare dependencies via a `package.json` in that directory. Commit both `package.json` (with exact versions in the `dependencies` field — no `^` or `~` prefixes) and `package-lock.json`. The agent (or user) runs `npm ci` (not `npm install`) on a new machine — `ci` enforces the lockfile exactly rather than resolving fresh.
-
-For one-off Node scripts without a natural home directory, inline dependencies are not yet standardised in Node — prefer adding a `package.json` alongside the script or converting it to Python.
-
-### What Must Never Be Committed
+## What Must Never Be Committed
 
 This repo is version-controlled and potentially synced across machines — **never commit sensitive or runtime-specific data.** Before staging any changes, verify that no file contains:
 
@@ -217,32 +141,9 @@ If in doubt, use a `.local` file (untracked) rather than the shared config. The 
 - **Agentic harnesses**: Claude Code (primary), pi (`~/opt/pi/`)
 - **Container runtime**: Docker (`/usr/bin/docker`) — used by on-demand agent skills (e.g. web-search/SearXNG)
 
-### Docker Pattern for Agent Skills
+## Docker-Backed Agent Skills
 
-Agent skills that need a backing service use Docker with host networking.
-Cold-start is ~10–15s on first call (image cached locally after first pull).
-
-**Why `--network=host`**: Docker bridge NAT (`-p 127.0.0.1::8080`) requires the host to route packets to the container's bridge IP (`172.17.x.x`). VPNs and some firewall setups install iptables rules that block this routing. Host networking sidesteps the bridge entirely — the container process binds directly to the host loopback.
-
-#### Persistent container pattern (preferred)
-
-For skills called concurrently or frequently. The container stays running between
-calls — no teardown on exit.
-
-1. Check if container is already running (`docker inspect --format='{{.State.Running}}'`)
-2. If not: `docker rm -f <name>` to clear stale state, then `docker run -d --network=host`
-3. Handle concurrent startup race: suppress "name already in use" error, verify something is now running
-4. Always poll `http://127.0.0.1:<port>/healthz` until ready (fast if already healthy)
-5. Issue the HTTP query, emit result to stdout
-6. No EXIT trap — container persists for the next call
-
-#### Per-call pattern (simpler, for infrequent use)
-
-1. `docker rm -f <name> 2>/dev/null || true` — remove any stale container
-2. `docker run -d --rm --network=host -e GRANIAN_HOST=127.0.0.1 -e <APP>_PORT=<fixed>` — host networking, loopback-only bind
-3. Poll `http://127.0.0.1:<port>/healthz` until ready
-4. Issue the HTTP query on the same port, emit result to stdout
-5. `trap 'docker stop <name>' EXIT` — clean up on all exit paths
+Some agent skills spin up a backing Docker service on demand (host networking, ~10–15s cold start on first pull). The `docker` skill auto-invokes before any `docker run` and covers both the persistent and per-call lifecycle patterns plus the host-networking rationale — follow it rather than duplicating the detail here.
 
 Current Docker-backed skills:
 
@@ -250,52 +151,15 @@ Current Docker-backed skills:
 |---|---|---|---|---|
 | `web-search` | persistent | `searxng/searxng` | `searxng-websearch` | `~/.config/searxng/settings.yml` |
 
-If Docker is absent on a read-only or minimal machine, exclude the relevant
-agent script via `.stow-local-ignore`.
+If Docker is absent on a read-only or minimal machine, exclude the relevant agent script via `.stow-local-ignore`.
 
-### Pi Documentation
+## Pi Documentation
 
 Pi's full documentation lives at `~/opt/pi/docs/`. If any task involves pi configuration, settings, skills, extensions, or providers, read the relevant docs from there rather than relying on training data.
 
 If `~/opt/pi/docs/` does not exist on this machine, alert the user before proceeding — pi may not be installed or may be at a different path.
 
 **Target platforms**: Linux (primary) and macOS (read-only pull target). Scripts and shell commands must be portable — avoid GNU-specific flags (`readlink -f`, `realpath` without fallback, `stat -c`, etc.). Use `python3` as a fallback when a portable equivalent is not available.
-
-### Pi Extension TUI Conventions
-
-When building pi extensions with custom TUI overlays or pickers (`ctx.ui.custom()`), apply these defaults:
-
-- **Vim navigation**: `j`/`k` navigate down/up; translate them to arrow-key escape codes (`\x1b[B` / `\x1b[A`) before forwarding to list widgets. `l` selects; `h` goes back/cancels if meaningful (skip it for pickers where 'h' may be a search character).
-- **Scroll shortcuts**: `gg` → top, `G` → bottom, `[`/`]` → prev/next section (for document views).
-- **Count prefix**: accumulate digit presses as a count multiplier for j/k/G.
-- **Search**: prefer type-to-filter over a dedicated search mode. Always show a hint line so it's discoverable.
-- **Hint line**: every overlay must render a one-line summary of available keys at the bottom.
-
-## Language Standards
-
-This section documents the language-specific conventions enforced across all projects in this repo. Mechanical enforcement happens via `lint-file.sh` (called by both the `settings.json` PostToolUse hook and the `lint-on-edit.ts` pi extension). Creating or editing files in these languages should trigger the relevant agent skill.
-
-### Python
-
-- **Toolchain:** `uv` exclusively — no `pip`, no `requirements.txt`, no `setup.py`. See `python-knowledge` SKILL.md.
-- **Type checking:** `mypy --strict` via `uv run mypy`. All projects should enable strict mode.
-- **Formatting/linting:** `ruff` via `uvx ruff`. Runs automatically via `lint-file.sh` on every edit.
-- **Testing:** `pytest` via `uv run pytest`. Prefer plain asserts over `self.assertEqual`.
-- **Automatic enforcement:** `lint-file.sh` maps `.py` → `uvx ruff check --fix`.
-
-### TypeScript / JavaScript
-
-- **TypeScript strict mode required:** `tsconfig.json` must set `"strict": true`. No exceptions. See `typescript-knowledge` SKILL.md.
-- **No `any`:** Use `unknown` with type guards. `@typescript-eslint/no-explicit-any` is an `error`.
-- **Linting:** ESLint v10.5.0 via `npx eslint`. Runs automatically via `lint-file.sh` on every edit for `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`.
-- **Type checking:** `npx tsc --noEmit` is reserved for CI/dedicated lint passes — too heavy for per-edit hooks.
-- **Automatic enforcement:** `lint-file.sh` maps TypeScript extensions → `npx eslint --fix`.
-
-### Adding a New Language
-
-To add linting support for another language (e.g. Go, Rust):
-1. Add one case arm to `stow-managed/bin/agent_scripts/lint-file.sh` with a `command -v <tool>` guard
-2. No changes needed to `settings.json`, `lint-on-edit.ts`, or any other config
 
 ## Key Conventions
 
@@ -310,99 +174,20 @@ To add linting support for another language (e.g. Go, Rust):
 3. **Uni-directional for read-only devices** — some devices are consumers only; design with this constraint in mind (don't rely on bidirectional merges)
 4. **Minimal manual steps on pull** — the goal is for `git pull` + `stow` to be sufficient to get up to date on any device
 
-## Hook Analytics
-
-A unified logging and analytics system that tracks every invocation of every hook across both Claude Code (shell hooks in `~/.claude/hooks/`) and pi (TypeScript extensions in `~/.pi/agent/extensions/`).
-
-### Log Location
-
-- **`~/.local/share/hook-analytics/hooks.jsonl`** — machine-local, not tracked in the repo. Created on first write by either logger.
-
-### Resilience Guarantees
-
-Logging is best-effort and **never affects** the hook's safety function:
-- **Claude Code hooks**: The resilient source pattern (file-existence guard + no-op fallback) ensures the hook runs even if `hook-logger.sh` is absent
-- **Pi extensions**: `withHookLogging` self-tests writability at module load; if logging is impossible, it returns the handler unchanged (transparent pass-through)
-
-### How to Instrument a New Hook
-
-**Claude Code hook (bash):**
-1. Copy the resilient source pattern from any existing instrumented hook (the `HOOK_LOGGER` + `if ! declare -f` block)
-2. Call `hook_log_start "<hook-name>" "<event>"` after sourcing the logger
-3. Call `hook_log_end "<outcome>" "<reason>" <exit_code>` before each exit point inside deny/ask/notify functions, and at the final `exit 0`
-
-**Pi extension (TypeScript):**
-1. Import: `import { withHookLogging } from "./hook-logger";`
-2. Wrap: `pi.on("<event>", withHookLogging("<name>", "<event>", async (event, ctx) => { ... }))`
-3. No guard needed — `withHookLogging` self-degrades to a pass-through when logging is impossible
-
-### How to View Analytics
-
-```
-hook-analytics                    Summary dashboard
-hook-analytics --history          Last 20 invocations
-hook-analytics --failures         Error entries only
-hook-analytics --hook <name>      Detailed log for one hook
-hook-analytics --daily            Daily breakdown table
-hook-analytics --weekly           Weekly breakdown table
-hook-analytics --monthly          Monthly breakdown table
-hook-analytics --all              Daily + weekly + monthly
-hook-analytics --graph            ASCII bar chart of daily invocations
-hook-analytics --json             Output filtered records as JSON
-hook-analytics --since <date>     Filter to on-or-after date (YYYY-MM-DD)
-hook-analytics --harness <name>   Filter to claude-code or pi
-hook-analytics --limit <N>        Cap result count (for --history, --hook)
-```
-
-### JSONL Schema
-
-Each line is a JSON object with these fields:
-- `ts` — ISO 8601 UTC timestamp
-- `harness` — `"claude-code"` or `"pi"`
-- `hook` — hook name (e.g. `"catch-dangerous-commands"`)
-- `event` — hook event type (e.g. `"PreToolUse"`, `"tool_call"`)
-- `outcome` — `"passed"` | `"asked"` | `"denied"` | `"blocked"` | `"notified"` | `"handled"` | `"error"`
-- `reason` — human-readable reason string
-- `duration_ms` — elapsed wall-clock milliseconds
-- `exit_code` — numeric exit code
-
 ## Documentation and Ideas Repository
 
-This repo uses two top-level directories for institutional knowledge discovered across sessions:
+Two top-level directories hold institutional knowledge discovered across sessions:
 
-### `docs/` — Established Conventions
+- **`docs/`** — *settled* conventions and best practices reached after research or experience. Treat as authoritative. Before any substantial change, check `docs/` for conventions that constrain implementation; if one turns out wrong, update it rather than working around it. Examples: `skill-authoring-best-practices-2026-06-17.md`, `language-skill-conventions.md`.
+- **`ideas/`** — *well-researched* proposals not yet implemented. Each documents context, problem, rationale, findings, and next steps — enough that another agent can resume it. Check `ideas/` before researching an improvement; when deferring a researched improvement, write an idea doc so the context isn't lost. Example: `install-svelte-skills.md`.
 
-Files in `docs/` capture **settled best practices and conventions** that future agents should follow. These are conclusions reached after research and experience — not speculative proposals. Anything in `docs/` should be treated as an authoritative reference.
+The dividing line: settled → `docs/`; still speculative → `ideas/`.
 
-Examples: `skill-authoring-best-practices-2026-06-17.md`, `language-skill-conventions.md`.
+## Subdirectory & Reference Context
 
-**What goes in docs/:**
-- Conventions we've established (naming, structure, patterns)
-- Research syntheses that produced a settled recommendation
-- Architecture decisions that future agents need to know
-- Reference material that multiple skills or agents share
+Detail has been pushed out of this root file to keep it lean; it loads on demand:
 
-**When to add:** After reaching a conclusion through research or experience. If it's still speculative, it belongs in `ideas/`.
-
-### `ideas/` — Researched Proposals, Not Yet Actioned
-
-Files in `ideas/` capture **well-researched proposals for future improvement** that haven't been implemented yet. Each idea doc documents the context, the problem, why it would be good to do, what was discovered during research, and the next steps a future agent would take.
-
-The key word is **well-researched**. A half-baked thought doesn't belong here — an idea doc should have done enough investigation that another agent (or the same agent in a future session) can pick it up and implement with minimal additional context.
-
-Example: `install-svelte-skills.md` — documents the full Svelte skill ecosystem discovered during research, the decision to defer, and exactly what Phase 1/2/3 would involve if reactivated.
-
-**What goes in ideas/:**
-- Feature proposals with research backing
-- Architecture changes scoped enough for an agent to implement
-- Improvements deferred because of timing (waiting for project reactivation, dependency updates, etc.)
-- Cross-cutting improvements that don't fit in a single session
-
-**When to add:** After researching an improvement to the point where the next steps are clear, but before deciding to implement immediately.
-
-### How Agents Should Use These
-
-1. **Before any substantial change**, check if `docs/` contains relevant conventions that constrain implementation.
-2. **When a `docs/` convention exists**, follow it. If it turns out to be wrong, update it rather than working around it.
-3. **When researching a future improvement**, check `ideas/` first. If the idea has been researched before, pick up where the idea doc left off.
-4. **When deferring a researched improvement** (deciding not to implement now), write an idea doc so the context isn't lost. Include enough detail that any agent can resume.
+- **`stow-managed/bin/CLAUDE.md`** — binary wrappers, agent-only scripts, script dependency management (PEP 723 / Node), and lint enforcement. Loads when editing files under `bin/`.
+- **`stow-managed/.pi/agent/extensions/CLAUDE.md`** — pi extension TUI conventions and hook instrumentation. Loads when editing pi extensions.
+- **`docs/hook-analytics-reference.md`** — the unified hook logging/analytics system (JSONL schema, instrumentation steps, `hook-analytics` CLI).
+- **`docs/rtk-reference.md`** — full RTK command catalog. RTK rewriting is applied automatically by the hook layer in both harnesses (Claude Code `settings.json` PreToolUse `rtk hook claude`; pi `rtk.ts`), so you rarely need to type `rtk` yourself. **Caveat:** re-running `rtk init` / `rtk init --global` re-expands the full catalog into a CLAUDE.md; if that happens, move it back to `docs/rtk-reference.md` and re-trim.

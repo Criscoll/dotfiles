@@ -47,6 +47,37 @@ done
 
 Key: `--rm` auto-removes on stop; `docker rm -f` pre-cleans for idempotency; `trap cleanup EXIT` covers errors and signals.
 
+## Persistent Container Pattern (preferred for frequent/concurrent calls)
+
+When a skill is called often or concurrently, keep the container running between
+calls instead of tearing it down — no per-call cold-start (~10–15s on first pull;
+image cached locally after).
+
+```sh
+CONTAINER=my-service
+PORT=18080
+
+# 1. Reuse if already running
+if [ "$(docker inspect --format='{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]; then
+  # 2. Clear stale state, then start detached (NO --rm — it must survive)
+  docker rm -f "$CONTAINER" 2>/dev/null || true
+  docker run -d --name "$CONTAINER" --network=host \
+    -e <BIND_HOST_VAR>=127.0.0.1 -e <PORT_VAR>="$PORT" some/image \
+    2>/dev/null || true          # 3. suppress "name already in use" startup race
+fi
+
+# 4. Always health-poll (fast if already healthy)
+for i in $(seq 1 30); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/healthz")" = "200" ] && break
+  sleep 1
+done
+
+# 5. Issue the query. NO EXIT trap — container persists for the next call.
+```
+
+Differences from the per-call pattern: omit `--rm`, omit the `trap cleanup EXIT`,
+and gate startup on a running-state check so concurrent callers don't collide.
+
 ## Networking
 
 **Read `references/networking.md` before any Docker networking task, port mapping setup, or when `curl` to a mapped port returns 000 or "Connection reset by peer".**
