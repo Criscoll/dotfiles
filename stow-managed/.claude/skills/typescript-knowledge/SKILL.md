@@ -9,6 +9,8 @@ description: >-
   Trigger phrases: "typescript", "ts", "tsx", "javascript", "js", "eslint", "tsc",
   "typeerror", "type guard", "interface", "type alias", "npx", "node", "strict mode",
   "flat config", "any type", "unknown type".
+  Also auto-invoke when the implementation plan involves editing `.ts` or `.tsx` files
+  — even if the user's prompt doesn't name TypeScript.
 disable-model-invocation: false
 ---
 
@@ -40,6 +42,10 @@ Never use: global `npm install -g`, `ts-node`, `tsx` (runtime), or `npm link`.
 **No non-null assertions (`!`).** Use `!` only when the invariant is proven by an immediately preceding check that TypeScript cannot narrow. Prefer early returns, `??`, or `?.` for null handling.
 
 **Prefer `const` over `let`.** Use `let` only when the variable is reassigned.
+
+**Baseline type-check before editing:** When starting work that touches `.ts` or `.tsx`
+files, run `npx tsc --noEmit` first to establish a clean baseline. Any errors introduced
+by later edits can then be attributed to the right change rather than pre-existing noise.
 
 ## Load Reference Files When Relevant
 

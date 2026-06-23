@@ -8,7 +8,9 @@ description: >-
   frameworks. Trigger phrases: "svelte", "sveltekit", ".svelte", "svelte
   component", "rune", "$state", "$props", "$derived", "$effect", "svelte 5",
   "kit", "+page", "+layout", "+error", "load function", "form action",
-  "use:enhance", "snippets", "$bindable".
+  "use:enhance", "snippets", "$bindable",
+  "fix a component", "edit a prop", "add a prop to", "update the template",
+  "update a Svelte component", "change a Kpi", "modify the card".
 disable-model-invocation: false
 ---
 
