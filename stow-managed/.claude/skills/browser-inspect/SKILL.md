@@ -166,6 +166,29 @@ Do **NOT** attempt to work around this by:
 - Describing the page from DOM/HTML text
 - Proceeding with any assumption about the visual state
 
+## Visual Bug Diagnostic Loop
+
+After spotting a broken element in a screenshot, before guessing the cause from code:
+
+1. Read the rendered value directly:
+   ```bash
+   ~/bin/agent_scripts/browser-eval 'Array.from(document.querySelectorAll(".delta")).map(el => el.textContent.trim())'
+   ```
+   Scope to the broken component's CSS class to extract the actual rendered string.
+
+2. Check for runtime JS errors:
+   ```bash
+   ~/bin/agent_scripts/browser-eval 'window.__sveltekit_error ?? null'
+   ```
+
+3. Confirm the fixed value after each change before re-screenshotting — saves a round trip:
+   ```bash
+   ~/bin/agent_scripts/browser-nav http://localhost:5173/overview  # reload
+   ~/bin/agent_scripts/browser-eval 'document.querySelector(".delta").textContent'
+   ```
+
+4. Only take a final screenshot once the eval confirms the value is correct.
+
 ## Inspect the DOM
 
 ```bash
