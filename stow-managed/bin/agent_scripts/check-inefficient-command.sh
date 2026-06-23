@@ -14,6 +14,10 @@ command_str="$1"
 # false positives (e.g. "rtk grep -r" matching the grep-r rule).
 [[ "$command_str" == rtk\ * ]] && exit 0
 
+# git commit: the -m argument is free-form message text, not a command.
+# Patterns like "grep -r" in a commit message body must not be blocked.
+printf '%s' "$command_str" | command grep -qE '(^|[[:space:]])git[[:space:]]+commit\b' && exit 0
+
 # Flat array: 4 elements per rule — (pattern, suggestion, exception, required_tool).
 # Set exception to '' when no exception is needed.
 # Set required_tool to the binary the suggestion depends on (e.g. 'rg', 'fd').

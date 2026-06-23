@@ -80,6 +80,13 @@ check_no_match "find -type f with -group exception" "find . -type f -group staff
 check_no_match "rtk prefix skips grep -r check" "rtk grep -r foo ."
 
 echo ""
+echo "=== git commit guard (message text must not be blocked) ==="
+check_no_match "git commit -m with grep -r in message" 'git commit -m "mention grep -r in message"'
+check_no_match "rtk git commit with blocked pattern in message" 'rtk git commit -m "grep -r is slow, use rg"'
+check_no_match "git commit chained after git add" 'git add foo.sh && git commit -m "replace grep -r with rg"'
+check_no_match "git commit heredoc form" $'git commit -m "$(cat <<\'EOF\'\nreplace grep -r with rg\nEOF\n)"'
+
+echo ""
 echo "=== required_tool guard (tool absent → allow through) ==="
 check_no_match_without_tool "grep -r allowed when rg absent" "grep -r foo" "rg"
 check_no_match_without_tool "find -name allowed when fd absent" 'find . -name "*.ts"' "fd"
