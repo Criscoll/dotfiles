@@ -3,7 +3,7 @@ name: notes-management
 description: >-
   Apply the notes conventions for the scribbles 01_Notes vault — folder
   taxonomy, note placement, file naming, frontmatter (aliases, tags, topics),
-  and the 00. Aliases/ folder-alias pattern. Auto-invoke BEFORE creating a new
+  and the 00_Aliases/ folder-alias pattern. Auto-invoke BEFORE creating a new
   note, choosing where a note belongs, adding frontmatter, creating folder
   aliases, or reviewing 01_Notes structure. Trigger phrases: "create a note",
   "new note", "add a note", "where does this note go", "note aliases",
@@ -28,12 +28,12 @@ top-level addition:
 
 | Folder | Domain |
 |---|---|
-| `01. Tech/` | Software, hardware, AI, tools, CLI, programming |
-| `02. Health/` | Physical health, fitness, sleep, medical |
-| `03. Adulting/` | Finance, housing, legal, career, logistics |
-| `04. Hobbies/` | Photography, hiking, blogging, creative pursuits |
-| `05. Social/` | Relationships, events, social logistics |
-| `06. Travel/` | Trip planning, packing, travel ideas |
+| `01_Tech/` | Software, hardware, AI, tools, CLI, programming |
+| `02_Health/` | Physical health, fitness, sleep, medical |
+| `03_Adulting/` | Finance, housing, legal, career, logistics |
+| `04_Hobbies/` | Photography, hiking, blogging, creative pursuits |
+| `05_Social/` | Relationships, events, social logistics |
+| `06_Travel/` | Trip planning, packing, travel ideas |
 
 **Unnumbered special folders** — personal domains with dedicated scope:
 
@@ -48,7 +48,7 @@ top-level addition:
 | `External Notes/til/` | Read-only imported TIL notes — do not add new entries here |
 
 Subdirectories at any depth are fine — create them freely to reflect topic
-depth (e.g. `01. Tech/AI/Agents/`). Any directory may contain a `00. Aliases/`
+depth (e.g. `01_Tech/AI/Agents/`). Any directory may contain a `00_Aliases/`
 subdirectory (see §Folder Alias Convention below).
 
 ---
@@ -113,14 +113,14 @@ semantic grouping).
 
 ---
 
-## Folder Alias Convention — `00. Aliases/`
+## Folder Alias Convention — `00_Aliases/`
 
-Each folder that covers a distinct topic **should** have a `00. Aliases/`
-subdirectory. Inside it, create empty `.md` files whose *filenames* are
-semantic aliases for the folder.
+Each folder that covers a distinct topic **should** have a `00_Aliases/`
+subdirectory (use `00_Aliases/` — no dots or spaces). Inside it, create empty
+`.md` files whose *filenames* are semantic aliases for the folder.
 
 Purpose: Obsidian and fd-based search match on filenames. An empty file named
-`containerization.md` inside `01. Tech/docker/00. Aliases/` makes
+`containerization.md` inside `01_Tech/docker/00_Aliases/` makes
 "containerization" a searchable entry point into that folder — without
 polluting any real note.
 
@@ -133,7 +133,7 @@ polluting any real note.
 - Do not duplicate the exact folder name — add *alternatives*.
 - Files are always empty (0 bytes). All content goes in real notes, not alias files.
 
-**Example** — `01. Tech/docker/00. Aliases/`:
+**Example** — `01_Tech/docker/00_Aliases/`:
 ```
 containerization.md
 containers.md
@@ -142,7 +142,7 @@ running services in isolation.md
 container runtime.md
 ```
 
-**Example** — `02. Health/Weightlifting/00. Aliases/`:
+**Example** — `02_Health/Weightlifting/00_Aliases/`:
 ```
 lifting.md
 strength training.md
@@ -216,6 +216,6 @@ Entry.
 2. Create the file with a natural-language, title-cased name.
 3. Add YAML frontmatter with meaningful aliases (2–5 alternatives, not the
    note's own title).
-4. Check whether the parent folder has a `00. Aliases/` directory; if not,
+4. Check whether the parent folder has a `00_Aliases/` directory; if not,
    create one with 3–8 empty alias files.
 5. Pick the appropriate template above and fill in the content.
