@@ -1,0 +1,123 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Convert an amount from one currency to one or more target currencies."""
+
+import argparse
+import email.utils
+import json
+import sys
+import urllib.error
+import urllib.request
+
+DEFAULT_TARGET = "AUD"
+FRANKFURTER_BASE = "https://api.frankfurter.dev/v1"
+OPEN_ER_BASE = "https://open.er-api.com/v6/latest"
+TIMEOUT = 10
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+HEADERS = {"User-Agent": "curl/8.0"}
+
+
+def fetch_frankfurter(base, targets, date=None):
+    non_base = [t for t in targets if t != base]
+    path = f"/{date}" if date else "/latest"
+    url = f"{FRANKFURTER_BASE}{path}?base={base}&symbols={','.join(non_base)}"
+    req = urllib.request.Request(url, headers=HEADERS)
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.code}: {e.reason}") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"network error: {e.reason}") from e
+    rates = data.get("rates", {})
+    for t in targets:
+        if t == base:
+            rates[t] = 1.0
+    return rates, data.get("date", date or "")
+
+
+def fetch_open_er(base, targets):
+    url = f"{OPEN_ER_BASE}/{base}"
+    req = urllib.request.Request(url, headers=HEADERS)
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            data = json.loads(resp.read())
+    except (urllib.error.HTTPError, urllib.error.URLError) as e:
+        raise RuntimeError(f"network error: {e}") from e
+    if data.get("result") != "success":
+        raise RuntimeError(data.get("error-type", "unknown error"))
+    all_rates = data.get("rates", {})
+    rates = {}
+    for t in targets:
+        if t == base:
+            rates[t] = 1.0
+        elif t in all_rates:
+            rates[t] = all_rates[t]
+        else:
+            raise RuntimeError(f"currency {t!r} not found")
+    utc_str = data.get("time_last_update_utc") or ""
+    try:
+        dt = email.utils.parsedate_to_datetime(utc_str)
+        date_str = dt.strftime("%Y-%m-%d")
+    except Exception:
+        date_str = utc_str[:10]
+    return rates, date_str
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="currency",
+        description="Convert AMOUNT from FROM currency to one or more TO currencies.",
+    )
+    parser.add_argument("--date", metavar="YYYY-MM-DD", help="Historical rate date")
+    parser.add_argument("amount", type=float)
+    parser.add_argument("base", metavar="FROM")
+    parser.add_argument("targets", metavar="TO", nargs="*")
+    args = parser.parse_args()
+
+    base = args.base.upper()
+    targets = [t.upper() for t in args.targets] if args.targets else [DEFAULT_TARGET]
+    seen: set[str] = set()
+    unique_targets = [t for t in targets if not (t in seen or seen.add(t))]  # type: ignore[func-returns-value]
+
+    source = "frankfurter"
+    rates: dict[str, float] = {}
+    date_used = ""
+    try:
+        rates, date_used = fetch_frankfurter(base, unique_targets, args.date)
+    except RuntimeError as e:
+        eprint(f"Frankfurter failed ({e}), trying open.er-api …")
+        source = "open.er-api"
+        try:
+            rates, date_used = fetch_open_er(base, unique_targets)
+        except RuntimeError as e2:
+            eprint(f"open.er-api also failed: {e2}")
+            sys.exit(1)
+
+    conversions = []
+    for t in unique_targets:
+        if t not in rates:
+            eprint(f"No rate returned for {t!r}")
+            sys.exit(1)
+        rate = rates[t]
+        conversions.append({"to": t, "rate": round(rate, 6), "result": round(args.amount * rate, 2)})
+
+    print(json.dumps({
+        "amount": args.amount,
+        "base": base,
+        "date": date_used,
+        "source": source,
+        "conversions": conversions,
+    }, indent=2))
+
+
+if __name__ == "__main__":
+    main()
