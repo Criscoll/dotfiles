@@ -4,7 +4,7 @@ The point of Plan is to turn the current item's approved requirements into a tec
 
 1. **Re-read `REQUIREMENTS.md` from disk.** It is this phase's input and the session is fresh — load it, don't reconstruct it from memory. Confirm its `Roadmap item` header matches the current unchecked item in `ROADMAP.md`. If it has unresolved Open Questions, surface them and resolve with the user before planning on top of them.
 
-2. **Research for decisions.** Do any further targeted reading needed to make sound technical choices — the requirements told you *what*; you may need to look closer to decide *how*. As you research, **extract concrete code-level context** — don't just understand the approach conceptually, capture the exact import paths, function signatures, class/interface names, API contracts, and file paths to proven implementations. You WILL write these into the plan's Reuse section in the next step.
+2. **Research for decisions.** Do any further targeted reading needed to make sound technical choices — the requirements told you *what*; you may need to look closer to decide *how*. As you research, **extract concrete code-level context** — don't just understand the approach conceptually, capture the exact import paths, function signatures, class/interface names, API contracts, and file paths to proven implementations. You WILL write these into the plan's Reuse section in the next step. Also identify any skills or extensions the implementing agent must explicitly invoke (e.g. `docker`, `typescript-knowledge`, `svelte-knowledge`, `python-knowledge`) — include a skill only if the implementer needs to call it themselves; omit skills the harness auto-invokes transparently.
 
 3. **Distill references.** Before writing the plan, consolidate what you found in step 2 into a Reuse section. The goal: an implementer reading the plan should never need to open a reference file or doc — every concrete import path, function signature, interface name, API contract, and gotcha is already written down. If you found yourself reading an example file (handoff.ts, qna.ts, etc.) or a doc page (extensions.md, tui.md, etc.), you must have captured what you learned from it here.
 
@@ -41,6 +41,11 @@ On approval this section COLLAPSES (see Gate step): the Option A/B menu is dropp
 but each decision keeps a short record — what was chosen, briefly why, and what was
 considered-and-rejected with the reason. That reasoning trail is context the
 implementer needs, not noise.
+
+## Agent Tooling
+Skills or extensions the implementing agent must explicitly invoke:
+- `<skill-name>` — why the executor needs it
+(Omit this section only if no skills or extensions are relevant.)
 
 ## Proposed Steps
 High-level sequence, not implementation detail. Each step independently
