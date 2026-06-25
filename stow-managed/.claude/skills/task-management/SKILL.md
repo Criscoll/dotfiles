@@ -1,5 +1,5 @@
 ---
-name: workbench-task
+name: task-management
 description: >-
   Apply the task management conventions for the scribbles workbench — task
   lifecycle, naming, outline.md structure, todo list format, and sub-task rules.
@@ -141,8 +141,27 @@ directory exists. If it does, read each sub-task outline and verify:
 
 ## Creating a New Task
 
+**Before writing anything**, check whether you can confidently answer all three:
+1. What is the motivation? (why this task, why now)
+2. What does done look like? (scope, success signal)
+3. Which category and stage does it belong in?
+
+If any answer is unclear, **ask first** rather than guessing. Present all unknowns in a single structured question — don't drip them one at a time.
+
+If the user wants to proceed despite ambiguity, start the `# Outline` with `[ ] Decide: ...` items that resolve the open questions before any action tasks appear:
+
+```markdown
+# Outline
+
+- [ ] Decide: which approach to take (option A vs option B)
+- [ ] Decide: whether to include X in scope
+- [ ] Task that depends on the above decisions
+```
+
+Once you have enough to proceed:
+
 1. Create a directory using the `Category_Name` convention in the appropriate stage.
 2. Create `outline.md` with at minimum a `# Brief` and `# Outline` section.
-3. Write the brief first — if the motivation or constraints aren't obvious, explain them.
+3. Write the brief first — capture the motivation, constraints, and any decisions still open.
 4. Add `# Success Criteria` if there's a clear definition of done.
 5. Break the outline down until every leaf task is atomic and actionable.
