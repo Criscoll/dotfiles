@@ -94,6 +94,10 @@ When a commit hash appears anywhere in the user's prompt (inline, in pasted term
 - File-type filter: `--type ts` not `--include '*.ts'`
 - Multiple patterns: `-e 'pat1' -e 'pat2'` or `'pat1|pat2'`
 
+## CLI Flag Hygiene
+
+Before using a flag you haven't verified, run `<cmd> --help` to confirm it exists. Never invent flags from naming intuition — unknown flags often fail silently (exit 1, no error printed) or behave unexpectedly.
+
 ## What Not to Do
 
 - Don't add features, refactors, or improvements beyond what was asked

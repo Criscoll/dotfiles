@@ -73,6 +73,10 @@ When using OpenRouter as the provider, a PII guardrail runs on every message and
 
 Other redaction types (email, phone, etc.) are available in OpenRouter but are **not enabled** on this account.
 
+## CLI Flag Hygiene
+
+Before using a flag you haven't verified, run `<cmd> --help` to confirm it exists. Never invent flags from naming intuition — unknown flags often fail silently (exit 1, no error printed) or behave unexpectedly.
+
 ## What Not to Do
 
 - Don't add features, refactors, or improvements beyond what was asked
