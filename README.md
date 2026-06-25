@@ -29,6 +29,9 @@ dotfiles/
 │   └── .local/share/
 │       ├── fonts/       # Nerd Fonts and Powerline fonts
 │       └── nvim/        # Neovim data files
+├── system/              # System-level configs (/etc/, /systemd/) — deployed via install scripts, not Stow
+│   ├── systemd/         # systemd unit files
+│   └── install-tailscale-mullvad.sh  # Deploy Mullvad+Tailscale coexistence routing
 ├── .claude/             # Machine-local Claude Code overrides (settings.local.json — untracked)
 ├── aider/               # Aider AI pair programmer config
 ├── vscode/              # VS Code settings (copied manually)
@@ -193,3 +196,28 @@ Automation scripts live in `stow-managed/Scripts/` (symlinked to `~/Scripts/`):
 | `script_download.sh` / `script_upload.sh` | Pull/push scripts from/to cloud |
 | `thunderbird_download.sh` / `thunderbird_upload.sh` | Sync Thunderbird config with Google Drive |
 | `encode_mp4.sh` | Transcode MP4 files to MOV via ffmpeg |
+
+---
+
+## System Configs
+
+Files under `/etc/` can't be managed by Stow (which only targets `~`). They live in `system/` and are deployed manually via install scripts. Each script is idempotent — safe to re-run.
+
+### Mullvad + Tailscale coexistence (`system/systemd/tailscale-mullvad-routing.service`)
+
+When Mullvad is active it uses policy routing: ip rule 5209 sends all traffic without a specific fwmark to Mullvad's routing table, which routes everything via `wg0-mullvad`. Tailscale's CGNAT range (`100.64.0.0/10`) gets swept up in this and dropped.
+
+The fix adds an ip rule at priority 5205 — just before Mullvad's rule 5209 — that routes `100.64.0.0/10` directly to Tailscale's routing table (table 52). Mullvad's rule never sees the traffic.
+
+**Deploy:**
+```bash
+bash ~/Repos/dotfiles/system/install-tailscale-mullvad.sh
+```
+
+This will:
+- Copy the systemd service to `/etc/systemd/system/`
+- Enable and start `tailscale-mullvad-routing.service`
+
+The service adds the ip rule on boot and removes it cleanly on stop. **Only needed on machines running both Mullvad and Tailscale.**
+
+See `01_Notes/01_Tech/Tools/Tailscale With Mullvad.md` in the scribbles vault for full background.
