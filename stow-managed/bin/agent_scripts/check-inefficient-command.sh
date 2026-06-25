@@ -78,6 +78,12 @@ rules=(
     "Use fd for type-based searches: fd -t f [path] or fd -t d [path]. fd also supports: --changed-after <file> (replaces -newer), --changed-within <duration> (replaces -mtime), --size <spec> (replaces -size). Only use find when filtering by -perm, -user, or -group."
     'find[[:space:]]+.*(-(perm|user|group)[[:space:]])'
     'fd'
+
+    # fd --search-path: not a valid fd flag; silently exits 1 masking the error
+    'fd[[:space:]].*--search-path'
+    "fd has no --search-path flag. Pass multiple search paths as positional arguments after the pattern: fd <pattern> path1 path2"
+    ''
+    'fd'
 )
 
 for ((i=0; i<${#rules[@]}; i+=4)); do
