@@ -1,0 +1,14 @@
+[Unit]
+Description=Mark Tailscale CGNAT traffic to bypass Mullvad VPN
+After=network.target tailscaled.service mullvad-daemon.service
+Wants=tailscaled.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/usr/sbin/nft delete table inet tailscale-mullvad-bypass
+ExecStart=/usr/sbin/nft -f /etc/nftables.d/tailscale-mullvad-bypass.nft
+ExecStop=-/usr/sbin/nft delete table inet tailscale-mullvad-bypass
+
+[Install]
+WantedBy=multi-user.target

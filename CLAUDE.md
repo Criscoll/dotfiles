@@ -165,7 +165,7 @@ If `~/opt/pi/docs/` does not exist on this machine, alert the user before procee
 
 - **Comma-prefix aliases** (`,upload_notes`, `,pdfcompress`, etc.) are used throughout `.zshrc` to namespace custom commands and avoid collisions with system commands
 - **Git submodules** are used for external dependencies: `powerlevel10k`, `tpm`, `tmux-resurrect`, `tmux2k`
-- **Non-stow directories** (`aider/`, `vscode/`, `darktable/`, `dockerfiles/`) are managed manually and not symlinked
+- **Non-stow directories** (`aider/`, `vscode/`, `darktable/`, `dockerfiles/`, `system/`) are managed manually and not symlinked. `system/` holds config installed into `/etc` via its own install script (see `system/README.md`).
 
 ## Design Goals to Keep In Mind
 
@@ -191,3 +191,4 @@ Detail has been pushed out of this root file to keep it lean; it loads on demand
 - **`stow-managed/.pi/agent/extensions/CLAUDE.md`** — pi extension TUI conventions and hook instrumentation. Loads when editing pi extensions.
 - **`docs/hook-analytics-reference.md`** — the unified hook logging/analytics system (JSONL schema, instrumentation steps, `hook-analytics` CLI).
 - **`docs/rtk-reference.md`** — full RTK command catalog. RTK rewriting is applied automatically by the hook layer in both harnesses (Claude Code `settings.json` PreToolUse `rtk hook claude`; pi `rtk.ts`), so you rarely need to type `rtk` yourself. **Caveat:** re-running `rtk init` / `rtk init --global` re-expands the full catalog into a CLAUDE.md; if that happens, move it back to `docs/rtk-reference.md` and re-trim.
+- **`docs/tailscale-mullvad-routing-2026-06-25.md`** — settled writeup of the Tailscale+Mullvad CGNAT bypass (the two-mark mechanism); implementation lives in `system/`.

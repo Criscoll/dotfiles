@@ -1,0 +1,20 @@
+table inet tailscale-mullvad-bypass {
+    # Outbound: mark CGNAT-bound traffic so Mullvad neither reroutes (meta mark) nor
+    # rejects (ct mark) it. type route => the mark affects the routing decision.
+    #   ct mark 0x00000f41  -> matched by Mullvad's "ct mark 0x00000f41 accept" kill-switch
+    #                          rule, so the packet passes the firewall.
+    #   meta mark 0x6d6f6c65 -> Mullvad's policy rule 5204
+    #                          ("not from all fwmark 0x6d6f6c65 lookup 1836018789") skips
+    #                          marked packets, so they fall through to Tailscale's rule and
+    #                          route via tailscale0 instead of wg0-mullvad.
+    chain output {
+        type route hook output priority -100; policy accept;
+        ip daddr 100.64.0.0/10 ct mark set 0x00000f41 meta mark set 0x6d6f6c65
+    }
+    # Inbound: mark traffic FROM the tailnet before Mullvad's input chain rejects it, so
+    # other devices can initiate connections TO this host over Tailscale (not just replies).
+    chain input {
+        type filter hook input priority -100; policy accept;
+        ip saddr 100.64.0.0/10 ct mark set 0x00000f41 meta mark set 0x6d6f6c65
+    }
+}
