@@ -1,0 +1,181 @@
+#!/bin/sh
+# video-transcript — extract transcript from YouTube (and other video) URLs.
+#
+# Usage: video-transcript [OPTIONS] <url>
+#
+# Tier 1: youtube-transcript-api (YouTube captions, ~1s, no download)
+# Tier 2: yt-dlp + pi multimodal ASR (fallback when captions unavailable)
+#
+# Prerequisites:
+#   pip install youtube-transcript-api   (tier 1)
+#   pip install yt-dlp                   (tier 2, also needed for --meta)
+
+set -e
+
+MODEL="openrouter/google/gemini-2.5-flash"
+LANG="en"
+JSON_OUTPUT=false
+META=false
+
+usage() {
+  echo "Usage: video-transcript [OPTIONS] <url>"
+  echo ""
+  echo "Extract spoken content from a video URL as plain text."
+  echo ""
+  echo "Options:"
+  echo "  --model <pattern>  Pi model for ASR fallback (default: openrouter/google/gemini-2.5-flash)"
+  echo "  --lang <code>      Caption language code (default: en)"
+  echo "  --json             Wrap output in JSON envelope"
+  echo "  --meta             Include title/channel/duration in --json output (requires yt-dlp)"
+  echo ""
+  echo "Strategy:"
+  echo "  1. youtube-transcript-api fetches YouTube captions in ~1s (no download)"
+  echo "  2. yt-dlp + pi multimodal model transcribes audio when captions are unavailable"
+  echo "     Works for most video sites supported by yt-dlp, not just YouTube."
+  echo ""
+  echo "Install prerequisites:"
+  echo "  pip install youtube-transcript-api   # tier 1"
+  echo "  pip install yt-dlp                   # tier 2 and --meta"
+  exit 0
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --model) MODEL="$2"; shift 2 ;;
+    --lang)  LANG="$2"; shift 2 ;;
+    --json)  JSON_OUTPUT=true; shift ;;
+    --meta)  META=true; shift ;;
+    --help|-h) usage ;;
+    --) shift; break ;;
+    -*) echo "Unknown flag: $1" >&2; exit 1 ;;
+    *) break ;;
+  esac
+done
+
+if [ $# -eq 0 ]; then
+  echo "Error: <url> required" >&2
+  usage
+  exit 1
+fi
+
+URL="$1"
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Error: python3 not found" >&2
+  exit 1
+fi
+
+WORK_DIR="${TMPDIR:-/tmp}/video-transcript-$$"
+mkdir -p "$WORK_DIR"
+cleanup() { rm -rf "$WORK_DIR"; }
+trap cleanup EXIT INT TERM
+
+SOURCE=""
+
+# ── Tier 1: youtube_transcript_api ───────────────────────────────────────────
+if python3 -c "import youtube_transcript_api" 2>/dev/null; then
+  VIDEO_URL="$URL" VIDEO_LANG="$LANG" \
+  python3 > "$WORK_DIR/transcript.txt" 2>"$WORK_DIR/t1_err.txt" << 'PYEOF' || true
+import os, sys, re, warnings
+warnings.filterwarnings("ignore")
+from youtube_transcript_api import YouTubeTranscriptApi
+
+url = os.environ["VIDEO_URL"]
+lang = os.environ["VIDEO_LANG"]
+
+patterns = [
+    r"[?&]v=([A-Za-z0-9_-]{11})",
+    r"youtu\.be/([A-Za-z0-9_-]{11})",
+    r"/shorts/([A-Za-z0-9_-]{11})",
+    r"/embed/([A-Za-z0-9_-]{11})",
+]
+vid = None
+for pat in patterns:
+    m = re.search(pat, url)
+    if m:
+        vid = m.group(1)
+        break
+
+if not vid:
+    print("tier1-skip: no YouTube video ID found in URL", file=sys.stderr)
+    sys.exit(2)
+
+try:
+    transcript = YouTubeTranscriptApi().fetch(vid, languages=[lang])
+    print(" ".join(s.text for s in transcript))
+except Exception as e:
+    print(f"tier1-skip: {e}", file=sys.stderr)
+    sys.exit(3)
+PYEOF
+  if [ -s "$WORK_DIR/transcript.txt" ]; then
+    SOURCE="captions"
+  fi
+else
+  echo "video-transcript: youtube-transcript-api not installed; install with: pip install youtube-transcript-api" >&2
+  echo "video-transcript: skipping to ASR tier" >&2
+fi
+
+# ── Tier 2: yt-dlp + pi ASR ──────────────────────────────────────────────────
+if [ -z "$SOURCE" ]; then
+  if ! command -v yt-dlp >/dev/null 2>&1; then
+    echo "Error: yt-dlp not found; install with: pip install yt-dlp" >&2
+    exit 1
+  fi
+  if ! command -v pi >/dev/null 2>&1; then
+    echo "Error: pi not found — check that ~/opt/pi/pi exists" >&2
+    exit 1
+  fi
+
+  echo "video-transcript: no captions found; downloading audio for ASR..." >&2
+  yt-dlp -x --audio-format mp3 -o "$WORK_DIR/audio.%(ext)s" "$URL"
+
+  AUDIO_FILE=$(ls "$WORK_DIR"/audio.* 2>/dev/null | head -1)
+  if [ -z "$AUDIO_FILE" ]; then
+    echo "Error: audio download produced no output" >&2
+    exit 1
+  fi
+
+  pi -p --model "$MODEL" "@$AUDIO_FILE" \
+    "Transcribe this audio verbatim. Return only the spoken text, no timestamps, labels, or commentary." \
+    > "$WORK_DIR/transcript.txt"
+  SOURCE="asr"
+fi
+
+# ── Meta: title/channel/duration via yt-dlp ──────────────────────────────────
+TITLE="" CHANNEL="" DURATION_STR=""
+if [ "$META" = true ]; then
+  if ! command -v yt-dlp >/dev/null 2>&1; then
+    echo "video-transcript: --meta requires yt-dlp; install with: pip install yt-dlp" >&2
+  else
+    META_JSON=$(yt-dlp --dump-json --skip-download "$URL" 2>/dev/null) || true
+    if [ -n "$META_JSON" ]; then
+      TITLE=$(printf '%s' "$META_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('title',''))")
+      CHANNEL=$(printf '%s' "$META_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('channel') or d.get('uploader',''))")
+      DURATION_STR=$(printf '%s' "$META_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('duration_string') or str(d.get('duration','')))")
+    fi
+  fi
+fi
+
+# ── Output ────────────────────────────────────────────────────────────────────
+if [ "$JSON_OUTPUT" = true ]; then
+  VIDEO_URL="$URL" VIDEO_TITLE="$TITLE" VIDEO_CHANNEL="$CHANNEL" \
+  VIDEO_DURATION="$DURATION_STR" VIDEO_LANG="$LANG" VIDEO_SOURCE="$SOURCE" \
+  python3 - "$WORK_DIR/transcript.txt" << 'PYEOF'
+import os, json, sys
+
+with open(sys.argv[1]) as f:
+    transcript = f.read().strip()
+
+print(json.dumps({
+    "url": os.environ["VIDEO_URL"],
+    "title": os.environ.get("VIDEO_TITLE", ""),
+    "channel": os.environ.get("VIDEO_CHANNEL", ""),
+    "duration": os.environ.get("VIDEO_DURATION", ""),
+    "language": os.environ["VIDEO_LANG"],
+    "source": os.environ["VIDEO_SOURCE"],
+    "transcript": transcript,
+}, ensure_ascii=False, indent=2))
+PYEOF
+else
+  cat "$WORK_DIR/transcript.txt"
+fi
