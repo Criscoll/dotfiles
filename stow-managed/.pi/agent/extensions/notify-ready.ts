@@ -1,12 +1,8 @@
 /**
  * Ready Notification
  *
- * Port of .claude/hooks/notify-ready.sh
- * Sends a desktop notification when pi finishes processing and is ready for input.
- *
- * Supports:
- *   - OSC 777: iTerm2, Ghostty, WezTerm, rxvt-unicode
- *   - OSC 99: Kitty
+ * Delegates tmux + desktop notification to notify-core.sh (shared with Claude Code hook).
+ * OSC 777/99 terminal escape sequences serve as fallback when no desktop notifier is available.
  */
 
 import { withHookLogging } from "./lib/hook-logger";
@@ -21,17 +17,18 @@ function notifyOSC99(title: string, body: string): void {
   process.stdout.write(`\x1b]99;i=1:p=body;${body}\x1b\\`);
 }
 
-function notify(title: string, body: string): void {
-  if (process.env.KITTY_WINDOW_ID) {
-    notifyOSC99(title, body);
-  } else {
-    // iTerm2, Ghostty, WezTerm, rxvt-unicode, and most modern terminals
-    notifyOSC777(title, body);
-  }
-}
-
 export default function (pi: ExtensionAPI) {
   pi.on("agent_end", withHookLogging("notify-ready", "agent_end", async () => {
-    notify("Pi", "Ready for input");
+    const coreScript = `${process.env.HOME}/.claude/hooks/notify-core.sh`;
+    const res = await pi.exec("sh", [coreScript, "Pi"], { timeout: 8000 });
+
+    // exit 1 means no desktop notifier — fall back to terminal escape sequences
+    if (res.code !== 0) {
+      if (process.env.KITTY_WINDOW_ID) {
+        notifyOSC99("Pi", "Ready for input");
+      } else {
+        notifyOSC777("Pi", "Ready for input");
+      }
+    }
   }));
 }
