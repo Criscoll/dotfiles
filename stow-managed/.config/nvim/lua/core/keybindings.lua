@@ -181,6 +181,10 @@ vim.api.nvim_create_user_command(
     {}
 )
 
+-- Navigate tabs (overrides H/L screen-top/bottom motions)
+vim.keymap.set('n', 'H', 'gT', { silent = true })
+vim.keymap.set('n', 'L', 'gt', { silent = true })
+
 -- Split Tab
 vim.keymap.set('n', '<C-w>z', ':tab split<CR>', { silent = true })
 
