@@ -1,6 +1,6 @@
 # Calendar — Allowed Command Surface
 
-All calendar operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.3.0 calendar ...` directly.
+All calendar operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.3.1 calendar ...` directly.
 
 Default calendar is the authenticated account's primary calendar.
 

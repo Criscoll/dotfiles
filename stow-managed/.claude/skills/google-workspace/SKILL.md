@@ -18,7 +18,7 @@ You are running the google-workspace skill. Drive `gws-cli` for Gmail and Calend
 work. **Send, delete, and destructive calendar operations are structurally unavailable
 — the harness hook blocks them even if attempted.**
 
-Always pin the exact version: `uvx gws-cli@1.3.0 <service> <subcommand> [flags]`
+Always pin the exact version: `uvx gws-cli@1.3.1 <service> <subcommand> [flags]`
 
 ## Verify auth first
 
@@ -69,9 +69,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 Authenticate gws-cli for Gmail + Calendar (interactive OAuth, browser will open):
 ```bash
-uvx gws-cli@1.3.0 auth login
-uvx gws-cli@1.3.0 account add-service gmail
-uvx gws-cli@1.3.0 account add-service calendar
+uvx gws-cli@1.3.1 auth login
+uvx gws-cli@1.3.1 account add-service gmail
+uvx gws-cli@1.3.1 account add-service calendar
 ```
 
 Disable gws-cli's built-in semantic security screening:
@@ -99,9 +99,9 @@ JSON string). The wrapper scripts handle both formats via an `extract()` helper;
 
 Verify scopes were granted:
 ```bash
-uvx gws-cli@1.3.0 account info
-uvx gws-cli@1.3.0 gmail labels
-uvx gws-cli@1.3.0 calendar list
+uvx gws-cli@1.3.1 account info
+uvx gws-cli@1.3.1 gmail labels
+uvx gws-cli@1.3.1 calendar list
 ```
 
 The token is stored encrypted under `~/.config/gws-cli/`. It is never committed to

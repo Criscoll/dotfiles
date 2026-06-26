@@ -1,6 +1,6 @@
 # Gmail — Allowed Command Surface
 
-All Gmail operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.3.0 gmail ...` directly.
+All Gmail operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.3.1 gmail ...` directly.
 
 ## Reading
 
