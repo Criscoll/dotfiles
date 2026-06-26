@@ -48,6 +48,14 @@ If auth errors, stop and tell the user.
 # All-day event (start = end = date-only)
 ~/bin/agent_scripts/calendar-create "Summary" 2026-01-15 2026-01-16 --all-day
 
+# Create a recurring event series (all-day; END is exclusive — use next calendar day)
+~/bin/agent_scripts/calendar-create-recurring "Summary" 2026-01-15 2026-01-16 "FREQ=DAILY" --all-day
+
+# Create a recurring time-based event — always pass --timezone explicitly
+~/bin/agent_scripts/calendar-create-recurring "Summary" 2026-01-15T08:00:00 2026-01-15T08:30:00 "FREQ=DAILY" --timezone "Australia/Melbourne"
+
+# Optional flags: --calendar/-c, --description/-d, --location/-l, --attendees/-a (comma-separated)
+
 # Update a single event — use for 1–4 events only
 ~/bin/agent_scripts/calendar-update <event-id> \
   --summary "Updated title ✅" \
@@ -136,6 +144,18 @@ DATETIME | SUMMARY | LOCATION | EVENT_ID
 ```
 
 When parsing the list, the `EVENT_ID` is the last field — it's a long alphanumeric string. The recurring instance IDs have a `_YYYYMMDD` suffix (e.g. `...9pcg_20260621`). Always use the full event ID when passing to `calendar-update`.
+
+## RRULE examples
+
+| RRULE | Meaning |
+|---|---|
+| `FREQ=DAILY` | Every day, indefinitely |
+| `FREQ=WEEKLY;BYDAY=MO,WE,FR` | Mon/Wed/Fri every week |
+| `FREQ=DAILY;COUNT=30` | Daily for 30 occurrences |
+| `FREQ=DAILY;UNTIL=20261231T000000Z` | Daily until end of year |
+| `FREQ=WEEKLY` | Once a week on the same day |
+
+All-day note: `START`/`END` are `YYYY-MM-DD`. For a single-day event, `END` must be the next calendar day — Google Calendar's end date is exclusive.
 
 ## What is NOT available
 

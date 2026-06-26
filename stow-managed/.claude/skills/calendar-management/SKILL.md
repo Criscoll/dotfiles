@@ -51,7 +51,9 @@ Events that are personal reflections, journal entries, reminders, or thoughts �
 
 Why hyphen: it's on the main keyboard screen on every phone keyboard (no emoji switcher needed), quick to type, and visually distinct enough in a calendar list to tell notes from tasks.
 
-### 3. Recurring schedules — never touch the master
+### 3. Recurring schedules — never touch the master; use `calendar-create-recurring` for new series
+
+**Creating a new series:** use `calendar-create-recurring`, not `calendar-create`. Pass `--all-day` for all-day series (end date is exclusive — use next calendar day). Always pass `--timezone` explicitly for time-based series; the default UTC may produce events at the wrong local time.
 
 These events are fixed calendar anchors, not tasks. They must never receive a tick, cross, or note prefix:
 
