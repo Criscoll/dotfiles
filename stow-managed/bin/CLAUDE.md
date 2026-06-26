@@ -27,6 +27,7 @@ exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
 | `alacritty` | `~/opt/alacritty` |
 | `pi` | `~/opt/pi/pi` |
 | `rtk` | `~/opt/rtk` |
+| `xsv` | `~/opt/xsv` |
 
 **Paths are conventions, not guarantees.** If a wrapper-backed command fails, verify the binary exists before assuming the wrapper is wrong:
 ```bash
