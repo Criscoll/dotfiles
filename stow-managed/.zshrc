@@ -140,9 +140,9 @@ alias glhsnl="git show --stat -p -U30 HEAD | delta --side-by-side"
 alias glhnl="git show --stat -p -U30 HEAD"
 
 function glhff() {
-    git show --stat --format="" HEAD | tail -n +2
+    git show --stat --format="" HEAD
     echo
-    git show --name-status --format="" HEAD | tail -n +2
+    git show --name-status --format="" HEAD
 }
 
 alias glinl="git show --color --stat -p -U30"
