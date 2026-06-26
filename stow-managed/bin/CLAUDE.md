@@ -28,6 +28,7 @@ exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
 | `pi` | `~/opt/pi/pi` |
 | `rtk` | `~/opt/rtk` |
 | `xsv` | `~/opt/xsv` |
+| `vd` | `~/opt/visidata/bin/vd` |
 
 **Paths are conventions, not guarantees.** If a wrapper-backed command fails, verify the binary exists before assuming the wrapper is wrong:
 ```bash
