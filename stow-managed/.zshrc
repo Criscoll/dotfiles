@@ -83,6 +83,7 @@ alias fgrep="fgrep --color=auto"
 alias egrep="egrep --color=auto"
 
 # Tools
+rp() { realpath "${1:-.}"; }
 alias fd="fdfind"
 alias py="python3"
 alias ta="tmux attach"
