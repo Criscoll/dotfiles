@@ -22,27 +22,38 @@ fi
 TS="$(date +%Y%m%d-%H%M%S)"
 LOG="/tmp/tailscale-mullvad-diag-$TS.log"
 
-# log: echo to stdout and append to the logfile.
-log() { printf '%s\n' "$*" | tee -a "$LOG" >/dev/null; printf '%s\n' "$*"; }
+# log: print clean to stdout; append the same line timestamped to the logfile so
+# the on-disk record is replayable with per-line timing.
+log() { printf '%s\n' "$*"; printf '%s %s\n' "$(date +%H:%M:%S)" "$*" >>"$LOG"; }
 
 PASS=0
 FAIL=0
+SKIP=0
 declare -a HINTS=()
 pass() { log "  [PASS] $1"; PASS=$((PASS + 1)); }
 fail() { log "  [FAIL] $1"; FAIL=$((FAIL + 1)); [[ $# -ge 2 ]] && HINTS+=("$2"); }
 warn() { log "  [WARN] $1"; }
+# skip: a check that could not run for a benign reason (e.g. no online peer to
+# ping). Distinct from FAIL so it never colours the exit code or the summary red.
+skip() { log "  [SKIP] $1"; SKIP=$((SKIP + 1)); }
 
 log "=== Tailscale+Mullvad bypass diagnostics — $TS ==="
 log "Logfile: $LOG"
+log "Host: $(hostname)   Kernel: $(uname -r)"
+log "tailscale: $(tailscale version 2>/dev/null | head -1 || echo n/a)   mullvad: $(mullvad version 2>/dev/null | awk -F': *' '/Current version/{print $2; exit}' || echo n/a)"
 log ""
 
 # 1. Interfaces -------------------------------------------------------------------
 # Both tunnels must exist; without them nothing downstream is meaningful.
-log "[1] Interfaces (tailscale0 + wg0-mullvad)"
+log "[1] Interfaces (tailscale0 + Mullvad wg tunnel)"
 IFACES="$(ip -br addr 2>/dev/null)"
 log "$IFACES"
+# Mullvad's tunnel interface has been named both 'wg0-mullvad' (older) and
+# 'wg-mullvad' (current) across releases — detect whichever is present rather
+# than hard-coding one and falsely reporting Mullvad disconnected.
+MULLVAD_IFACE="$(awk '{print $1}' <<<"$IFACES" | grep -E '^wg[0-9]*-mullvad$' | head -1)"
 if grep -q '^tailscale0' <<<"$IFACES"; then pass "tailscale0 present"; else fail "tailscale0 missing" "Tailscale is down — 'sudo tailscale up'"; fi
-if grep -q 'wg0-mullvad' <<<"$IFACES"; then pass "wg0-mullvad present"; else warn "wg0-mullvad missing (Mullvad disconnected — bypass is moot but harmless)"; fi
+if [[ -n "$MULLVAD_IFACE" ]]; then pass "Mullvad tunnel present ($MULLVAD_IFACE)"; else warn "no Mullvad wg tunnel (Mullvad disconnected — bypass is moot but harmless)"; fi
 log ""
 
 # 2. Mullvad state ----------------------------------------------------------------
@@ -58,13 +69,30 @@ log ""
 
 # 3. Pick a tailnet peer ----------------------------------------------------------
 # Auto-resolve a 100.x peer so the routing/ping checks have a real target.
-log "[3] Auto-pick a tailnet peer IP"
+log "[3] Auto-pick an ONLINE tailnet peer IP"
 PEER=""
+PEERS_TOTAL=0
+PEERS_ONLINE=0
 if command -v tailscale >/dev/null 2>&1; then
-    SELF_IP="$(tailscale ip -4 2>/dev/null || true)"
-    PEER="$(tailscale status 2>/dev/null | awk '{print $1}' | grep -E '^100\.' | grep -vF "${SELF_IP:-__none__}" | head -1)"
+    SELF_IP="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+    TS_STATUS="$(tailscale status 2>/dev/null || true)"
+    log "$TS_STATUS"
+    # A peer line starts with a 100.x IP; an offline peer carries the 'offline'
+    # token in its status column. Picking only an online peer avoids the old
+    # false FAIL — an offline device fails ping regardless of whether the routing
+    # marks are correct, which is a property of the peer, not the bypass.
+    PEERS_TOTAL="$(awk -v self="${SELF_IP:-__none__}" '$1 ~ /^100\./ && $1 != self {n++} END{print n+0}' <<<"$TS_STATUS")"
+    PEERS_ONLINE="$(awk -v self="${SELF_IP:-__none__}" '$1 ~ /^100\./ && $1 != self && $0 !~ /offline/ {n++} END{print n+0}' <<<"$TS_STATUS")"
+    PEER="$(awk -v self="${SELF_IP:-__none__}" '$1 ~ /^100\./ && $1 != self && $0 !~ /offline/ {print $1; exit}' <<<"$TS_STATUS")"
 fi
-if [[ -n "$PEER" ]]; then pass "peer = $PEER"; else fail "no tailnet peer found" "No peers in 'tailscale status' — connect another device"; fi
+log "  peers: $PEERS_TOTAL total, $PEERS_ONLINE online"
+if [[ -n "$PEER" ]]; then
+    pass "peer = $PEER (online)"
+elif [[ "$PEERS_TOTAL" -gt 0 ]]; then
+    warn "all $PEERS_TOTAL tailnet peers offline — routing checks still run; the ping check is skipped, not failed"
+else
+    fail "no tailnet peer found" "No peers in 'tailscale status' — connect another device"
+fi
 log ""
 
 # 4. Our table loaded & correct ---------------------------------------------------
@@ -107,8 +135,8 @@ if [[ -n "$PEER" ]]; then
     log "  marked(0x6d6f6c65): $MARKED"
     if grep -q 'dev tailscale0' <<<"$MARKED"; then
         pass "marked traffic routes via tailscale0"
-    elif grep -q 'wg0-mullvad' <<<"$MARKED"; then
-        fail "marked traffic routes via wg0-mullvad" "meta mark / route hook not applied — Mullvad's rule 5204 is still catching the packet"
+    elif grep -qE 'wg[0-9]*-mullvad' <<<"$MARKED"; then
+        fail "marked traffic routes via Mullvad tunnel (${MULLVAD_IFACE:-wg-mullvad})" "meta mark / route hook not applied — Mullvad's rule 5204 is still catching the packet"
     else
         warn "unexpected marked route: $MARKED"
     fi
@@ -140,8 +168,16 @@ log ""
 # The original smoking gun: 'tailscale ping' (public relay path) works even when
 # the kernel path is blocked, so a relay-OK / kernel-FAIL contrast => marks broken.
 log "[9] Connectivity (kernel path vs relay path)"
-if [[ -n "$PEER" ]]; then
-    if ping -c3 -W2 "$PEER" >/dev/null 2>&1; then
+if [[ -z "$PEER" ]]; then
+    if [[ "$PEERS_TOTAL" -gt 0 ]]; then
+        skip "no online peer to ping — all $PEERS_TOTAL peers offline (cannot exercise the kernel path; not a routing fault)"
+    else
+        skip "no tailnet peer available to ping"
+    fi
+else
+    PING_OUT="$(ping -c3 -W2 "$PEER" 2>&1)"
+    log "$PING_OUT"
+    if grep -q ' 0% packet loss' <<<"$PING_OUT"; then
         pass "ping $PEER (kernel path) succeeds"
     else
         fail "ping $PEER (kernel path) fails" "Kernel path blocked — see route/mark hints above"
@@ -150,16 +186,20 @@ if [[ -n "$PEER" ]]; then
         if tailscale ping "$PEER" >/dev/null 2>&1; then
             log "  tailscale ping (relay path) succeeds"
         else
-            warn "tailscale ping (relay path) also fails — peer may be offline, not a routing issue"
+            warn "tailscale ping (relay path) also fails — peer may have just dropped, not necessarily a routing issue"
         fi
     fi
 fi
 log ""
 
 # 10. Summary ---------------------------------------------------------------------
-log "=== Summary: $PASS passed, $FAIL failed ==="
+log "=== Summary: $PASS passed, $FAIL failed, $SKIP skipped ==="
 if [[ $FAIL -eq 0 ]]; then
-    log "All checks passed — bypass is healthy."
+    if [[ $SKIP -gt 0 ]]; then
+        log "Core checks passed — bypass is healthy ($SKIP check(s) skipped for lack of an online peer)."
+    else
+        log "All checks passed — bypass is healthy."
+    fi
 else
     log "Likely causes:"
     for h in "${HINTS[@]}"; do log "  - $h"; done
