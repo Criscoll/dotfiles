@@ -116,6 +116,27 @@ Example `~/.claude/settings.local.json`:
 }
 ```
 
+## Machine Setup Audit (`dotfiles-audit`)
+
+`stow-managed/bin/dotfiles-audit` is the deterministic, **read-only/non-destructive** source of
+truth for whether a machine is correctly set up. It checks required binaries, opt-backed wrapper
+health, guard directories, expected repos/paths, git submodule state, broken stow symlinks,
+Docker, gws-cli config, optional/WIP mail tools, and version drift against `versions.lock`.
+
+**Fresh agents should run it first** to assess machine state before diagnosing setup problems —
+its output points at the failing check and a remediation hint for each.
+
+```bash
+dotfiles-audit                 # full check; exit 0 only if no FAILs (WARNs don't fail it)
+dotfiles-audit --update-versions  # rewrite versions.lock from installed versions (primary only)
+dotfiles-audit --no-color      # plain output (also honours NO_COLOR)
+```
+
+`versions.lock` is **this machine's committed snapshot** of tested tool versions, so drift can be
+tracked across machines. Drift is directional: installed *behind* the lock is flagged `WARN …
+BEHIND` (actionable); installed *ahead* of the lock is a dim `PASS … (ahead of lock=…, ok)` and
+needs no action. Refresh the snapshot with `--update-versions` on a primary machine.
+
 ## What Must Never Be Committed
 
 This repo is version-controlled and potentially synced across machines — **never commit sensitive or runtime-specific data.** Before staging any changes, verify that no file contains:

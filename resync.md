@@ -18,11 +18,15 @@ Key constraint to internalize: **generic config lives in `stow-managed/` (tracke
 
 Confirm the repo path. This runbook assumes the repo lives at `~/Repos/dotfiles/`. If the clone is elsewhere, substitute the actual path throughout.
 
+Run `dotfiles-audit` first as a fast, read-only pre-check (guard dirs, broken symlinks, missing binaries/wrappers, submodule state, version drift). Its output seeds the manual inventory below — it won't tell you about per-file config divergence, but it flags the structural problems before you start.
+
 Create a working file at `/tmp/resync-audit.md` now. Write phase findings there as you go — inventory results, classifications, diffs, and the final plan. This survives context compaction and gives you a persistent reference throughout the session.
 
 ---
 
 ## Phase 1: Inventory
+
+**Run `dotfiles-audit` first.** It's a deterministic, read-only pre-check that surfaces the structural problems — missing guard directories, broken stow symlinks, missing binaries/wrappers, uninitialised submodules, and version drift — in one pass. Treat its FAIL/WARN lines as seed entries for the inventory; it doesn't compare per-file config contents, which is what the rest of this phase covers.
 
 **Check guard directories first.** Some directories must exist as real directories (not symlinks) before stow runs, to allow tracked and local-only files to coexist inside them. Verify each of the following exists and is a real directory — not a symlink:
 - `~/.claude/commands/`
