@@ -11,8 +11,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const SCRIPT = join(homedir(), "bin", "agent_scripts", "websearch");
+const DOCKER = "/usr/bin/docker";
+const CONTAINER_NAME = "searxng-websearch";
 
 export default function (pi: ExtensionAPI) {
+  // Serializes cold-start: parallel cold callers wait for the first one to
+  // complete (container will be warm by then) rather than all racing to start.
+  let coldStartPromise: Promise<void> | null = null;
+
   pi.registerTool({
     name: "web_search",
     label: "Web Search",
@@ -50,96 +56,131 @@ export default function (pi: ExtensionAPI) {
     }),
 
     async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-      const args: string[] = [];
+      const runSearch = async () => {
+        const args: string[] = [];
 
-      if (params.max_results != null) {
-        args.push("-n", String(params.max_results));
-      }
-      if (params.engines) {
-        args.push("-e", params.engines);
-      }
-      if (params.time_range) {
-        args.push("-t", params.time_range);
-      }
+        if (params.max_results != null) {
+          args.push("-n", String(params.max_results));
+        }
+        if (params.engines) {
+          args.push("-e", params.engines);
+        }
+        if (params.time_range) {
+          args.push("-t", params.time_range);
+        }
 
-      // Query is positional — must come after all flags.
-      args.push(params.query);
+        // Query is positional — must come after all flags.
+        args.push(params.query);
 
-      const flagParts: string[] = [`max: ${params.max_results ?? 10}`];
-      if (params.engines) flagParts.push(`engines: ${params.engines}`);
-      if (params.time_range) flagParts.push(`time_range: ${params.time_range}`);
-      onUpdate?.({
-        content: [{ type: "text" as const, text: `Searching: "${params.query}"  (${flagParts.join("  ")})` }],
-        details: {},
-      });
+        const flagParts: string[] = [`max: ${params.max_results ?? 10}`];
+        if (params.engines) flagParts.push(`engines: ${params.engines}`);
+        if (params.time_range) flagParts.push(`time_range: ${params.time_range}`);
+        onUpdate?.({
+          content: [{ type: "text" as const, text: `Searching: "${params.query}"  (${flagParts.join("  ")})` }],
+          details: {},
+        });
 
-      const result = await pi.exec(SCRIPT, args, { signal });
+        const result = await pi.exec(SCRIPT, args, { signal });
 
-      if (result.code !== 0) {
-        throw new Error(
-          `websearch failed (exit ${result.code}): ${result.stderr || "(no output)"}`,
-        );
-      }
+        if (result.code !== 0) {
+          throw new Error(
+            `websearch failed (exit ${result.code}): ${result.stderr || "(no output)"}`,
+          );
+        }
 
-      let results: Array<{
-        title: string;
-        url: string;
-        snippet: string;
-        engine: string;
-      }>;
+        let results: Array<{
+          title: string;
+          url: string;
+          snippet: string;
+          engine: string;
+        }>;
 
-      try {
-        results = JSON.parse(result.stdout);
-      } catch {
-        throw new Error(
-          `websearch returned invalid JSON: ${result.stdout.slice(0, 200)}`,
-        );
-      }
+        try {
+          results = JSON.parse(result.stdout);
+        } catch {
+          throw new Error(
+            `websearch returned invalid JSON: ${result.stdout.slice(0, 200)}`,
+          );
+        }
 
-      if (results.length === 0) {
+        if (results.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: `No results found for: ${params.query}` }],
+            details: { query: params.query, results: [] },
+          };
+        }
+
+        const engineCounts: Record<string, number> = {};
+        for (const r of results) {
+          if (r.engine) engineCounts[r.engine] = (engineCounts[r.engine] ?? 0) + 1;
+        }
+        const engineSummary = Object.entries(engineCounts)
+          .map(([e, n]) => `${e} ×${n}`)
+          .join(", ");
+
+        const preview: string[] = [`Results (${results.length}):`, ""];
+        for (let i = 0; i < results.length; i++) {
+          const r = results[i];
+          const tag = r.engine ? `[${r.engine}]` : "";
+          preview.push(`  ${i + 1}. ${tag} ${r.title}`);
+          preview.push(`     ${r.url}`);
+          if (r.snippet) preview.push(`     ${r.snippet.slice(0, 120)}`);
+          preview.push("");
+        }
+        if (engineSummary) preview.push(`Engines: ${engineSummary}`);
+        onUpdate?.({
+          content: [{ type: "text" as const, text: preview.join("\n") }],
+          details: {},
+        });
+
+        const lines: string[] = [`Search results for: ${params.query}`, ""];
+        for (let i = 0; i < results.length; i++) {
+          const r = results[i];
+          lines.push(`${i + 1}. ${r.title}`);
+          lines.push(`   URL: ${r.url}`);
+          if (r.snippet) lines.push(`   ${r.snippet}`);
+          if (r.engine) lines.push(`   [via ${r.engine}]`);
+          lines.push("");
+        }
+
         return {
-          content: [{ type: "text" as const, text: `No results found for: ${params.query}` }],
-          details: { query: params.query, results: [] },
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+          details: { query: params.query, results },
         };
-      }
-
-      const engineCounts: Record<string, number> = {};
-      for (const r of results) {
-        if (r.engine) engineCounts[r.engine] = (engineCounts[r.engine] ?? 0) + 1;
-      }
-      const engineSummary = Object.entries(engineCounts)
-        .map(([e, n]) => `${e} ×${n}`)
-        .join(", ");
-
-      const preview: string[] = [`Results (${results.length}):`, ""];
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i];
-        const tag = r.engine ? `[${r.engine}]` : "";
-        preview.push(`  ${i + 1}. ${tag} ${r.title}`);
-        preview.push(`     ${r.url}`);
-        if (r.snippet) preview.push(`     ${r.snippet.slice(0, 120)}`);
-        preview.push("");
-      }
-      if (engineSummary) preview.push(`Engines: ${engineSummary}`);
-      onUpdate?.({
-        content: [{ type: "text" as const, text: preview.join("\n") }],
-        details: {},
-      });
-
-      const lines: string[] = [`Search results for: ${params.query}`, ""];
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i];
-        lines.push(`${i + 1}. ${r.title}`);
-        lines.push(`   URL: ${r.url}`);
-        if (r.snippet) lines.push(`   ${r.snippet}`);
-        if (r.engine) lines.push(`   [via ${r.engine}]`);
-        lines.push("");
-      }
-
-      return {
-        content: [{ type: "text" as const, text: lines.join("\n") }],
-        details: { query: params.query, results },
       };
+
+      // ── Container warm-up check ───────────────────────────────────────────
+      const inspect = await pi.exec(DOCKER, [
+        "inspect", "--format={{.State.Running}}", CONTAINER_NAME,
+      ], { signal });
+      const containerWarm = inspect.code === 0 && inspect.stdout.trim() === "true";
+
+      if (!containerWarm) {
+        if (!coldStartPromise) {
+          onUpdate?.({
+            content: [{ type: "text" as const, text: "SearXNG container is cold — starting (~10–15s)..." }],
+            details: {},
+          });
+          // This call starts the container; resolve coldStartPromise when done
+          // so parallel waiters can proceed (container will be warm by then).
+          let resolve!: () => void;
+          coldStartPromise = new Promise<void>(r => { resolve = r; });
+          try {
+            return await runSearch();
+          } finally {
+            resolve();
+            coldStartPromise = null;
+          }
+        } else {
+          onUpdate?.({
+            content: [{ type: "text" as const, text: "Waiting for SearXNG container to start..." }],
+            details: {},
+          });
+          await coldStartPromise;
+        }
+      }
+
+      return runSearch();
     },
   });
 }
