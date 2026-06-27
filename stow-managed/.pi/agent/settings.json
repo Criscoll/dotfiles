@@ -3,10 +3,10 @@
     "~/.claude/skills"
   ],
   "enableInstallTelemetry": false,
-  "lastChangelogVersion": "0.79.1",
+  "lastChangelogVersion": "0.80.2",
   "hideThinkingBlock": true,
   "defaultProvider": "openrouter",
-  "defaultModel": "deepseek/deepseek-v4-pro",
+  "defaultModel": "deepseek/deepseek-v4-flash",
   "defaultThinkingLevel": "high",
   "enabledModels": [
     "openrouter/deepseek/deepseek-v4-flash",
