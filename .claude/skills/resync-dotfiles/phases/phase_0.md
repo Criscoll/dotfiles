@@ -1,34 +1,19 @@
 # Phase 0: Orientation
 
+Read `HOME_DIR` and `REPO_DIR` from the `## Confirmed Paths` section of `/tmp/resync-audit.md`.
+
 ## Step 1: Resolve paths
 
-Determine the real paths for this machine before doing anything else.
+(Already confirmed in SKILL.md Step 1 — read the values from `/tmp/resync-audit.md` if it exists, otherwise re-derive:)
 
-**Home directory:**
 ```bash
 realpath ~
-```
-
-**Dotfiles repo — check common locations:**
-```bash
 for p in ~/Repos/dotfiles ~/dotfiles ~/src/dotfiles ~/projects/dotfiles ~/.dotfiles; do
   [ -d "$p/stow-managed" ] && echo "Found: $(realpath $p)"
 done
 ```
 
-If the repo is not found at any of those locations, search more broadly:
-```bash
-find ~ -maxdepth 5 -name "stow-managed" -type d 2>/dev/null | head -5
-```
-
-**Confirm with the user before proceeding.** Present what you found:
-
-```
-Home directory:  [resolved path]
-Dotfiles repo:   [resolved path, or "not found"]
-```
-
-Ask the user to confirm these are correct, or to provide the correct repo path if it wasn't found. Do not proceed until both paths are confirmed.
+Confirm both paths with the user before proceeding.
 
 ---
 
@@ -64,45 +49,37 @@ This file persists across context compaction. Append all findings to it as you w
 
 ---
 
-## Step 4: Version Check
+## Step 4: Run dotfiles-audit
 
-The README contains a **Tool Stack** table with the versions this config was last tested against. Check what is installed locally and compare.
-
-For each tool in the table, run the version command below and note the output:
-
-| Tool | Version command |
-|------|----------------|
-| zsh | `zsh --version` |
-| alacritty | `alacritty --version 2>/dev/null` |
-| tmux | `tmux -V 2>/dev/null` |
-| neovim | `nvim --version 2>/dev/null \| head -1` |
-| helix | `hx --version 2>/dev/null` |
-| delta | `delta --version 2>/dev/null` |
-| fzf | `fzf --version 2>/dev/null` |
-| ripgrep | `rg --version 2>/dev/null \| head -1` |
-| rclone | `rclone --version 2>/dev/null \| head -1` |
-| mbsync | `mbsync --version 2>/dev/null` |
-| msmtp | `msmtp --version 2>/dev/null \| head -1` |
-
-For each tool, classify the result as:
-- `CURRENT` — installed version matches or is newer than the README version
-- `OUTDATED` — installed version is older than the README version
-- `NOT_INSTALLED` — command not found or produced no output
-
-Skip classification for tools where the README version cell shows `—`.
-
-Append a version status table to `/tmp/resync-audit.md`:
-
-```
-## Tool Version Check
-
-| Tool | README version | Installed version | Status |
-|------|----------------|-------------------|--------|
-| zsh | ... | ... | CURRENT / OUTDATED / NOT_INSTALLED |
-...
+```bash
+dotfiles-audit --no-color
 ```
 
-**Present this table to the user.** For any `OUTDATED` tool, note that the installed version may not be compatible with the current config. For any `NOT_INSTALLED` tool, note that the tool is absent from this machine and its associated config will have nothing to target.
+This covers: required binaries, guard directories, broken stow symlinks, git submodule state, Docker, version drift against `versions.lock`, and opt-backed wrapper health.
+
+Append the full output to `/tmp/resync-audit.md` under `## dotfiles-audit`. Present FAIL and WARN lines to the user; note that WARN items don't fail the audit but may need attention.
+
+---
+
+## Step 5: Run dotfiles-diff
+
+```bash
+dotfiles-diff --no-color 2>/dev/null | tee /tmp/resync-diff.txt
+```
+
+This produces a stow inventory: LINKED (already symlinked), MISSING (not yet on machine), BLOCKED (real file exists where symlink should go), WRONG (symlink points elsewhere), FOREIGN (symlink into a different repo), LOCAL (local-only, not in repo).
+
+Append a count summary to `/tmp/resync-audit.md` under `## dotfiles-diff`. List BLOCKED and MISSING entries individually; others by count. FOREIGN entries should be listed individually for the user to confirm they are expected.
+
+---
+
+## Step 6: Routing check
+
+```bash
+git -C $REPO_DIR diff --name-only --diff-filter=U 2>/dev/null
+```
+
+Based on the three outputs (audit, diff, conflict check), determine which mode applies using the routing table in SKILL.md. If triage is needed, stop here and follow the triage path. If sync mode, continue.
 
 ---
 
