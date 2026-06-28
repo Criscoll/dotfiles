@@ -25,7 +25,7 @@ echo "HOME_DIR=$HOME_DIR"
 echo "REPO_DIR=${REPO_DIR:-NOT FOUND}"
 ```
 
-If REPO_DIR is not found, ask the user to provide it. Hold `HOME_DIR`, `REPO_DIR`, and `RESYNC_DIR="$REPO_DIR/.resync"` for all subsequent commands.
+If REPO_DIR is not found, ask the user to provide it. Hold `HOME_DIR`, `REPO_DIR`, `RESYNC_DIR="$REPO_DIR/.resync"`, `LEDGER="$REPO_DIR/.resync-ledger.md"`, and `OVERLAYS="$REPO_DIR/.resync-overlays"` for all subsequent commands. The ledger and overlays are durable and survive `.resync/` deletion — never delete them as part of cleanup.
 
 **Check for `$ARGUMENTS` override** — if `$ARGUMENTS` contains a stage name, force that stage:
 
@@ -77,6 +77,7 @@ When audit output surfaces FAILs or specific anomalies, route to the relevant sc
 | File appears local but its parent directory is a repo symlink | `scenarios/symlinked_via_dir.md` |
 | `settings.local.json` missing or stale after a fresh stow | `scenarios/settings_drift.md` |
 | `lazy-lock.json` shows as modified or has conflict markers | `scenarios/lazy_lockfile.md` |
+| Machine is pull-only / has standing upstream-pending items | `scenarios/read_only_machine.md` |
 
 ```bash
 cat "${CLAUDE_SKILL_DIR}/scenarios/<name>.md"
@@ -91,7 +92,8 @@ cat "${CLAUDE_SKILL_DIR}/scenarios/<name>.md"
 - Always simulate before applying stow: `stow -v --simulate -t $HOME_DIR stow-managed`.
 - Guard dirs must be real directories, not symlinks, before stow runs.
 - Machine-specific content belongs in `.local` files — not in tracked config.
-- Do not commit from this machine unless push access is confirmed.
+- If `bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" $HOME_DIR $REPO_DIR mode` returns `READ-ONLY`: never commit or push; record divergences in the ledger instead.
+- The ledger (`.resync-ledger.md`) and `.resync-overlays/` are durable, gitignored, and must never be committed or deleted between runs.
 - Use `[ -L "$path" ]` to test for symlinks — not `ls -la "$path/"` (trailing slash follows the link).
 
 ---

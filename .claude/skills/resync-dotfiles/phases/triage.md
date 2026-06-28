@@ -8,7 +8,15 @@ Writes `$RESYNC_DIR/triage.md`. Reads `HOME_DIR`, `REPO_DIR`, and `RESYNC_DIR` f
 cat "$RESYNC_DIR/state.md"
 ```
 
-Confirm HOME_DIR and REPO_DIR are correct.
+Confirm HOME_DIR and REPO_DIR are correct. Note the `Machine mode:` line — if `READ-ONLY`, divergences go into the ledger, not a commit.
+
+## Check ledger for known-intentional items
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" list
+```
+
+Items in the **Local-only** register are known-intentional drift — note them as such and do **not** re-present them as unexpected findings. Items in **Upstream-pending** with an overlay are expected inline edits — note them as "will reapply after stow."
 
 ## Run full audit tools (within-stage /tmp/ scratch)
 
@@ -127,6 +135,16 @@ Review the sensitive scan output from `diff_check.sh`:
 - `POSSIBLE SECRETS FOUND` — is it a real credential or just a variable name / comment?
 - Company-internal paths hard-coded in config?
 - Anything problematic if the repo were public or cloned to another machine?
+
+## Reconcile pass (if a git pull occurred this session)
+
+If a `git pull` was run during orientation or by the user before invoking the skill, run the reconcile pass now to auto-close any pending ledger entries that have landed upstream:
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" reconcile
+```
+
+Report any entries that were auto-closed and remind the user to delete the absorbed overlay files if prompted.
 
 ## Route to scenarios if needed
 

@@ -30,12 +30,23 @@ Using the inventory, timeline, diff, and sensitive findings from triage.md, assi
 | `CLEAN_APPLY` | Repo can be applied directly; local has nothing different that matters |
 | `LOCAL_MIGRATION` | Local has machine-specific or sensitive content to extract into a `.local` file before stowing |
 | `CONFLICT` | Both sides changed the same setting incompatibly; needs explicit user decision |
-| `LOCAL_ONLY_ADDITIONS` | Local has content the repo doesn't — assess if machine-specific or potentially generic |
+| `LOCAL_ONLY_ADDITIONS` | Local has content the repo doesn't — classify via decision menu (see below) |
 | `MISSING_LOCALLY` | File in repo but not on machine; straightforward to apply |
 | `SENSITIVE_IN_REPO` | Repo version contains content that should not be tracked; remediation required before applying |
 
-For `CONFLICT` files, describe the nature of the conflict clearly (incompatible values, structural divergence, etc.).  
-For `LOCAL_ONLY_ADDITIONS`, note whether the content is machine-specific (stays local) or generic enough to upstream.
+For `CONFLICT` files, describe the nature of the conflict clearly (incompatible values, structural divergence, etc.).
+
+For `LOCAL_ONLY_ADDITIONS` and `CONFLICT` items on a READ-ONLY machine, apply the per-item decision menu from `scenarios/read_only_machine.md`. Each item gets one of these dispositions:
+
+| Disposition | Meaning |
+|---|---|
+| `take-repo` | Discard local, stow normally |
+| `split-to-.local` | Extract machine-specific parts to a `.local` file, stow generic base |
+| `upstream-pending` | Generic change; record in ledger for porting from primary device |
+| `local-only` | Machine-specific forever; record in ledger, never upstream |
+| `inline-overlay` | Can't use `.local`; record + capture overlay patch |
+
+On a READ-WRITE machine, treat LOCAL_ONLY_ADDITIONS as candidates for committing from this machine — note in the plan for the upstream step.
 
 ### Write plan.md
 
@@ -64,7 +75,7 @@ Use the Write tool to create `$RESYNC_DIR/plan.md`:
 (or: none)
 
 ## Local-only Additions
-- [ ] file — [machine-specific or potentially generic?]
+- [ ] file — disposition: (take-repo / split-to-.local / upstream-pending / local-only / inline-overlay)
 (or: none)
 
 ## Sensitive in Repo (remediation required before apply)

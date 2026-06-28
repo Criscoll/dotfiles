@@ -155,7 +155,17 @@ echo "Backed up to $BACKUP_DIR/<rel/path>"
 ```
 Verify backup contains everything from the local version, then `safe_remove.sh` and stow.
 
-**Take local:** Do not stow. Leave local version in place. Note as candidate for upstreaming from a primary device.
+**Take local:** Do not stow. Leave local version in place. Record in the ledger based on whether the content is generic or machine-specific:
+
+```bash
+# Generic — can be ported from a primary device:
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" \
+  add-upstream "stow-managed/<file>" "<brief description>"
+
+# Machine-specific — never upstream:
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" \
+  add-local "<file>" "<why it's machine-specific>"
+```
 
 **Merge:** Align shared content with the repo version, extract machine-specific parts into a `.local` file, then treat as LOCAL_MIGRATION.
 
@@ -163,8 +173,27 @@ Verify backup contains everything from the local version, then `safe_remove.sh` 
 
 ### LOCAL_ONLY_ADDITIONS
 
-- Machine-specific content → move to a `.local` file, then stow
-- Generic content → flag for upstreaming from a primary device; do not modify the repo from this machine
+Apply the disposition recorded in plan.md for each item:
+
+- `take-repo` — discard local, stow normally (use `safe_remove.sh` first)
+- `split-to-.local` — extract machine-specific content into a `.local` file, then stow
+- `upstream-pending` — do not modify the repo; record in ledger:
+  ```bash
+  bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" \
+    add-upstream "stow-managed/<file>" "<description>"
+  ```
+- `local-only` — leave in place; record in ledger:
+  ```bash
+  bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" \
+    add-local "<file>" "<why it's machine-specific>"
+  ```
+- `inline-overlay` — record as upstream-pending + capture the diff as an overlay patch:
+  ```bash
+  bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" \
+    add-upstream "stow-managed/<file>" "<description> (INLINE; no .local support)"
+  bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" \
+    add-overlay "<file relative to stow-managed/>"
+  ```
 
 ### COLLAPSIBLE_DIR
 
@@ -187,6 +216,16 @@ ls -la "$HOME_DIR/<file>"
 ```
 
 Should point into `$REPO_DIR/stow-managed/`.
+
+### Re-apply overlay patches
+
+After all stow operations are complete, re-apply any registered overlay patches (for inline edits that can't use a `.local` file):
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" reapply-overlays
+```
+
+Patches already present in the tree are skipped. Conflicts are flagged for manual resolution.
 
 ---
 
@@ -220,6 +259,9 @@ Completed: <date>
 
 ## Deferred
 [What was skipped and why, or "none"]
+
+## Upstream-pending / Local-only
+[See .resync-ledger.md — entries recorded this session are listed there. Do not duplicate here.]
 
 ## Sensitive flags (pending repo-side remediation)
 [List any SENSITIVE_IN_REPO items, or "none"]

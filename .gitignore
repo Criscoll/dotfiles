@@ -18,6 +18,10 @@ stow-managed/.local/share/fonts/.uuid
 # Resync stage artifacts — machine-local, never commit
 .resync/
 
+# Resync upstream ledger and overlays — per-machine, never commit
+.resync-ledger.md
+.resync-overlays/
+
 # Python bytecode caches — never commit
 __pycache__/
 **/__pycache__/

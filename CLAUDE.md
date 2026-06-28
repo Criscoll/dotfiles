@@ -17,6 +17,19 @@ Because some config is machine-specific (e.g. work-only aliases, work-specific e
 
 When adding config, ask: "Is this generic enough to share across all devices?" If yes → standard file. If device-specific → `.local` file.
 
+## The Upstream Ledger (read-only machines)
+
+For machines that cannot push to this repo, a durable **upstream ledger** tracks what's pending and what's intentionally local:
+
+- **Location:** `$REPO_DIR/.resync-ledger.md` — gitignored, per-machine, survives `.resync/` deletion
+- **Two registers:**
+  - `Upstream-pending` — generic improvements made on this machine that need to be ported upstream from a primary device. Auto-closed once they land and are pulled in.
+  - `Local-only` — machine-specific config that should never go to the repo. The resync skill uses this to suppress false-positive drift warnings on every run.
+- **Machine mode flag:** the ledger header declares `READ-ONLY` or `READ-WRITE`. When `READ-ONLY`, no skill path will attempt `git commit` or `push`.
+- **Overlay patches:** `$REPO_DIR/.resync-overlays/*.patch` — for inline edits in files that don't support a `.local` import. Captured via `git diff`, re-applied after every stow run, auto-dropped once upstream absorbs the change.
+
+Managed entirely via `scripts/ledger.sh` inside the resync-dotfiles skill. Both the ledger and overlays dir are gitignored and must never be committed.
+
 ## How It Works (GNU Stow)
 
 Everything under `stow-managed/` is symlinked into `~` via:

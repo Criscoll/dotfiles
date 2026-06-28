@@ -20,8 +20,16 @@ Ask for each conflicting section:
 
 - **Machine-specific on one side?** (company paths, local env vars, work aliases, absolute paths that only make sense here) → extract that content into a `.local` file, take the repo version for the shared portion.
 - **Functionally identical?** (upstream added the same config the local machine already had — same alias, same option, same key binding, just landed in the repo later) → always take upstream. The repo version is now canonical; keeping the local variant would cause drift without any benefit.
-- **Both sides are generic?** → the local edit may be worth upstreaming. Take the better version and note it as a candidate to commit from a primary device. Do not commit from this machine unless push access is confirmed.
-- **Incompatible values?** (different colorscheme, key bound to a different action) → present to the user. Do not resolve without an explicit choice.
+- **Both sides are generic?** → the local edit may be worth upstreaming. Take the better version. On a READ-ONLY machine, record in the ledger as upstream-pending:
+  ```bash
+  bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" \
+    add-upstream "stow-managed/<file>" "<what was added>"
+  ```
+  If the file cannot use a `.local` import, also capture an overlay: `add-overlay <file>`.
+  On a READ-WRITE machine, note as a candidate to commit from this machine.
+- **Incompatible values?** (different colorscheme, key bound to a different action) → present to the user. Do not resolve without an explicit choice. If the user chooses to keep the local value:
+  - Machine-specific → `add-local <file> "<reason>"`
+  - Generic but can't go upstream from here → `add-upstream <file> "<description>"` (+ overlay if needed)
 
 ## Resolution
 

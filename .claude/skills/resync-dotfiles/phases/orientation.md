@@ -28,6 +28,22 @@ Check for blockers that should be resolved **before** triage runs:
 
 If blockers are present, resolve them now. Write `state.md` after blockers are cleared (or if the user decides to proceed and wants triage to handle them instead).
 
+## Initialise ledger and surface backlog
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" init
+```
+
+If the ledger already exists, read machine mode and show any pending upstream items:
+
+```bash
+MACHINE_MODE="$(bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" mode)"
+echo "Machine mode: $MACHINE_MODE"
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" list-pending
+```
+
+If `MACHINE_MODE=READ-ONLY`: note that no commits or pushes will be made this session; divergences will be recorded in the ledger.
+
 ## Confirm paths with user
 
 Brief the user:
@@ -47,6 +63,7 @@ mkdir -p "$RESYNC_DIR"
   echo "HOME_DIR: $HOME_DIR"
   echo "REPO_DIR: $REPO_DIR"
   echo "Machine: $(hostname)"
+  echo "Machine mode: $MACHINE_MODE"
   echo "Started: $(date)"
   echo ""
   echo "## Status: complete"
