@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
-NO_COLOR_FLAG=0; HELP_FLAG=0; MAX_DEPTH=4
+NO_COLOR_FLAG=0; HELP_FLAG=0; MAX_DEPTH=4; SUMMARY_FLAG=0
 for _arg in "$@"; do
   case "$_arg" in
     --no-color)      NO_COLOR_FLAG=1 ;;
     --help|-h)       HELP_FLAG=1 ;;
+    --summary)       SUMMARY_FLAG=1 ;;
     --max-depth=*)   MAX_DEPTH="${_arg#--max-depth=}" ;;
   esac
 done
@@ -15,7 +16,10 @@ dotfiles-diff — read-only stow drift inventory for this dotfiles repo.
 Classifies every item in stow-managed/ against ~/ and shows guard directory
 contents and content diffs for blocked items and local-only files.
 
-Usage: dotfiles-diff [--max-depth=N] [--no-color] [--help]
+Usage: dotfiles-diff [--summary] [--max-depth=N] [--no-color] [--help]
+  --summary      Print only anomaly lines (WRONG, BLOCKED, FOREIGN, MISSING,
+                 RENAMED, guard BROKEN) plus the Summary counts. Suppresses
+                 LINKED and LOCAL items — use for quick routing decisions.
   --max-depth=N  Maximum traversal depth into stow-managed/ (default: 4).
   --no-color     Disable ANSI colour/dim styling (also honours NO_COLOR).
   --help, -h     Show this message and exit.
@@ -54,14 +58,16 @@ DOTFILES_STOW_DIR="$STOW_DIR" \
 DOTFILES_NO_COLOR="$NO_COLOR_FLAG" \
 DOTFILES_MAX_DEPTH="$MAX_DEPTH" \
 DOTFILES_DIFF_TMP="$_DIFF_TMP" \
+DOTFILES_SUMMARY="$SUMMARY_FLAG" \
 python3 << 'PYEOF'
 import os, sys, hashlib
 
-stow_root = os.environ["DOTFILES_STOW_DIR"]
-home      = os.path.expanduser("~")
-no_color  = os.environ.get("DOTFILES_NO_COLOR", "0") == "1"
-max_depth = int(os.environ.get("DOTFILES_MAX_DEPTH", "4"))
-tmp_file  = os.environ["DOTFILES_DIFF_TMP"]
+stow_root    = os.environ["DOTFILES_STOW_DIR"]
+home         = os.path.expanduser("~")
+no_color     = os.environ.get("DOTFILES_NO_COLOR", "0") == "1"
+max_depth    = int(os.environ.get("DOTFILES_MAX_DEPTH", "4"))
+tmp_file     = os.environ["DOTFILES_DIFF_TMP"]
+summary_mode = os.environ.get("DOTFILES_SUMMARY", "0") == "1"
 
 if no_color:
     C_LINKED = C_MISSING = C_BLOCKED = C_WRONG = C_FOREIGN = C_LOCAL = C_DIM = C_RESET = ""
@@ -114,7 +120,8 @@ def classify(stow_path, home_path, rel, depth):
         resolved = os.path.normpath(os.path.join(os.path.dirname(home_path), raw))
         if resolved == stow_path:
             counts["LINKED"] += 1
-            print(f"  {C_LINKED}LINKED{C_RESET}   ~/{rel}")
+            if not summary_mode:
+                print(f"  {C_LINKED}LINKED{C_RESET}   ~/{rel}")
         elif resolved.startswith(stow_root + os.sep):
             counts["WRONG"] += 1
             print(f"  {C_WRONG}WRONG{C_RESET}    ~/{rel}  {C_DIM}[different stow item → {resolved}]{C_RESET}")
@@ -178,15 +185,16 @@ def classify(stow_path, home_path, rel, depth):
                         print(f"  {C_FOREIGN}FOREIGN{C_RESET}  ~/{sub_rel}  {C_DIM}[foreign symlink → {tgt}]{C_RESET}")
                     else:
                         counts["LOCAL"] += 1
-                        print(f"  {C_LOCAL}LOCAL{C_RESET}    ~/{sub_rel}  {C_DIM}[symlink → {tgt}]{C_RESET}")
+                        if not summary_mode:
+                            print(f"  {C_LOCAL}LOCAL{C_RESET}    ~/{sub_rel}  {C_DIM}[symlink → {tgt}]{C_RESET}")
                         local_paths.append(f"{sub_home}|{sub_rel}")
                         local_in_dir.append(name)
                 else:
                     counts["LOCAL"] += 1
-                    # Defer rename check; accumulate
                     local_in_dir.append(name)
                     local_paths.append(f"{sub_home}|{sub_rel}")
-                    print(f"  {C_LOCAL}LOCAL{C_RESET}    ~/{sub_rel}")
+                    if not summary_mode:
+                        print(f"  {C_LOCAL}LOCAL{C_RESET}    ~/{sub_rel}")
 
             # Rename detection within this directory
             if missing_in_dir and local_in_dir:
@@ -250,12 +258,14 @@ section "Guard Directory Inventory"
 DOTFILES_STOW_DIR="$STOW_DIR" \
 DOTFILES_NO_COLOR="$NO_COLOR_FLAG" \
 DOTFILES_DIFF_TMP="$_DIFF_TMP" \
+DOTFILES_SUMMARY="$SUMMARY_FLAG" \
 python3 << 'PYEOF'
 import os
 
-stow_root = os.environ["DOTFILES_STOW_DIR"]
-no_color  = os.environ.get("DOTFILES_NO_COLOR", "0") == "1"
-tmp_file  = os.environ["DOTFILES_DIFF_TMP"]
+stow_root    = os.environ["DOTFILES_STOW_DIR"]
+no_color     = os.environ.get("DOTFILES_NO_COLOR", "0") == "1"
+tmp_file     = os.environ["DOTFILES_DIFF_TMP"]
+summary_mode = os.environ.get("DOTFILES_SUMMARY", "0") == "1"
 
 if no_color:
     C_REPO = C_LOCAL = C_BROKEN = C_DIM = C_BOLD = C_RESET = ""
@@ -285,18 +295,18 @@ for gdir in GUARD_DIRS:
         continue
     if os.path.islink(expanded):
         tgt = os.path.realpath(expanded)
-        print(f"  {C_DIM}NOTE{C_RESET}     {gdir}  {C_DIM}(fully stowed → {tgt}; see Stow Inventory){C_RESET}")
+        if not summary_mode:
+            print(f"  {C_DIM}NOTE{C_RESET}     {gdir}  {C_DIM}(fully stowed → {tgt}; see Stow Inventory){C_RESET}")
         continue
-    # Real directory
-    print(f"  {C_BOLD}{gdir}:{C_RESET}")
+    # Real directory — collect entries, update counts, buffer BROKEN lines
     try:
         entries = sorted(os.listdir(expanded))
     except PermissionError:
+        print(f"  {C_BOLD}{gdir}:{C_RESET}")
         print(f"    {C_BROKEN}(permission denied){C_RESET}")
         continue
-    if not entries:
-        print(f"    {C_DIM}(empty){C_RESET}")
-        continue
+    broken_lines = []
+    normal_lines = []
     for name in entries:
         path = os.path.join(expanded, name)
         if os.path.islink(path):
@@ -304,16 +314,27 @@ for gdir in GUARD_DIRS:
             tgt_abs = os.path.normpath(os.path.join(expanded, tgt))
             if not os.path.exists(tgt_abs):
                 counts["GUARD_BROKEN"] += 1
-                print(f"    {C_BROKEN}BROKEN{C_RESET}   {name}  {C_DIM}[broken → {tgt}]{C_RESET}")
+                broken_lines.append(f"    {C_BROKEN}BROKEN{C_RESET}   {name}  {C_DIM}[broken → {tgt}]{C_RESET}")
             elif tgt_abs.startswith(stow_root + os.sep) or tgt_abs == stow_root:
                 counts["GUARD_REPO"] += 1
-                print(f"    {C_REPO}REPO{C_RESET}     {name}")
+                normal_lines.append(f"    {C_REPO}REPO{C_RESET}     {name}")
             else:
                 counts["GUARD_LOCAL"] += 1
-                print(f"    {C_LOCAL}LOCAL{C_RESET}    {name}  {C_DIM}[foreign symlink → {tgt_abs}]{C_RESET}")
+                normal_lines.append(f"    {C_LOCAL}LOCAL{C_RESET}    {name}  {C_DIM}[foreign symlink → {tgt_abs}]{C_RESET}")
         else:
             counts["GUARD_LOCAL"] += 1
-            print(f"    {C_LOCAL}LOCAL{C_RESET}    {name}")
+            normal_lines.append(f"    {C_LOCAL}LOCAL{C_RESET}    {name}")
+    if summary_mode:
+        if broken_lines:
+            print(f"  {C_BOLD}{gdir}:{C_RESET}")
+            for l in broken_lines:
+                print(l)
+    else:
+        print(f"  {C_BOLD}{gdir}:{C_RESET}")
+        if not entries:
+            print(f"    {C_DIM}(empty){C_RESET}")
+        for l in broken_lines + normal_lines:
+            print(l)
 
 with open(tmp_file, "a") as f:
     for k, v in counts.items():
@@ -325,11 +346,13 @@ section "Content Diffs"
 
 DOTFILES_NO_COLOR="$NO_COLOR_FLAG" \
 DOTFILES_DIFF_TMP="$_DIFF_TMP" \
+DOTFILES_SUMMARY="$SUMMARY_FLAG" \
 python3 << 'PYEOF'
 import os, subprocess
 
-no_color = os.environ.get("DOTFILES_NO_COLOR", "0") == "1"
-tmp_file = os.environ["DOTFILES_DIFF_TMP"]
+no_color     = os.environ.get("DOTFILES_NO_COLOR", "0") == "1"
+tmp_file     = os.environ["DOTFILES_DIFF_TMP"]
+summary_mode = os.environ.get("DOTFILES_SUMMARY", "0") == "1"
 
 if no_color:
     C_BOLD = C_DIM = C_FAIL = C_PASS = C_LOCAL = C_RESET = ""
@@ -398,40 +421,41 @@ else:
         else:
             print("    (diff failed)")
 
-# 3b — Local-only files
-print(f"\n  {C_BOLD}3b — Local-only files{C_RESET}")
-if not locals_:
-    print("  (no local-only files in descended directories)")
-else:
-    for pair in locals_:
-        if len(pair) != 2:
-            continue
-        home_path, rel = pair
-        if not os.path.isfile(home_path) or os.path.islink(home_path):
-            print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}  (directory or symlink — not shown)")
-            continue
-        try:
-            size = os.path.getsize(home_path)
-        except OSError:
-            print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}  (inaccessible)")
-            continue
-        if is_binary(home_path):
-            print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}  (binary file, {size} bytes)")
-            continue
-        print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}")
-        print(f"    {C_DIM}--- first 30 lines ---{C_RESET}")
-        try:
-            with open(home_path, "r", errors="replace") as f:
-                file_lines = f.readlines()
-        except OSError:
-            print(f"    (cannot read)")
-            continue
-        for l in file_lines[:30]:
-            print(f"    {l}", end="")
-        if not file_lines or not file_lines[-1].endswith("\n"):
-            print()
-        if len(file_lines) > 30:
-            print(f"    {C_DIM}[{len(file_lines) - 30} more lines — full path: {home_path}]{C_RESET}")
+# 3b — Local-only files (skipped in --summary mode)
+if not summary_mode:
+    print(f"\n  {C_BOLD}3b — Local-only files{C_RESET}")
+    if not locals_:
+        print("  (no local-only files in descended directories)")
+    else:
+        for pair in locals_:
+            if len(pair) != 2:
+                continue
+            home_path, rel = pair
+            if not os.path.isfile(home_path) or os.path.islink(home_path):
+                print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}  (directory or symlink — not shown)")
+                continue
+            try:
+                size = os.path.getsize(home_path)
+            except OSError:
+                print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}  (inaccessible)")
+                continue
+            if is_binary(home_path):
+                print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}  (binary file, {size} bytes)")
+                continue
+            print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}")
+            print(f"    {C_DIM}--- first 30 lines ---{C_RESET}")
+            try:
+                with open(home_path, "r", errors="replace") as f:
+                    file_lines = f.readlines()
+            except OSError:
+                print(f"    (cannot read)")
+                continue
+            for l in file_lines[:30]:
+                print(f"    {l}", end="")
+            if not file_lines or not file_lines[-1].endswith("\n"):
+                print()
+            if len(file_lines) > 30:
+                print(f"    {C_DIM}[{len(file_lines) - 30} more lines — full path: {home_path}]{C_RESET}")
 PYEOF
 
 # ── 4. Summary ───────────────────────────────────────────────────────────────

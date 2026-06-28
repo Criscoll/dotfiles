@@ -154,10 +154,21 @@ Docker, gws-cli config, optional/WIP mail tools, and version drift against `vers
 its output points at the failing check and a remediation hint for each.
 
 ```bash
-dotfiles-audit                 # full check; exit 0 only if no FAILs (WARNs don't fail it)
+dotfiles-audit                    # full check; exit 0 only if no FAILs (WARNs don't fail it)
+dotfiles-audit --fails            # FAIL/WARN lines + Summary counts only — routing tier
 dotfiles-audit --update-versions  # rewrite versions.lock from installed versions (primary only)
-dotfiles-audit --no-color      # plain output (also honours NO_COLOR)
+dotfiles-audit --no-color         # plain output (also honours NO_COLOR)
 ```
+
+`dotfiles-diff` is the companion stow-drift inventory tool:
+
+```bash
+dotfiles-diff                  # full per-item LINKED/LOCAL/WRONG/BLOCKED/FOREIGN/MISSING listing
+dotfiles-diff --summary        # anomaly lines only (WRONG/BLOCKED/FOREIGN/MISSING/BROKEN) + counts — routing tier
+dotfiles-diff --no-color       # plain output (also honours NO_COLOR)
+```
+
+For agent routing decisions, prefer `dotfiles-audit --fails` and `dotfiles-diff --summary` — they suppress the 400+ LINKED/LOCAL/PASS lines that are noise at routing altitude and re-inflate context on every subsequent turn.
 
 `versions.lock` is **this machine's committed snapshot** of tested tool versions, so drift can be
 tracked across machines. Drift is directional: installed *behind* the lock is flagged `WARN …

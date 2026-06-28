@@ -43,21 +43,22 @@ Each subsequent phase reads `HOME_DIR` and `REPO_DIR` from the `## Confirmed Pat
 
 ## Step 2: Run the canonical tools
 
-Run the detection tools and append outputs to `/tmp/resync-audit.md`:
+Capture full output silently (compaction recovery reference, not read back into context):
 
 ```bash
-{ echo "## dotfiles-audit"; dotfiles-audit --no-color; echo ""; } >> /tmp/resync-audit.md
+dotfiles-audit --no-color > /tmp/resync-audit-full.txt 2>&1
+dotfiles-diff --no-color > /tmp/resync-diff-full.txt 2>&1
 ```
 
-```bash
-{ echo "## dotfiles-diff"; dotfiles-diff --no-color 2>/dev/null | tee /tmp/resync-diff.txt; echo ""; } >> /tmp/resync-audit.md
-```
+Surface the routing-relevant summary into context:
 
 ```bash
+dotfiles-audit --no-color --fails
+dotfiles-diff --no-color --summary
 git -C $REPO_DIR diff --name-only --diff-filter=U 2>/dev/null
 ```
 
-Present the output to the user. Note any FAIL items from `dotfiles-audit`, BLOCKED/MISSING/WRONG counts from `dotfiles-diff`, and any files with merge conflict markers.
+Note any FAIL/WARN items from `dotfiles-audit`, anomaly lines (WRONG/BLOCKED/FOREIGN/MISSING) and counts from `dotfiles-diff`, and any files with merge conflict markers. If a scenario needs the full per-item listing, retrieve it with `cat /tmp/resync-audit-full.txt` or `cat /tmp/resync-diff-full.txt`.
 
 ---
 
@@ -144,6 +145,12 @@ ls -la $HOME_DIR/.zshrc $HOME_DIR/.tmux.conf 2>/dev/null || true
 
 If `dotfiles-diff` showed COLLAPSIBLE entries, offer to run `collapsible_dirs.sh` and then `collapse_dir.sh` for each approved directory as an optional follow-up. Do not collapse without explicit user approval.
 
+**Canonical verify** (use this single command to close out any sync or triage path):
+
+```bash
+dotfiles-audit --no-color --fails && dotfiles-diff --no-color --summary
+```
+
 ---
 
 Load scenario files on demand — do not read them speculatively:
@@ -158,28 +165,9 @@ Handle scenarios in the order listed if multiple apply (git state before stow st
 
 ## Step 4: Triage — stash, pull, pop (pull-only machines)
 
-If the machine has uncommitted changes, pull will fail or produce conflicts. The standard process:
-
 ```bash
-# Check for uncommitted changes
-git -C $REPO_DIR status --short
-
-# If there are changes, stash them
-git -C $REPO_DIR stash push -m "pre-pull drift $(date +%Y%m%d-%H%M%S)"
-
-# Pull
-git -C $REPO_DIR pull
-
-# Pop the stash
-git -C $REPO_DIR stash pop
+cat "${CLAUDE_SKILL_DIR}/scenarios/git_drift.md"
 ```
-
-**After the pop:**
-- Clean pop → local changes were compatible; re-run Step 2 and re-route.
-- Conflicts → load `scenarios/merge_conflicts.md`.
-- Pop looks wrong → drop the stash and start from the pulled state: `git -C $REPO_DIR checkout -- .` (only after confirming nothing local is worth keeping).
-
-This machine is pull-only — do not commit or push regardless of outcome.
 
 ---
 
@@ -216,43 +204,6 @@ Each phase file tells you exactly which condition to report when it's done. Foll
 
 ## Emergency rollback — restore to pre-pull state
 
-If the sync went wrong and you want to get back to exactly where things were before pulling:
-
-### Step R1: Find the pre-pull commit
-
 ```bash
-git -C $REPO_DIR reflog | head -20
+cat "${CLAUDE_SKILL_DIR}/scenarios/rollback.md"
 ```
-
-Look for the entry immediately before `pull` (will read something like `HEAD@{1}: pull: Fast-forward`). Note the SHA — call it `PRE_PULL_SHA`.
-
-### Step R2: Reset the repo
-
-```bash
-git -C $REPO_DIR reset --hard $PRE_PULL_SHA
-git -C $REPO_DIR log --oneline -5
-```
-
-### Step R3: Restore stashed local changes (if Step 4 created a stash)
-
-```bash
-git -C $REPO_DIR stash list
-git -C $REPO_DIR stash pop stash@{0}
-```
-
-If the pop produces conflicts, load `scenarios/merge_conflicts.md`. To discard the stash entirely: `git -C $REPO_DIR stash drop stash@{0}`.
-
-### Step R4: Verify stow is clean
-
-```bash
-stow --simulate -v -t $HOME_DIR $REPO_DIR/stow-managed 2>&1
-```
-
-### Step R5: Confirm the environment is healthy
-
-```bash
-ls -la $HOME_DIR/.zshrc $HOME_DIR/.tmux.conf $HOME_DIR/.config/nvim/init.lua
-zsh -i -c "echo shell ok"
-```
-
-If anything still looks wrong after the rollback, stop and describe the symptom — do not apply further fixes blindly.

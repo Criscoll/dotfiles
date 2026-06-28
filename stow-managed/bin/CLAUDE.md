@@ -38,6 +38,21 @@ ls ~/opt/nvim-linux-x86_64.appimage    # does the binary exist?
 
 If a binary lives elsewhere on a machine, add a direct PATH entry to that machine's `~/.zshrc.local` rather than changing the shared wrapper. **Do not add per-app PATH entries to `.zshrc`** — machine-specific PATH additions belong in `~/.zshrc.local`.
 
+## Audit Scripts (`dotfiles-audit`, `dotfiles-diff`)
+
+These are the canonical read-only setup checkers. Both are default-safe and unchanged — the new flags add a high-level tier without altering existing output.
+
+```
+dotfiles-audit --fails            # FAIL/WARN lines + Summary counts only (routing tier)
+dotfiles-audit --no-color         # full output, no ANSI (default, unchanged)
+dotfiles-audit --update-versions  # refresh versions.lock (primary machine only)
+
+dotfiles-diff --summary           # anomaly lines (WRONG/BLOCKED/FOREIGN/MISSING/BROKEN) + counts (routing tier)
+dotfiles-diff --no-color          # full output, no ANSI (default, unchanged)
+```
+
+The `--fails` / `--summary` flags are the preferred first step for agent routing decisions — they suppress the 400+ LINKED/LOCAL/PASS lines that are never needed at routing time. Full output is still available on demand via `cat /tmp/resync-*-full.txt` (written by the resync-dotfiles skill).
+
 ## Agent-Only Scripts (`agent_scripts/`)
 
 Scripts intended for use **only by an agent** (not by the user directly in a shell) live in `agent_scripts/`. Because `~/bin/` is a directory symlink to `stow-managed/bin/`, this subdir is automatically accessible as `~/bin/agent_scripts/` without re-running stow — no `$PATH` entry needed or wanted.

@@ -2,11 +2,12 @@
 
 PASS=0; FAIL=0; WARN=0
 
-NO_COLOR_FLAG=0; UPDATE_VERSIONS_FLAG=0; HELP_FLAG=0
+NO_COLOR_FLAG=0; UPDATE_VERSIONS_FLAG=0; HELP_FLAG=0; FAILS_FLAG=0
 for _arg in "$@"; do
   case "$_arg" in
     --no-color)        NO_COLOR_FLAG=1 ;;
     --update-versions) UPDATE_VERSIONS_FLAG=1 ;;
+    --fails)           FAILS_FLAG=1 ;;
     --help|-h)         HELP_FLAG=1 ;;
   esac
 done
@@ -18,9 +19,11 @@ Verifies required binaries, opt-backed wrappers, guard directories, expected
 repos/paths, git submodule state, stow symlink health, Docker, gws-cli config,
 optional/WIP mail tools, and version drift against versions.lock.
 
-Usage: dotfiles-audit [--update-versions] [--no-color] [--help]
+Usage: dotfiles-audit [--update-versions] [--fails] [--no-color] [--help]
   --update-versions  Rewrite versions.lock from currently installed versions
                      (run on a primary machine to refresh the snapshot).
+  --fails            Print only FAIL/WARN lines and the final Summary counts.
+                     Suppresses PASS items — use for quick routing decisions.
   --no-color         Disable ANSI colour/dim styling (also honours NO_COLOR).
   --help, -h         Show this message and exit.
 EOF
@@ -36,7 +39,7 @@ else
 fi
 
 section() { printf "\n${C_BOLD}=== %s ===${C_RESET}\n" "$1"; }
-pass()    { printf "  ${C_PASS}PASS${C_RESET}  %s\n" "$1"; PASS=$((PASS+1)); }
+pass()    { PASS=$((PASS+1)); [[ "$FAILS_FLAG" -eq 1 ]] && return; printf "  ${C_PASS}PASS${C_RESET}  %s\n" "$1"; }
 fail()    { printf "  ${C_FAIL}FAIL${C_RESET}  %s\n" "$1"; FAIL=$((FAIL+1)); }
 warn()    { printf "  ${C_WARN}WARN${C_RESET}  %s\n" "$1"; WARN=$((WARN+1)); }
 
@@ -344,8 +347,8 @@ else
       if [[ "$_cmp" == "-1" ]]; then
         warn "$_tool BEHIND  locked=$_locked installed=$_installed"
       elif [[ "$_cmp" == "1" ]]; then
-        printf "  ${C_PASS}PASS${C_RESET}  ${C_DIM}%s %s (ahead of lock=%s, ok)${C_RESET}\n" "$_tool" "$_installed" "$_locked"
         PASS=$((PASS+1))
+        [[ "$FAILS_FLAG" -eq 0 ]] && printf "  ${C_PASS}PASS${C_RESET}  ${C_DIM}%s %s (ahead of lock=%s, ok)${C_RESET}\n" "$_tool" "$_installed" "$_locked"
       else
         # numerically equal but strings differ (e.g. build metadata) — treat as match
         pass "$_tool $_installed"
