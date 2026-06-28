@@ -146,7 +146,7 @@ printf "${C_BOLD}dotfiles-audit${C_RESET} ${C_DIM}— read-only machine setup ch
 
 # ── 1. Required Binaries ─────────────────────────────────────────────────────
 section "Required Binaries"
-for cmd in zsh tmux git stow rclone docker delta uv claude; do
+for cmd in zsh tmux git stow rclone docker delta uv claude git-crypt; do
   check_bin "$cmd"
 done
 
@@ -310,13 +310,23 @@ else
   fi
 fi
 
-# ── 9. Optional / WIP Tools ──────────────────────────────────────────────────
+# ── 9. Agent Script Dependencies ─────────────────────────────────────────────
+section "Agent Script Dependencies"
+# Playwright chromium (required by webcrawl; script auto-installs on first run)
+_playwright_cache="$HOME/.cache/ms-playwright"
+if compgen -G "$_playwright_cache/chromium-*" > /dev/null 2>&1; then
+  pass "Playwright chromium browsers installed"
+else
+  warn "Playwright chromium browsers absent — webcrawl will auto-install on first use (~30s), or run: uvx crawl4ai-setup"
+fi
+
+# ── 10. Optional / WIP Tools ─────────────────────────────────────────────────
 section "Optional / WIP Tools"
 check_bin_warn mbsync   "mbsync (mail sync)"
 check_bin_warn msmtp    "msmtp (mail send)"
 check_bin_warn neomutt  "neomutt (mail client)"
 
-# ── 10. Version Drift ────────────────────────────────────────────────────────
+# ── 11. Version Drift ────────────────────────────────────────────────────────
 section "Version Drift"
 if [[ ! -f "$LOCK_FILE" ]]; then
   warn "no versions.lock found — run: dotfiles-audit --update-versions"

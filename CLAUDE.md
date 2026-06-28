@@ -96,6 +96,33 @@ Then stow will create the symlinks pointing to the repo versions.
 mkdir -p ~/.pi/agent ~/.pi/agent/extensions ~/.pi/agent/agents
 ```
 
+### git-crypt (Encrypted Repos)
+
+Some repos (e.g. `scribbles`, `health-analytics`) use **git-crypt in GPG mode** to encrypt sensitive files at rest. Each repo has the GPG public key committed inside `.git-crypt/`; unlocking requires the corresponding private key to be present on the machine.
+
+**Convention: one personal GPG key, added to every encrypted repo.** All repos use the same GPG identity — `git-crypt add-gpg-user YOUR_EMAIL` — so the same private key unlocks everything.
+
+**Setting up on a new machine:**
+
+```bash
+# On the source machine: export the private key
+gpg --export-secret-keys --armor YOUR_EMAIL > ~/private.key
+
+# Transfer securely (scp, USB, etc.) — never email
+# On the new machine:
+gpg --import ~/private.key
+rm ~/private.key
+
+# Trust the key (required — git-crypt rejects untrusted keys)
+gpg --edit-key YOUR_EMAIL
+# gpg> trust → 5 (ultimate) → quit
+
+# Unlock each repo
+git-crypt unlock    # run from inside each encrypted repo; no key file argument needed
+```
+
+`git-crypt` must be installed (`sudo apt install git-crypt`). The `dotfiles-audit` script checks for it.
+
 ### Machine-Specific Claude Code Settings (`settings.local.json`)
 
 `stow-managed/.claude/settings.json` stows to `~/.claude/settings.json`, which is **user-level scope** — it applies to all Claude Code projects on the machine, not just this repo. Do not confuse it with the project-level `.claude/settings.json` that would live in a project root.

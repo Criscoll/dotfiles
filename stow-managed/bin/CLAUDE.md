@@ -60,7 +60,12 @@ Scripts tracked here may have library dependencies. The rule: **dependencies mus
 
 `uv` reads this block, installs into an isolated cache (`~/.cache/uv`), and runs — no venv, no global pip, no manual setup. **Always pin exact versions (`==`)** — loose bounds let a future compromised release slip in silently. When upgrading, update the pin in every script that uses it and test before committing.
 
-Prerequisite: `uv` installed once per machine (`curl -LsSf https://astral.sh/uv/install.sh | sh`). All Python scripts under `bin/` and `agent_scripts/` follow this pattern. Exception: `webcrawl` predates it and uses a global `crawl4ai` install — leave as-is unless revisiting it specifically.
+Prerequisite: `uv` installed once per machine (`curl -LsSf https://astral.sh/uv/install.sh | sh`). All Python scripts under `bin/` and `agent_scripts/` follow this pattern.
+
+**One-time post-install for `webcrawl`:** `crawl4ai` depends on Playwright browsers, which install system-wide outside uv's cache. After a fresh machine setup, run once:
+```bash
+uvx crawl4ai-setup
+```
 
 ### Node scripts — `package.json` in the script directory
 
