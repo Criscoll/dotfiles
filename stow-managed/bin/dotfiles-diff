@@ -1,0 +1,476 @@
+#!/usr/bin/env bash
+
+NO_COLOR_FLAG=0; HELP_FLAG=0; MAX_DEPTH=4
+for _arg in "$@"; do
+  case "$_arg" in
+    --no-color)      NO_COLOR_FLAG=1 ;;
+    --help|-h)       HELP_FLAG=1 ;;
+    --max-depth=*)   MAX_DEPTH="${_arg#--max-depth=}" ;;
+  esac
+done
+
+if [[ "$HELP_FLAG" -eq 1 ]]; then
+  cat <<'EOF'
+dotfiles-diff — read-only stow drift inventory for this dotfiles repo.
+Classifies every item in stow-managed/ against ~/ and shows guard directory
+contents and content diffs for blocked items and local-only files.
+
+Usage: dotfiles-diff [--max-depth=N] [--no-color] [--help]
+  --max-depth=N  Maximum traversal depth into stow-managed/ (default: 4).
+  --no-color     Disable ANSI colour/dim styling (also honours NO_COLOR).
+  --help, -h     Show this message and exit.
+
+Exit code: 1 if any BLOCKED or WRONG items require manual intervention before
+stow can run; 0 otherwise.
+EOF
+  exit 0
+fi
+
+if [[ "$NO_COLOR_FLAG" -eq 1 || -n "$NO_COLOR" ]]; then
+  C_PASS=""; C_FAIL=""; C_WARN=""; C_BOLD=""; C_DIM=""; C_RESET=""
+else
+  C_PASS="\033[0;32m"; C_FAIL="\033[0;31m"; C_WARN="\033[0;33m"
+  C_BOLD="\033[1m"; C_DIM="\033[2m"; C_RESET="\033[0m"
+fi
+C_LINKED="$C_PASS"
+
+section() { printf "\n${C_BOLD}=== %s ===${C_RESET}\n" "$1"; }
+
+_script_real="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0" 2>/dev/null)"
+REPO_ROOT="$(dirname "$(dirname "$(dirname "$_script_real")")")"
+[[ -d "$REPO_ROOT/.git" ]] || REPO_ROOT="$HOME/Repos/dotfiles"
+STOW_DIR="$REPO_ROOT/stow-managed"
+
+_DIFF_TMP="$(mktemp)"
+trap 'rm -f "$_DIFF_TMP"' EXIT
+
+printf "${C_BOLD}dotfiles-diff${C_RESET} ${C_DIM}— stow drift inventory; see CLAUDE.md for remediation.${C_RESET}\n"
+printf "${C_DIM}stow-managed: %s${C_RESET}\n" "$STOW_DIR"
+
+# ── 1. Stow Inventory ────────────────────────────────────────────────────────
+section "Stow Inventory"
+
+DOTFILES_STOW_DIR="$STOW_DIR" \
+DOTFILES_NO_COLOR="$NO_COLOR_FLAG" \
+DOTFILES_MAX_DEPTH="$MAX_DEPTH" \
+DOTFILES_DIFF_TMP="$_DIFF_TMP" \
+python3 << 'PYEOF'
+import os, sys, hashlib
+
+stow_root = os.environ["DOTFILES_STOW_DIR"]
+home      = os.path.expanduser("~")
+no_color  = os.environ.get("DOTFILES_NO_COLOR", "0") == "1"
+max_depth = int(os.environ.get("DOTFILES_MAX_DEPTH", "4"))
+tmp_file  = os.environ["DOTFILES_DIFF_TMP"]
+
+if no_color:
+    C_LINKED = C_MISSING = C_BLOCKED = C_WRONG = C_FOREIGN = C_LOCAL = C_DIM = C_RESET = ""
+else:
+    C_LINKED  = "\033[0;32m"
+    C_MISSING = "\033[2m"
+    C_BLOCKED = "\033[0;31m"
+    C_WRONG   = "\033[0;31m"
+    C_FOREIGN = "\033[0;33m"
+    C_LOCAL   = "\033[0;33m"
+    C_DIM     = "\033[2m"
+    C_RESET   = "\033[0m"
+
+SKIP_NAMES = {".git", "__pycache__", ".stow-local-ignore"}
+
+counts = dict(LINKED=0, MISSING=0, BLOCKED=0, WRONG=0, FOREIGN=0, LOCAL=0, RENAMED=0)
+blocked_paths = []
+local_paths   = []
+
+stow_local_ignore = os.path.join(stow_root, ".stow-local-ignore")
+if os.path.exists(stow_local_ignore):
+    print(f"  {C_DIM}Note: .stow-local-ignore detected; some items may be intentionally excluded.{C_RESET}")
+
+def is_in_git_tree(path):
+    p = os.path.abspath(path)
+    while True:
+        if os.path.isdir(os.path.join(p, ".git")):
+            return True
+        parent = os.path.dirname(p)
+        if parent == p:
+            return False
+        p = parent
+
+def sha256_file(path):
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(65536)
+                if not chunk:
+                    break
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+def classify(stow_path, home_path, rel, depth):
+    if os.path.islink(home_path):
+        raw = os.readlink(home_path)
+        resolved = os.path.normpath(os.path.join(os.path.dirname(home_path), raw))
+        if resolved == stow_path:
+            counts["LINKED"] += 1
+            print(f"  {C_LINKED}LINKED{C_RESET}   ~/{rel}")
+        elif resolved.startswith(stow_root + os.sep):
+            counts["WRONG"] += 1
+            print(f"  {C_WRONG}WRONG{C_RESET}    ~/{rel}  {C_DIM}[different stow item → {resolved}]{C_RESET}")
+            blocked_paths.append(f"{stow_path}|{home_path}")
+        elif not os.path.exists(resolved):
+            counts["WRONG"] += 1
+            print(f"  {C_WRONG}WRONG{C_RESET}    ~/{rel}  {C_DIM}[broken → {raw}]{C_RESET}")
+            blocked_paths.append(f"{stow_path}|{home_path}")
+        elif is_in_git_tree(resolved):
+            counts["FOREIGN"] += 1
+            print(f"  {C_FOREIGN}FOREIGN{C_RESET}  ~/{rel}  {C_DIM}[→ {resolved}]{C_RESET}")
+        else:
+            counts["WRONG"] += 1
+            print(f"  {C_WRONG}WRONG{C_RESET}    ~/{rel}  {C_DIM}[unexpected target → {resolved}]{C_RESET}")
+            blocked_paths.append(f"{stow_path}|{home_path}")
+        return
+
+    stow_is_dir = os.path.isdir(stow_path) and not os.path.islink(stow_path)
+    home_is_dir = os.path.isdir(home_path) and not os.path.islink(home_path)
+
+    if stow_is_dir and home_is_dir:
+        if depth >= max_depth:
+            print(f"  {C_DIM}…        ~/{rel}/  (max-depth {max_depth} reached; use --max-depth=N to go deeper){C_RESET}")
+            return
+
+        # Forward pass: repo → machine
+        stow_entries = set(os.listdir(stow_path)) - SKIP_NAMES
+        yielded_home = set()
+        for name in sorted(stow_entries):
+            sub_stow = os.path.join(stow_path, name)
+            sub_home = os.path.join(home_path, name)
+            sub_rel  = os.path.join(rel, name)
+            classify(sub_stow, sub_home, sub_rel, depth + 1)
+            yielded_home.add(name)
+
+        # Reverse pass: machine → repo (LOCAL detection)
+        if os.path.isdir(home_path):
+            home_entries = set(os.listdir(home_path)) - SKIP_NAMES
+            local_in_dir  = []
+            missing_in_dir = []
+
+            # Gather MISSINGs from this directory for rename detection
+            for name in stow_entries:
+                sub_stow = os.path.join(stow_path, name)
+                sub_home = os.path.join(home_path, name)
+                if not os.path.exists(sub_home) and not os.path.islink(sub_home):
+                    if os.path.isfile(sub_stow) and os.path.getsize(sub_stow) <= 500 * 1024:
+                        missing_in_dir.append(name)
+
+            for name in sorted(home_entries - yielded_home):
+                sub_home = os.path.join(home_path, name)
+                sub_rel  = os.path.join(rel, name)
+                if os.path.islink(sub_home):
+                    raw = os.readlink(sub_home)
+                    tgt = os.path.normpath(os.path.join(home_path, raw))
+                    if not os.path.exists(tgt):
+                        counts["WRONG"] += 1
+                        print(f"  {C_WRONG}WRONG{C_RESET}    ~/{sub_rel}  {C_DIM}[broken local symlink → {raw}]{C_RESET}")
+                    elif is_in_git_tree(tgt):
+                        counts["FOREIGN"] += 1
+                        print(f"  {C_FOREIGN}FOREIGN{C_RESET}  ~/{sub_rel}  {C_DIM}[foreign symlink → {tgt}]{C_RESET}")
+                    else:
+                        counts["LOCAL"] += 1
+                        print(f"  {C_LOCAL}LOCAL{C_RESET}    ~/{sub_rel}  {C_DIM}[symlink → {tgt}]{C_RESET}")
+                        local_paths.append(f"{sub_home}|{sub_rel}")
+                        local_in_dir.append(name)
+                else:
+                    counts["LOCAL"] += 1
+                    # Defer rename check; accumulate
+                    local_in_dir.append(name)
+                    local_paths.append(f"{sub_home}|{sub_rel}")
+                    print(f"  {C_LOCAL}LOCAL{C_RESET}    ~/{sub_rel}")
+
+            # Rename detection within this directory
+            if missing_in_dir and local_in_dir:
+                missing_hashes = {}
+                for mname in missing_in_dir:
+                    h = sha256_file(os.path.join(stow_path, mname))
+                    if h:
+                        missing_hashes[h] = mname
+                for lname in local_in_dir:
+                    lpath = os.path.join(home_path, lname)
+                    if not os.path.isfile(lpath) or os.path.islink(lpath):
+                        continue
+                    if os.path.getsize(lpath) > 500 * 1024:
+                        continue
+                    lh = sha256_file(lpath)
+                    if lh and lh in missing_hashes:
+                        mname = missing_hashes[lh]
+                        counts["RENAMED"] += 1
+                        lrel = os.path.join(rel, lname)
+                        print(f"  {C_FOREIGN}RENAMED?{C_RESET} ~/{lrel}  {C_DIM}(content matches stow-managed: {mname}){C_RESET}")
+        return
+
+    if not os.path.exists(home_path) and not os.path.islink(home_path):
+        counts["MISSING"] += 1
+        print(f"  {C_MISSING}MISSING{C_RESET}  ~/{rel}")
+        return
+
+    # Anything else: BLOCKED
+    counts["BLOCKED"] += 1
+    if home_is_dir and not stow_is_dir:
+        note = " (stow file vs real dir)"
+    else:
+        note = ""
+    print(f"  {C_BLOCKED}BLOCKED{C_RESET}  ~/{rel}{note}")
+    blocked_paths.append(f"{stow_path}|{home_path}")
+
+# Walk top-level stow-managed entries
+for name in sorted(os.listdir(stow_root)):
+    if name in SKIP_NAMES:
+        continue
+    classify(
+        os.path.join(stow_root, name),
+        os.path.join(home, name),
+        name,
+        0,
+    )
+
+# Write counts and paths to temp file
+with open(tmp_file, "a") as f:
+    for k, v in counts.items():
+        f.write(f"{k}={v}\n")
+    for p in blocked_paths:
+        f.write(f"BLOCKED_PATH={p}\n")
+    for p in local_paths:
+        f.write(f"LOCAL_PATH={p}\n")
+PYEOF
+
+# ── 2. Guard Directory Inventory ─────────────────────────────────────────────
+section "Guard Directory Inventory"
+
+DOTFILES_STOW_DIR="$STOW_DIR" \
+DOTFILES_NO_COLOR="$NO_COLOR_FLAG" \
+DOTFILES_DIFF_TMP="$_DIFF_TMP" \
+python3 << 'PYEOF'
+import os
+
+stow_root = os.environ["DOTFILES_STOW_DIR"]
+no_color  = os.environ.get("DOTFILES_NO_COLOR", "0") == "1"
+tmp_file  = os.environ["DOTFILES_DIFF_TMP"]
+
+if no_color:
+    C_REPO = C_LOCAL = C_BROKEN = C_DIM = C_BOLD = C_RESET = ""
+else:
+    C_REPO   = "\033[0;32m"
+    C_LOCAL  = "\033[0;33m"
+    C_BROKEN = "\033[0;31m"
+    C_DIM    = "\033[2m"
+    C_BOLD   = "\033[1m"
+    C_RESET  = "\033[0m"
+
+GUARD_DIRS = [
+    "~/.claude/commands",
+    "~/.claude/agents",
+    "~/.claude/skills",
+    "~/.claude/hooks",
+    "~/.pi/agent/extensions",
+    "~/.pi/agent/agents",
+]
+
+counts = dict(GUARD_REPO=0, GUARD_LOCAL=0, GUARD_BROKEN=0)
+
+for gdir in GUARD_DIRS:
+    expanded = os.path.expanduser(gdir)
+    if not os.path.exists(expanded) and not os.path.islink(expanded):
+        print(f"  \033[0;31mMISSING\033[0m  {gdir}  {C_DIM}(create: mkdir -p {expanded}){C_RESET}")
+        continue
+    if os.path.islink(expanded):
+        tgt = os.path.realpath(expanded)
+        print(f"  {C_DIM}NOTE{C_RESET}     {gdir}  {C_DIM}(fully stowed → {tgt}; see Stow Inventory){C_RESET}")
+        continue
+    # Real directory
+    print(f"  {C_BOLD}{gdir}:{C_RESET}")
+    try:
+        entries = sorted(os.listdir(expanded))
+    except PermissionError:
+        print(f"    {C_BROKEN}(permission denied){C_RESET}")
+        continue
+    if not entries:
+        print(f"    {C_DIM}(empty){C_RESET}")
+        continue
+    for name in entries:
+        path = os.path.join(expanded, name)
+        if os.path.islink(path):
+            tgt = os.readlink(path)
+            tgt_abs = os.path.normpath(os.path.join(expanded, tgt))
+            if not os.path.exists(tgt_abs):
+                counts["GUARD_BROKEN"] += 1
+                print(f"    {C_BROKEN}BROKEN{C_RESET}   {name}  {C_DIM}[broken → {tgt}]{C_RESET}")
+            elif tgt_abs.startswith(stow_root + os.sep) or tgt_abs == stow_root:
+                counts["GUARD_REPO"] += 1
+                print(f"    {C_REPO}REPO{C_RESET}     {name}")
+            else:
+                counts["GUARD_LOCAL"] += 1
+                print(f"    {C_LOCAL}LOCAL{C_RESET}    {name}  {C_DIM}[foreign symlink → {tgt_abs}]{C_RESET}")
+        else:
+            counts["GUARD_LOCAL"] += 1
+            print(f"    {C_LOCAL}LOCAL{C_RESET}    {name}")
+
+with open(tmp_file, "a") as f:
+    for k, v in counts.items():
+        f.write(f"{k}={v}\n")
+PYEOF
+
+# ── 3. Content Diffs ─────────────────────────────────────────────────────────
+section "Content Diffs"
+
+DOTFILES_NO_COLOR="$NO_COLOR_FLAG" \
+DOTFILES_DIFF_TMP="$_DIFF_TMP" \
+python3 << 'PYEOF'
+import os, subprocess
+
+no_color = os.environ.get("DOTFILES_NO_COLOR", "0") == "1"
+tmp_file = os.environ["DOTFILES_DIFF_TMP"]
+
+if no_color:
+    C_BOLD = C_DIM = C_FAIL = C_PASS = C_LOCAL = C_RESET = ""
+else:
+    C_BOLD  = "\033[1m"
+    C_DIM   = "\033[2m"
+    C_FAIL  = "\033[0;31m"
+    C_PASS  = "\033[0;32m"
+    C_LOCAL = "\033[0;33m"
+    C_RESET = "\033[0m"
+
+home = os.path.expanduser("~")
+
+blocked = []
+locals_ = []
+
+with open(tmp_file) as f:
+    for line in f:
+        line = line.rstrip("\n")
+        if line.startswith("BLOCKED_PATH="):
+            blocked.append(line[len("BLOCKED_PATH="):].split("|", 1))
+        elif line.startswith("LOCAL_PATH="):
+            locals_.append(line[len("LOCAL_PATH="):].split("|", 1))
+
+def is_binary(path):
+    try:
+        with open(path, "rb") as f:
+            return b"\x00" in f.read(8192)
+    except OSError:
+        return False
+
+# 3a — Blocked items
+print(f"\n  {C_BOLD}3a — Blocked items{C_RESET}")
+if not blocked:
+    print("  (no blocked items)")
+else:
+    for pair in blocked:
+        if len(pair) != 2:
+            continue
+        stow_path, home_path = pair
+        rel = os.path.relpath(home_path, home)
+        print(f"\n  {C_FAIL}BLOCKED{C_RESET}  ~/{rel}")
+        if not os.path.isfile(stow_path) or not os.path.isfile(home_path):
+            print("    (directory vs file or inaccessible — cannot diff)")
+            continue
+        if is_binary(stow_path) or is_binary(home_path):
+            print("    (binary files — cannot diff)")
+            continue
+        stow_rel = os.path.relpath(stow_path)
+        result = subprocess.run(
+            ["diff", "-u",
+             "--label", f"stow-managed/{rel}",
+             "--label", f"~/{rel}",
+             stow_path, home_path],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            print(f"    {C_PASS}content identical — safe to replace with symlink{C_RESET}")
+        elif result.returncode == 1:
+            lines = result.stdout.splitlines()
+            shown = lines[:40]
+            for l in shown:
+                print(f"    {l}")
+            if len(lines) > 40:
+                print(f"    {C_DIM}[{len(lines) - 40} more lines omitted]{C_RESET}")
+        else:
+            print("    (diff failed)")
+
+# 3b — Local-only files
+print(f"\n  {C_BOLD}3b — Local-only files{C_RESET}")
+if not locals_:
+    print("  (no local-only files in descended directories)")
+else:
+    for pair in locals_:
+        if len(pair) != 2:
+            continue
+        home_path, rel = pair
+        if not os.path.isfile(home_path) or os.path.islink(home_path):
+            print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}  (directory or symlink — not shown)")
+            continue
+        try:
+            size = os.path.getsize(home_path)
+        except OSError:
+            print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}  (inaccessible)")
+            continue
+        if is_binary(home_path):
+            print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}  (binary file, {size} bytes)")
+            continue
+        print(f"\n  {C_LOCAL}LOCAL{C_RESET}  ~/{rel}")
+        print(f"    {C_DIM}--- first 30 lines ---{C_RESET}")
+        try:
+            with open(home_path, "r", errors="replace") as f:
+                file_lines = f.readlines()
+        except OSError:
+            print(f"    (cannot read)")
+            continue
+        for l in file_lines[:30]:
+            print(f"    {l}", end="")
+        if not file_lines or not file_lines[-1].endswith("\n"):
+            print()
+        if len(file_lines) > 30:
+            print(f"    {C_DIM}[{len(file_lines) - 30} more lines — full path: {home_path}]{C_RESET}")
+PYEOF
+
+# ── 4. Summary ───────────────────────────────────────────────────────────────
+section "Summary"
+
+LINKED=0; MISSING=0; BLOCKED=0; WRONG=0; FOREIGN=0; LOCAL=0; RENAMED=0
+GUARD_REPO=0; GUARD_LOCAL=0; GUARD_BROKEN=0
+
+while IFS='=' read -r key val; do
+  case "$key" in
+    LINKED)      LINKED="$val" ;;
+    MISSING)     MISSING="$val" ;;
+    BLOCKED)     BLOCKED="$val" ;;
+    WRONG)       WRONG="$val" ;;
+    FOREIGN)     FOREIGN="$val" ;;
+    LOCAL)       LOCAL="$val" ;;
+    RENAMED)     RENAMED="$val" ;;
+    GUARD_REPO)  GUARD_REPO="$val" ;;
+    GUARD_LOCAL) GUARD_LOCAL="$val" ;;
+    GUARD_BROKEN)GUARD_BROKEN="$val" ;;
+  esac
+done < <(grep -v '^BLOCKED_PATH\|^LOCAL_PATH' "$_DIFF_TMP")
+
+printf "  ${C_BOLD}Stow inventory:${C_RESET}\n"
+printf "    ${C_PASS}LINKED${C_RESET}    %d\n"  "$LINKED"
+printf "    ${C_DIM}MISSING${C_RESET}   %d\n"  "$MISSING"
+printf "    ${C_FAIL}BLOCKED${C_RESET}   %d\n" "$BLOCKED"
+printf "    ${C_FAIL}WRONG${C_RESET}     %d\n" "$WRONG"
+printf "    ${C_WARN}FOREIGN${C_RESET}   %d\n" "$FOREIGN"
+printf "    ${C_WARN}LOCAL${C_RESET}     %d\n" "$LOCAL"
+printf "    ${C_WARN}RENAMED?${C_RESET}  %d\n" "$RENAMED"
+printf "  ${C_BOLD}Guard directories:${C_RESET}\n"
+printf "    ${C_PASS}REPO${C_RESET}      %d\n"  "$GUARD_REPO"
+printf "    ${C_WARN}LOCAL${C_RESET}     %d\n"  "$GUARD_LOCAL"
+printf "    ${C_FAIL}BROKEN${C_RESET}    %d\n"  "$GUARD_BROKEN"
+echo
+
+if [[ "$BLOCKED" -gt 0 || "$WRONG" -gt 0 || "$GUARD_BROKEN" -gt 0 ]]; then
+  printf "${C_FAIL}Action required:${C_RESET} resolve BLOCKED/WRONG/BROKEN items before running stow.\n"
+fi
+
+[[ "$BLOCKED" -eq 0 && "$WRONG" -eq 0 ]]
