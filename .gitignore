@@ -15,6 +15,9 @@ stow-managed/.local/share/fonts/.uuid
 # Deep-plan runtime artifacts — never commit
 .plans/
 
+# Resync stage artifacts — machine-local, never commit
+.resync/
+
 # Python bytecode caches — never commit
 __pycache__/
 **/__pycache__/

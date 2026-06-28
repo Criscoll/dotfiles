@@ -10,71 +10,61 @@ disable-model-invocation: false
 allowed-tools: Bash Read Write Glob Grep Edit
 ---
 
-You are running the dotfiles resync skill. Before entering the phase-by-phase sync workflow, run the canonical audit tools and route to the correct mode.
+You are running the dotfiles resync skill. Each invocation covers exactly one stage. At the end of every stage, ask the user to `/clear` and re-invoke — this keeps each stage in a bounded context.
 
-## Step 1: Orientation
+## Step 0: Resolve paths and detect stage
+
+**Resolve HOME_DIR and REPO_DIR:**
 
 ```bash
-realpath ~
+HOME_DIR=$(realpath ~)
 for p in ~/Repos/dotfiles ~/dotfiles ~/src/dotfiles ~/projects/dotfiles ~/.dotfiles; do
-  [ -d "$p/stow-managed" ] && echo "Found: $(realpath $p)"
+  [ -d "$p/stow-managed" ] && REPO_DIR=$(realpath "$p") && break
 done
+echo "HOME_DIR=$HOME_DIR"
+echo "REPO_DIR=${REPO_DIR:-NOT FOUND}"
 ```
 
-Hold `HOME_DIR` and `REPO_DIR` for all subsequent commands. Confirm with the user before proceeding.
+If REPO_DIR is not found, ask the user to provide it. Hold `HOME_DIR`, `REPO_DIR`, and `RESYNC_DIR="$REPO_DIR/.resync"` for all subsequent commands.
 
-After confirming paths, create the working file that persists across context compaction:
+**Check for `$ARGUMENTS` override** — if `$ARGUMENTS` contains a stage name, force that stage:
 
-```bash
-{ echo "# Resync Audit"
-  echo "Started: $(date)"
-  echo "Machine: $(hostname)"
-  echo ""
-  echo "## Confirmed Paths"
-  echo "HOME_DIR=$HOME_DIR"
-  echo "REPO_DIR=$REPO_DIR"
-  echo ""
-} > /tmp/resync-audit.md
-```
-
-Each subsequent phase reads `HOME_DIR` and `REPO_DIR` from the `## Confirmed Paths` section of this file.
-
----
-
-## Step 2: Run the canonical tools
-
-Capture full output silently (compaction recovery reference, not read back into context):
-
-```bash
-dotfiles-audit --no-color > /tmp/resync-audit-full.txt 2>&1
-dotfiles-diff --no-color > /tmp/resync-diff-full.txt 2>&1
-```
-
-Surface the routing-relevant summary into context:
-
-```bash
-dotfiles-audit --no-color --fails
-dotfiles-diff --no-color --summary
-git -C $REPO_DIR diff --name-only --diff-filter=U 2>/dev/null
-```
-
-Note any FAIL/WARN items from `dotfiles-audit`, anomaly lines (WRONG/BLOCKED/FOREIGN/MISSING) and counts from `dotfiles-diff`, and any files with merge conflict markers. If a scenario needs the full per-item listing, retrieve it with `cat /tmp/resync-audit-full.txt` or `cat /tmp/resync-diff-full.txt`.
-
----
-
-## Step 3: Route
-
-Use the following decision table to decide what to do next:
-
-| Condition | Mode |
+| `$ARGUMENTS` value | Forced stage |
 |---|---|
-| Merge conflict markers detected (files listed by the `--diff-filter=U` command) | **Triage** → stash/pull/pop (Step 4), then load `scenarios/merge_conflicts.md` |
-| BLOCKED count > 5 and LINKED count near 0 | **Triage** → cold start: load `scenarios/cold_start.md` |
-| `dotfiles-audit` has FAIL items → match to symptom table below | **Triage** → load relevant scenario(s) |
-| No FAILs, no conflicts, `dotfiles-diff` shows only MISSING (and optionally COLLAPSIBLE), zero BLOCKED/WRONG, no unexpected FOREIGN | **Fast-sync** → inline steps below |
-| No FAILs, no conflicts, BLOCKED/WRONG/ambiguous entries present | **Sync** → proceed to `python3 ${CLAUDE_SKILL_DIR}/resync.py --phase 0` |
+| `orientation` | orientation |
+| `triage` | triage |
+| `plan` | plan |
+| `execute` | execute |
 
-**Symptom → Scenario routing table:**
+**Otherwise detect stage from `.resync/` file presence:**
+
+```bash
+ls "$RESYNC_DIR/" 2>/dev/null | sort || echo "(no .resync/ dir)"
+```
+
+| Condition | Stage |
+|---|---|
+| `.resync/` missing or `state.md` absent | orientation |
+| `state.md` exists, `triage.md` absent | triage |
+| `triage.md` exists, `plan.md` absent, `triage.md` contains `Fast-sync eligible: YES` | execute |
+| `triage.md` exists, `plan.md` absent | plan |
+| `plan.md` exists, does not contain `## Status: APPROVED` | plan (annotation cycle) |
+| `plan.md` contains `## Status: APPROVED`, `log.md` absent | execute |
+| `log.md` exists | done — read `$RESYNC_DIR/log.md` and report summary to the user |
+
+**Load and follow the phase file for the detected stage:**
+
+```bash
+cat "${CLAUDE_SKILL_DIR}/phases/<stage>.md"
+```
+
+The phase file is the authoritative instruction for this stage. Follow it exactly.
+
+---
+
+## Scenario routing
+
+When audit output surfaces FAILs or specific anomalies, route to the relevant scenario. Load on demand only — do not read speculatively.
 
 | Symptom | Load |
 |---|---|
@@ -88,85 +78,8 @@ Use the following decision table to decide what to do next:
 | `settings.local.json` missing or stale after a fresh stow | `scenarios/settings_drift.md` |
 | `lazy-lock.json` shows as modified or has conflict markers | `scenarios/lazy_lockfile.md` |
 
-### Fast-sync lane
-
-When only MISSING entries are present (safe, non-destructive — stow never clobbers):
-
-**FS1: Verify guard directories are real directories**
-
-```bash
-for d in commands agents skills hooks; do
-  path="$HOME_DIR/.claude/$d"
-  if [ -L "$path" ]; then
-    echo "SYMLINK (must resolve first): $path -> $(readlink "$path")"
-  elif [ -d "$path" ]; then
-    echo "OK: $path"
-  else
-    echo "MISSING — will create: $path"
-  fi
-done
-```
-
-Create any that are missing:
-```bash
-mkdir -p $HOME_DIR/.claude/commands $HOME_DIR/.claude/agents $HOME_DIR/.claude/skills $HOME_DIR/.claude/hooks
-```
-
-If any are symlinks — stop and use the Sync lane instead.
-
-**FS2: Surface `.stow-local-ignore` if present**
-
-```bash
-if [ -f "$REPO_DIR/stow-managed/.stow-local-ignore" ]; then
-  echo "Active exclusions:"; cat "$REPO_DIR/stow-managed/.stow-local-ignore"
-else
-  echo "No .stow-local-ignore — all managed files will be linked."
-fi
-```
-
-**FS3: Simulate and confirm**
-
-```bash
-cd $REPO_DIR && stow -v --simulate -t $HOME_DIR stow-managed
-```
-
-Show the `LINK:` lines to the user and ask for confirmation before applying.
-
-**FS4: Apply, verify, and offer COLLAPSIBLE collapse**
-
-```bash
-cd $REPO_DIR && stow -v -t $HOME_DIR stow-managed
-```
-
-Spot-check a few new symlinks:
-```bash
-ls -la $HOME_DIR/.zshrc $HOME_DIR/.tmux.conf 2>/dev/null || true
-```
-
-If `dotfiles-diff` showed COLLAPSIBLE entries, offer to run `collapsible_dirs.sh` and then `collapse_dir.sh` for each approved directory as an optional follow-up. Do not collapse without explicit user approval.
-
-**Canonical verify** (use this single command to close out any sync or triage path):
-
-```bash
-dotfiles-audit --no-color --fails && dotfiles-diff --no-color --summary
-```
-
----
-
-Load scenario files on demand — do not read them speculatively:
-
 ```bash
 cat "${CLAUDE_SKILL_DIR}/scenarios/<name>.md"
-```
-
-Handle scenarios in the order listed if multiple apply (git state before stow state).
-
----
-
-## Step 4: Triage — stash, pull, pop (pull-only machines)
-
-```bash
-cat "${CLAUDE_SKILL_DIR}/scenarios/git_drift.md"
 ```
 
 ---
@@ -180,25 +93,6 @@ cat "${CLAUDE_SKILL_DIR}/scenarios/git_drift.md"
 - Machine-specific content belongs in `.local` files — not in tracked config.
 - Do not commit from this machine unless push access is confirmed.
 - Use `[ -L "$path" ]` to test for symlinks — not `ls -la "$path/"` (trailing slash follows the link).
-
----
-
-## Sync mode — phase orchestration
-
-When routing to sync mode, start the phase machine:
-
-```bash
-python3 ${CLAUDE_SKILL_DIR}/resync.py --phase 0
-```
-
-After each phase, use the routing table to find the next phase, then fetch and execute it:
-
-```bash
-python3 ${CLAUDE_SKILL_DIR}/resync.py --route <current_phase> <condition>
-python3 ${CLAUDE_SKILL_DIR}/resync.py --phase <next_phase>
-```
-
-Each phase file tells you exactly which condition to report when it's done. Follow it.
 
 ---
 
