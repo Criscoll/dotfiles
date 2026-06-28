@@ -77,8 +77,10 @@ cmd_init() {
   fi
 
   echo "No ledger found at $LEDGER."
-  mode="READ-ONLY"
-  # Test if /dev/tty is usable before opening it (avoids bash error in agent/CI contexts)
+  echo "Machine mode must be set explicitly — there is no default." >&2
+  echo "Ask the user: can this machine push to the dotfiles repo?" >&2
+
+  # Test if /dev/tty is usable before opening it (avoids bash error in agent contexts)
   _tty_ok=$(python3 -c "
 import sys
 try:
@@ -88,14 +90,20 @@ except OSError:
     print('no')
 " 2>/dev/null)
   if [ "$_tty_ok" = "yes" ]; then
-    printf "Is this machine read-only (cannot push to the dotfiles repo)? [Y/n] " >&2
+    printf "Can this machine push to the dotfiles repo? read-write (rw) or read-only (ro): " >&2
     read -r answer </dev/tty
     case "$answer" in
-      [Nn]*) mode="READ-WRITE" ;;
-      *)     mode="READ-ONLY" ;;
+      rw|read-write|READ-WRITE|y|yes|Yes|YES) mode="READ-WRITE" ;;
+      ro|read-only|READ-ONLY|n|no|No|NO)      mode="READ-ONLY" ;;
+      *)
+        echo "ERROR: unrecognised answer '$answer'. Re-run and enter 'rw' or 'ro'." >&2
+        exit 1
+        ;;
     esac
   else
-    echo "(non-interactive: defaulting to READ-ONLY; edit $LEDGER to change)" >&2
+    echo "ERROR: no terminal available. The agent must ask the user and pass the mode explicitly." >&2
+    echo "Usage: set Machine mode manually by editing $LEDGER after creation, or re-run interactively." >&2
+    exit 1
   fi
 
   cat > "$LEDGER" <<EOF

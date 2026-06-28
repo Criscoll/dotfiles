@@ -30,11 +30,23 @@ If blockers are present, resolve them now. Write `state.md` after blockers are c
 
 ## Initialise ledger and surface backlog
 
+Check whether the ledger exists:
+
+```bash
+[ -f "$REPO_DIR/.resync-ledger.md" ] && echo "ledger exists" || echo "ledger absent"
+```
+
+**If absent:** ask the user directly before running `init`:
+
+> "Can this machine push to the dotfiles repo, or is it pull-only? (read-write / read-only)"
+
+Then run `init` — it will prompt for mode if a terminal is available, or fail with an error if not:
+
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" init
 ```
 
-If the ledger already exists, read machine mode and show any pending upstream items:
+**If the ledger already exists**, read machine mode and show any pending upstream items:
 
 ```bash
 MACHINE_MODE="$(bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" mode)"
