@@ -54,7 +54,13 @@ On a READ-WRITE machine, treat LOCAL_ONLY_ADDITIONS as candidates for committing
 bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" list-tools
 ```
 
-Any tool with decision `install-now` goes into the "Tools to Install" section of the plan. For each, look up the standard installation method for this OS (apt, snap, cargo, npm, pip, manual binary, etc.) and include the command. If the install method is unclear, note it as "install method unknown — user to confirm."
+Any tool with decision `install-now` goes into the "Tools to Install" section of the plan. For each tool, look up the install command in the reference file:
+
+```bash
+cat "${CLAUDE_SKILL_DIR}/references/tool-installs.md"
+```
+
+Use the table to populate the install command. Only fall back to "install method unknown — user to confirm" if the tool is not listed in the reference.
 
 ### Write plan.md
 
@@ -91,7 +97,7 @@ Use the Write tool to create `$RESYNC_DIR/plan.md`:
 (or: none)
 
 ## Tools to Install
-- [ ] rtk — `cargo install rtk` (or: apt install rtk)
+- [ ] rtk — `download from github.com/rtk-ai/rtk/releases; verify sha256` (from references/tool-installs.md)
 (or: none)
 
 ## Collapsible Dirs
