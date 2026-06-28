@@ -1,7 +1,12 @@
 ---
 name: resync-dotfiles
-description: Sync this machine's dotfiles with the repo — proactive full sync or reactive triage after a pull. Auto-invoke BEFORE running stow, after a git pull on the dotfiles repo, or when the user reports broken symlinks, merge conflicts, stow collisions, or drift from the repo. Trigger phrases: "resync dotfiles", "sync dotfiles", "stow collision", "after git pull", "bring machine up to date", "broken symlinks", "dotfiles out of sync", "dotfiles sync problem".
-disable-model-invocation: true
+description: >-
+  Sync this machine's dotfiles with the repo — proactive full sync or reactive triage after a pull.
+  Auto-invoke BEFORE running stow, after a git pull on the dotfiles repo, or when the user reports
+  broken symlinks, merge conflicts, stow collisions, or drift from the repo.
+  Trigger phrases: "resync dotfiles", "sync dotfiles", "stow collision", "after git pull",
+  "bring machine up to date", "broken symlinks", "dotfiles out of sync", "dotfiles sync problem".
+disable-model-invocation: false
 allowed-tools: Bash Read Write Glob Grep Edit
 ---
 
@@ -18,16 +23,34 @@ done
 
 Hold `HOME_DIR` and `REPO_DIR` for all subsequent commands. Confirm with the user before proceeding.
 
+After confirming paths, create the working file that persists across context compaction:
+
+```bash
+{ echo "# Resync Audit"
+  echo "Started: $(date)"
+  echo "Machine: $(hostname)"
+  echo ""
+  echo "## Confirmed Paths"
+  echo "HOME_DIR=$HOME_DIR"
+  echo "REPO_DIR=$REPO_DIR"
+  echo ""
+} > /tmp/resync-audit.md
+```
+
+Each subsequent phase reads `HOME_DIR` and `REPO_DIR` from the `## Confirmed Paths` section of this file.
+
 ---
 
 ## Step 2: Run the canonical tools
 
+Run the detection tools and append outputs to `/tmp/resync-audit.md`:
+
 ```bash
-dotfiles-audit --no-color
+{ echo "## dotfiles-audit"; dotfiles-audit --no-color; echo ""; } >> /tmp/resync-audit.md
 ```
 
 ```bash
-dotfiles-diff --no-color 2>/dev/null | tee /tmp/resync-diff.txt
+{ echo "## dotfiles-diff"; dotfiles-diff --no-color 2>/dev/null | tee /tmp/resync-diff.txt; echo ""; } >> /tmp/resync-audit.md
 ```
 
 ```bash
@@ -47,7 +70,8 @@ Use the following decision table to decide what to do next:
 | Merge conflict markers detected (files listed by the `--diff-filter=U` command) | **Triage** → stash/pull/pop (Step 4), then load `scenarios/merge_conflicts.md` |
 | BLOCKED count > 5 and LINKED count near 0 | **Triage** → cold start: load `scenarios/cold_start.md` |
 | `dotfiles-audit` has FAIL items → match to symptom table below | **Triage** → load relevant scenario(s) |
-| No FAILs, no conflicts, BLOCKED/MISSING manageable | **Sync** → proceed to `python3 ${CLAUDE_SKILL_DIR}/resync.py --phase 0` |
+| No FAILs, no conflicts, `dotfiles-diff` shows only MISSING (and optionally COLLAPSIBLE), zero BLOCKED/WRONG, no unexpected FOREIGN | **Fast-sync** → inline steps below |
+| No FAILs, no conflicts, BLOCKED/WRONG/ambiguous entries present | **Sync** → proceed to `python3 ${CLAUDE_SKILL_DIR}/resync.py --phase 0` |
 
 **Symptom → Scenario routing table:**
 
@@ -62,6 +86,65 @@ Use the following decision table to decide what to do next:
 | File appears local but its parent directory is a repo symlink | `scenarios/symlinked_via_dir.md` |
 | `settings.local.json` missing or stale after a fresh stow | `scenarios/settings_drift.md` |
 | `lazy-lock.json` shows as modified or has conflict markers | `scenarios/lazy_lockfile.md` |
+
+### Fast-sync lane
+
+When only MISSING entries are present (safe, non-destructive — stow never clobbers):
+
+**FS1: Verify guard directories are real directories**
+
+```bash
+for d in commands agents skills hooks; do
+  path="$HOME_DIR/.claude/$d"
+  if [ -L "$path" ]; then
+    echo "SYMLINK (must resolve first): $path -> $(readlink "$path")"
+  elif [ -d "$path" ]; then
+    echo "OK: $path"
+  else
+    echo "MISSING — will create: $path"
+  fi
+done
+```
+
+Create any that are missing:
+```bash
+mkdir -p $HOME_DIR/.claude/commands $HOME_DIR/.claude/agents $HOME_DIR/.claude/skills $HOME_DIR/.claude/hooks
+```
+
+If any are symlinks — stop and use the Sync lane instead.
+
+**FS2: Surface `.stow-local-ignore` if present**
+
+```bash
+if [ -f "$REPO_DIR/stow-managed/.stow-local-ignore" ]; then
+  echo "Active exclusions:"; cat "$REPO_DIR/stow-managed/.stow-local-ignore"
+else
+  echo "No .stow-local-ignore — all managed files will be linked."
+fi
+```
+
+**FS3: Simulate and confirm**
+
+```bash
+cd $REPO_DIR && stow -v --simulate -t $HOME_DIR stow-managed
+```
+
+Show the `LINK:` lines to the user and ask for confirmation before applying.
+
+**FS4: Apply, verify, and offer COLLAPSIBLE collapse**
+
+```bash
+cd $REPO_DIR && stow -v -t $HOME_DIR stow-managed
+```
+
+Spot-check a few new symlinks:
+```bash
+ls -la $HOME_DIR/.zshrc $HOME_DIR/.tmux.conf 2>/dev/null || true
+```
+
+If `dotfiles-diff` showed COLLAPSIBLE entries, offer to run `collapsible_dirs.sh` and then `collapse_dir.sh` for each approved directory as an optional follow-up. Do not collapse without explicit user approval.
+
+---
 
 Load scenario files on demand — do not read them speculatively:
 

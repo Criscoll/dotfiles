@@ -4,7 +4,7 @@
 # Usage:
 #   bash timeline.sh HOME_DIR REPO_DIR
 #
-# Input:  reads /tmp/resync-exists-locally.txt (written by inventory.sh)
+# Input:  reads /tmp/resync-exists-locally.txt (written by phase 1, from the dotfiles-diff inventory)
 # Output: TSV with columns:  REL_PATH  REPO_DATE  LOCAL_DATE  NEWER
 #
 # NEWER values:
@@ -20,7 +20,7 @@ REPO_DIR="${2:?Usage: timeline.sh HOME_DIR REPO_DIR}"
 INPUT="/tmp/resync-exists-locally.txt"
 
 if [[ ! -f "$INPUT" ]]; then
-  echo "ERROR: $INPUT not found — run inventory.sh first" >&2
+  echo "ERROR: $INPUT not found — run phase 1 first" >&2
   exit 1
 fi
 
@@ -28,7 +28,7 @@ fi
 AUDIT="/tmp/resync-audit.md"
 if [[ -f "$AUDIT" && "$INPUT" -ot "$AUDIT" ]]; then
   echo "WARNING: $INPUT is older than $AUDIT — it may be stale from a previous run." >&2
-  echo "         Re-run inventory.sh if results look wrong." >&2
+  echo "         Re-run phase 1 if results look wrong." >&2
 fi
 
 if [[ ! -s "$INPUT" ]]; then
@@ -42,15 +42,15 @@ while IFS= read -r rel; do
   target="$HOME_DIR/$rel"
 
   repo_date_raw=$(git -C "$REPO_DIR" log --follow -1 --format="%ai" -- "stow-managed/$rel" 2>/dev/null || true)
-  local_epoch=$(stat -c "%Y" "$target" 2>/dev/null || true)
-  local_date_human=$(stat -c "%y" "$target" 2>/dev/null | cut -d. -f1 || true)
+  repo_epoch=$(git -C "$REPO_DIR" log --follow -1 --format="%at" -- "stow-managed/$rel" 2>/dev/null || true)
+  local_epoch=$(python3 -c "import os,sys; print(int(os.stat(sys.argv[1]).st_mtime))" "$target" 2>/dev/null || true)
+  local_date_human=$(python3 -c "import os,sys,datetime; print(datetime.datetime.fromtimestamp(os.stat(sys.argv[1]).st_mtime).strftime('%Y-%m-%d %H:%M:%S'))" "$target" 2>/dev/null || true)
 
   if [[ -z "$repo_date_raw" || -z "$local_epoch" ]]; then
     newer="UNKNOWN"
     repo_date_raw="${repo_date_raw:-not in git}"
     local_date_human="${local_date_human:-not found}"
   else
-    repo_epoch=$(date -d "$repo_date_raw" +%s 2>/dev/null || echo 0)
     diff_secs=$(( local_epoch - repo_epoch ))
     if (( diff_secs > 60 )); then
       newer="LOCAL"

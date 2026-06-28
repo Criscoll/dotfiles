@@ -4,7 +4,7 @@
 # Usage:
 #   bash diff_check.sh HOME_DIR REPO_DIR
 #
-# Input:  reads /tmp/resync-exists-locally.txt (written by inventory.sh)
+# Input:  reads /tmp/resync-exists-locally.txt (written by phase 1, from the dotfiles-diff inventory)
 # Output:
 #   Summary line per file: IDENTICAL or DIFFERS, followed by the diff if different.
 #   A final "## Sensitive scan" section scanning stow-managed/ for credential patterns.
@@ -19,7 +19,7 @@ REPO_DIR="${2:?Usage: diff_check.sh HOME_DIR REPO_DIR}"
 INPUT="/tmp/resync-exists-locally.txt"
 
 if [[ ! -f "$INPUT" ]]; then
-  echo "ERROR: $INPUT not found — run inventory.sh first" >&2
+  echo "ERROR: $INPUT not found — run phase 1 first" >&2
   exit 1
 fi
 
@@ -27,7 +27,7 @@ fi
 AUDIT="/tmp/resync-audit.md"
 if [[ -f "$AUDIT" && "$INPUT" -ot "$AUDIT" ]]; then
   echo "WARNING: $INPUT is older than $AUDIT — it may be stale from a previous run." >&2
-  echo "         Re-run inventory.sh if results look wrong." >&2
+  echo "         Re-run phase 1 if results look wrong." >&2
 fi
 
 echo "## Diff Results"

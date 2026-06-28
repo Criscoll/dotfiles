@@ -8,7 +8,7 @@ Run the timeline script against the `EXISTS_LOCALLY` files identified in Phase 1
 bash ${CLAUDE_SKILL_DIR}/scripts/timeline.sh $HOME_DIR $REPO_DIR
 ```
 
-The script reads `/tmp/resync-exists-locally.txt` (written by inventory.sh) and outputs a TSV with four columns:
+The script reads `/tmp/resync-exists-locally.txt` (written by phase 1, from the `dotfiles-diff` inventory) and outputs a TSV with four columns:
 
 | Column | Meaning |
 |---|---|

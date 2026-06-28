@@ -15,6 +15,14 @@ HOME_DIR="${1:?Usage: safe_remove.sh HOME_DIR REPO_DIR [rel_path ...]}"
 REPO_DIR="${2:?Usage: safe_remove.sh HOME_DIR REPO_DIR [rel_path ...]}"
 shift 2
 
+portable_realpath() {
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$1"
+  else
+    python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1"
+  fi
+}
+
 if [[ $# -eq 0 ]]; then
   echo "No files to remove."
   exit 0
@@ -31,7 +39,7 @@ for rel in "$@"; do
     continue
   fi
 
-  real="$(realpath "$target")"
+  real="$(portable_realpath "$target")"
   if [[ "$real" == "$REPO_DIR"* ]]; then
     echo "ABORT: $target resolves to $real" >&2
     echo "       This path is inside the repo — removing it would delete a tracked file." >&2

@@ -87,10 +87,10 @@ with open('/tmp/resync-diff.txt') as f:
 " > /tmp/resync-missing-locally.txt
 ```
 
-Then detect COLLAPSIBLE_DIR entries — `dotfiles-diff` does not classify these, so run `inventory.sh` for this purpose only:
+Then detect COLLAPSIBLE_DIR entries — `dotfiles-diff` does not classify these, so run `collapsible_dirs.sh`:
 
 ```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/inventory.sh $HOME_DIR $REPO_DIR 2>/dev/null | grep "^COLLAPSIBLE_DIR" > /tmp/resync-collapsible-dirs.txt
+bash ${CLAUDE_SKILL_DIR}/scripts/collapsible_dirs.sh $HOME_DIR $REPO_DIR 2>/dev/null
 cat /tmp/resync-collapsible-dirs.txt
 ```
 
