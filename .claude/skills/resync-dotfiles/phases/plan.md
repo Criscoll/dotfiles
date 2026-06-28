@@ -48,6 +48,14 @@ For `LOCAL_ONLY_ADDITIONS` and `CONFLICT` items on a READ-ONLY machine, apply th
 
 On a READ-WRITE machine, treat LOCAL_ONLY_ADDITIONS as candidates for committing from this machine — note in the plan for the upstream step.
 
+### Check for install-now tool decisions
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" list-tools
+```
+
+Any tool with decision `install-now` goes into the "Tools to Install" section of the plan. For each, look up the standard installation method for this OS (apt, snap, cargo, npm, pip, manual binary, etc.) and include the command. If the install method is unclear, note it as "install method unknown — user to confirm."
+
 ### Write plan.md
 
 Use the Write tool to create `$RESYNC_DIR/plan.md`:
@@ -80,6 +88,10 @@ Use the Write tool to create `$RESYNC_DIR/plan.md`:
 
 ## Sensitive in Repo (remediation required before apply)
 - [ ] file — [what was found]
+(or: none)
+
+## Tools to Install
+- [ ] rtk — `cargo install rtk` (or: apt install rtk)
 (or: none)
 
 ## Collapsible Dirs

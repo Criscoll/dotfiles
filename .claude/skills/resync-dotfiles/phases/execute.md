@@ -205,6 +205,22 @@ bash "${CLAUDE_SKILL_DIR}/scripts/collapse_dir.sh" "$HOME_DIR" "$REPO_DIR" "rel/
 
 The script aborts if any local-only file is found in the subtree. Run one directory at a time and verify before the next. Collapsing a parent handles its subdirectories — do not run on subdirectories separately.
 
+### TOOLS_TO_INSTALL
+
+For each item in "## Tools to Install", run the installation command recorded in the plan. Verify the tool is on PATH afterwards:
+
+```bash
+which <tool> || <tool> --version 2>/dev/null || echo "not found after install"
+```
+
+On success, update the ledger decision from `install-now` to remove the entry (no longer pending):
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" add-tool <name> pending "installed $(date +%Y-%m-%d)"
+```
+
+On failure, leave the decision as `install-now` so the next session retries.
+
 ### SENSITIVE_IN_REPO
 
 Do not apply these files. Flag them prominently in log.md. The issue must be fixed in the repo before syncing further.
@@ -256,6 +272,9 @@ Completed: <date>
 
 ## Conflicts resolved
 [How each conflict was resolved, or "none"]
+
+## Tools installed
+[List tools installed this session, or "none"]
 
 ## Deferred
 [What was skipped and why, or "none"]

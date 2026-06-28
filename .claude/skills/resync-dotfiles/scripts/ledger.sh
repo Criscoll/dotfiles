@@ -290,6 +290,88 @@ cmd_reapply_overlays() {
   done
 }
 
+cmd_add_tool() {
+  tool="${1:?add-tool requires <tool>}"
+  decision="${2:?add-tool requires <decision> (never|pending|install-now)}"
+  reason="${3:-no reason given}"
+  stamp="$(_date)"
+
+  case "$decision" in
+    never|pending|install-now) ;;
+    *)
+      echo "ERROR: decision must be one of: never | pending | install-now" >&2
+      exit 1
+      ;;
+  esac
+
+  # Ensure section exists in the ledger, then upsert the entry
+  python3 - "$LEDGER" "$tool" "$decision" "$reason" "$stamp" <<'PYEOF'
+import sys, re
+
+ledger, tool, decision, reason, stamp = sys.argv[1:]
+with open(ledger) as f:
+    content = f.read()
+
+entry = '- %s — %s — %s (%s)\n' % (tool, decision, reason, stamp)
+
+# Remove any existing entry for this tool (upsert)
+content = re.sub(r'- ' + re.escape(tool) + r' — [^\n]+\n', '', content)
+
+section_header = '## Tool-decisions (machine-specific — do not ask again)\n'
+comment = '<!-- Decisions about missing binaries/tools on this machine.\n     Format: - <tool> — <decision> — <reason> (<date>)\n     Decisions: never | pending | install-now -->\n'
+
+if '## Tool-decisions' not in content:
+    # Append the whole section
+    content = content.rstrip() + '\n\n' + section_header + comment + '\n' + entry + '\n'
+else:
+    # Insert into existing section (before the next ## or EOF)
+    def insert_tool(m):
+        block = m.group(0)
+        return block.rstrip('\n') + '\n' + entry + '\n'
+    new = re.sub(r'## Tool-decisions[^\n]*\n(<!--.*?-->\n)?\n?',
+                 insert_tool, content, count=1, flags=re.DOTALL)
+    content = new
+
+with open(ledger, 'w') as f:
+    f.write(content)
+print('Recorded tool decision: %s → %s' % (tool, decision))
+PYEOF
+}
+
+cmd_list_tools() {
+  if [[ ! -f "$LEDGER" ]]; then
+    echo "(no ledger)"
+    return
+  fi
+  python3 -c "
+import sys, re
+with open(sys.argv[1]) as f:
+    content = f.read()
+m = re.search(r'## Tool-decisions.*?(?=\n## |\Z)', content, re.DOTALL)
+if m:
+    block = re.sub(r'<!--.*?-->', '', m.group(0), flags=re.DOTALL).strip()
+    print(block)
+else:
+    print('(no Tool-decisions section in ledger)')
+" "$LEDGER"
+}
+
+cmd_has_tool() {
+  tool="${1:?has-tool requires <tool>}"
+  if [[ ! -f "$LEDGER" ]]; then
+    echo "none"
+    return
+  fi
+  python3 -c "
+import sys, re
+tool = sys.argv[2]
+with open(sys.argv[1]) as f:
+    content = f.read()
+m = re.search(r'- ' + re.escape(tool) + r' — (\S+?) —', content)
+print(m.group(1) if m else 'none')
+" "$LEDGER" "$tool"
+}
+
 cmd_reconcile() {
   if [[ ! -f "$LEDGER" ]]; then
     echo "No ledger to reconcile."
@@ -369,9 +451,12 @@ case "$SUBCMD" in
   add-overlay)      cmd_add_overlay "$@" ;;
   reapply-overlays) cmd_reapply_overlays ;;
   reconcile)        cmd_reconcile ;;
+  add-tool)         cmd_add_tool "$@" ;;
+  list-tools)       cmd_list_tools ;;
+  has-tool)         cmd_has_tool "$@" ;;
   *)
     echo "Unknown subcommand: $SUBCMD" >&2
-    echo "Valid: init mode list list-pending add-upstream add-local add-overlay reapply-overlays reconcile" >&2
+    echo "Valid: init mode list list-pending add-upstream add-local add-overlay reapply-overlays reconcile add-tool list-tools has-tool" >&2
     exit 1
     ;;
 esac

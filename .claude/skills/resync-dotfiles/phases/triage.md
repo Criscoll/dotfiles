@@ -146,6 +146,50 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" reconcile
 
 Report any entries that were auto-closed and remind the user to delete the absorbed overlay files if prompted.
 
+## Classify missing tools
+
+Extract the names of missing binaries, wrappers, PATH tools, and Docker images from the full audit output:
+
+```bash
+grep -iE 'FAIL|WARN' /tmp/resync-audit-full.txt | grep -iE 'missing|not in PATH|not installed|absent|backing binar'
+```
+
+From the matching lines, identify individual tool names (e.g. `nvim`, `rtk`, `rg`, `rclone`, `git-crypt`, `vd`, etc.). A single line may list several tools in parentheses — extract each one.
+
+Check the ledger for existing decisions:
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" list-tools
+```
+
+For each tool name, check if a decision is already recorded:
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" has-tool <name>
+```
+
+- `never` → suppress from triage output; do not surface again
+- `pending` → note in triage "Deferred tool installs" section; do not ask again
+- `install-now` → add to "Tools to Install" section for the plan stage
+- `none` → decision needed; ask the user
+
+**For undecided tools**, group them by category (wrappers, PATH tools, Docker images, credentials/config) and use `AskUserQuestion` to collect decisions — batch up to 4 questions per call, grouping related tools. Present options per group:
+
+- **Never install on this machine** — record permanently in the ledger; never surface again
+- **Install in this session** — add to the plan for execution now
+- **Defer without recording** — no ledger entry; will ask again next session
+
+Once the user responds, record `never` and `install-now` decisions:
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" add-tool <name> never "<reason>"
+bash "${CLAUDE_SKILL_DIR}/scripts/ledger.sh" "$HOME_DIR" "$REPO_DIR" add-tool <name> install-now "user requested install"
+```
+
+Do not record `defer` decisions — silence from the ledger means "ask again next session."
+
+After execution of an `install-now` tool, update its decision to `pending` (so the ledger knows it was requested but not yet done if something interrupted) or remove it if successfully installed.
+
 ## Route to scenarios if needed
 
 If the audit surfaces FAILs or anomalies, consult the **Scenario routing** table in SKILL.md and load the relevant scenario(s) now. Handle them before writing `triage.md`.
@@ -191,6 +235,15 @@ Use the Write tool to create `$RESYNC_DIR/triage.md`. Write a compact, distilled
 ## Stow-local-ignore exclusions
 - none
 (or: list active exclusions)
+
+## Tool-decisions
+### install-now (add to plan)
+- rtk — requested this session
+(or: none)
+
+### pending (deferred; on record)
+- pi — pending (will install manually)
+(or: none)
 
 ## Fast-sync eligible: YES
 ```
