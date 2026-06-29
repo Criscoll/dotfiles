@@ -24,9 +24,12 @@ def _ensure_playwright_browsers():
     from pathlib import Path
 
     playwright_cache = Path.home() / ".cache" / "ms-playwright"
-    if playwright_cache.exists() and any(
-        d.name.startswith("chromium") for d in playwright_cache.iterdir() if d.is_dir()
-    ):
+    installed = playwright_cache.exists() and any(
+        (d / "INSTALLATION_COMPLETE").exists()
+        for d in playwright_cache.iterdir()
+        if d.is_dir() and d.name.startswith("chromium_headless_shell")
+    )
+    if installed:
         return
 
     print("webcrawl: Playwright browsers not found — running one-time setup...", file=sys.stderr)
@@ -42,13 +45,15 @@ def _ensure_playwright_browsers():
         sys.exit(1)
 
 
-async def crawl(url, include_links=False, output_json=False, query=None):
+async def crawl(url, include_links=False, output_json=False, query=None, raw=False):
     _ensure_playwright_browsers()
     from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
     from crawl4ai.content_filter_strategy import PruningContentFilter, BM25ContentFilter
     from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-    if query:
+    if raw:
+        content_filter = None
+    elif query:
         content_filter = BM25ContentFilter(user_query=query, bm25_threshold=1.0)
     else:
         content_filter = PruningContentFilter(threshold=0.48, threshold_type="fixed")
@@ -64,7 +69,7 @@ async def crawl(url, include_links=False, output_json=False, query=None):
         print(f"Error: failed to crawl {url}", file=sys.stderr)
         sys.exit(1)
 
-    content = get_markdown(result)
+    content = get_markdown(result, prefer_filtered=not raw)
     links = result.links or {}
 
     if output_json:
@@ -136,15 +141,17 @@ examples:
   webcrawl https://example.com --json                   JSON for agents
   webcrawl https://example.com --json --links           JSON with content + links
   webcrawl https://example.com --filter "authentication" topic-focused content
+  webcrawl https://example.com --raw                    unfiltered markdown (good for product pages)
 """,
     )
     parser.add_argument("url", help="URL to fetch and extract content from")
     parser.add_argument("--links", action="store_true", help="Include internal and external links in output")
     parser.add_argument("--json", action="store_true", dest="output_json", help="Emit a JSON object instead of plain markdown")
     parser.add_argument("--filter", metavar="QUERY", dest="query", help="Keep only content blocks relevant to QUERY (BM25 scoring)")
+    parser.add_argument("--raw", action="store_true", help="Skip content filtering; return full page markdown")
     args = parser.parse_args()
 
-    asyncio.run(crawl(args.url, include_links=args.links, output_json=args.output_json, query=args.query))
+    asyncio.run(crawl(args.url, include_links=args.links, output_json=args.output_json, query=args.query, raw=args.raw))
 
 
 if __name__ == "__main__":

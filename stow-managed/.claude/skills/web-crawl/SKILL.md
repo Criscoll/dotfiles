@@ -29,11 +29,29 @@ webcrawl https://example.com --links                  # markdown + links
 webcrawl https://example.com --json                   # structured output for agents
 webcrawl https://example.com --json --links           # content + navigation in one shot
 webcrawl https://example.com --filter "topic"         # BM25-scored, topic-focused
+webcrawl https://example.com --raw                    # unfiltered markdown (see below)
 ```
 
 **Agentic navigation pattern:** fetch with `--json --links`, read `links.internal` to pick the next URL, repeat.
 
 **Research pattern:** `WebSearch` to find URLs → `webcrawl` to fetch full content of the best hits.
+
+## Content Filtering and `--raw`
+
+By default, webcrawl runs a `PruningContentFilter` that removes low-density blocks (nav, footers, ads). This works well for articles and docs but **discards product content on e-commerce pages** — Shopify and similar stores inject product titles, prices, and specs via JS into elements that the filter scores as low-value, so they get stripped.
+
+**Use `--raw` when the default output is mostly nav links and boilerplate** — it bypasses all filtering and returns the full page markdown. Confirmed cases where `--raw` is needed:
+
+- Shopify product pages (price, title, specs all missing without it)
+- Any JS-heavy SPA where default output is suspiciously thin
+
+**Fallback for structured product data on Shopify:** the `.json` endpoint is even more reliable than `--raw` when you only need fields (title, price, variants, availability):
+
+```bash
+curl -s "https://store.example.com/products/product-handle.json" | python3 -c "import sys,json; d=json.load(sys.stdin); ..."
+```
+
+Use `webcrawl --raw` when you need the full page context (description, specs, related content). Use curl + `.json` when you only need structured product fields.
 
 ## When to Use / Not Use
 
