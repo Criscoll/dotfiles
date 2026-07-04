@@ -1,0 +1,19 @@
+services:
+  daemon:
+    build: .
+    image: paseo-with-agents
+    container_name: paseo-daemon
+    ports:
+      - "${TS_IP}:6767:6767"
+    environment:
+      - PASEO_PASSWORD=${PASEO_PASSWORD}
+      - PASEO_HOSTNAMES=${TS_IP}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    volumes:
+      - ./paseo-home/.cache:/home/paseo/.cache
+      - ./paseo-home/.claude:/home/paseo/.claude
+      - ./paseo-home/.codex:/home/paseo/.codex
+      - ./paseo-home/.config:/home/paseo/.config
+      - ./paseo-home/.paseo:/home/paseo/.paseo
+      - /home/cristian/Repos:/workspace
+    restart: unless-stopped
