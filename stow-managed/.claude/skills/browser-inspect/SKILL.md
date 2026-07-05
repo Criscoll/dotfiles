@@ -76,11 +76,18 @@ wait for N lines that may never come (the server stays running), causing an infi
 
 ## When the Browser Won't Start — STOP
 
-If `browser-start` exits non-zero (no browser found, or CDP connection times out),
-**stop and report to the user.** State the exact error and the remediation, e.g.:
+`browser-start` self-heals the common case: if no system Chromium/Chrome is found, it
+automatically downloads Playwright's bundled Chromium via `uvx --from playwright
+playwright install chromium` (one-time, ~180MB) before giving up. You should not need to
+install anything by hand — just run `browser-start` and let it do this.
 
-> The browser scraping tools need a Chromium/Chrome browser, which isn't available here.
-> Install one with `python3 -m playwright install chromium` (or a system browser), then retry.
+If `browser-start` still exits non-zero after that (e.g. `uvx` itself is missing, or the
+CDP connection times out), **stop and report to the user.** State the exact error and the
+remediation, e.g.:
+
+> The browser scraping tools need a Chromium/Chrome browser, and auto-install via `uvx`
+> didn't work here (no `uvx` on PATH). Install `uv` first, or install a system browser,
+> then retry.
 
 For `--browser firefox`, the prerequisite is a `geckodriver` binary (on `PATH` or at
 `~/opt/geckodriver`) plus system Firefox. If `browser-start --browser firefox` reports

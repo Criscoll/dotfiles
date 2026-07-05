@@ -29,6 +29,8 @@ exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
 | `rtk` | `~/opt/rtk` |
 | `xsv` | `~/opt/xsv` |
 | `vd` | `~/opt/visidata/bin/vd` |
+| `uv` | `~/opt/uv/uv` |
+| `uvx` | `~/opt/uv/uvx` |
 
 **Paths are conventions, not guarantees.** If a wrapper-backed command fails, verify the binary exists before assuming the wrapper is wrong:
 ```bash
@@ -75,7 +77,14 @@ Scripts tracked here may have library dependencies. The rule: **dependencies mus
 
 `uv` reads this block, installs into an isolated cache (`~/.cache/uv`), and runs — no venv, no global pip, no manual setup. **Always pin exact versions (`==`)** — loose bounds let a future compromised release slip in silently. When upgrading, update the pin in every script that uses it and test before committing.
 
-Prerequisite: `uv` installed once per machine (`curl -LsSf https://astral.sh/uv/install.sh | sh`). All Python scripts under `bin/` and `agent_scripts/` follow this pattern.
+Prerequisite: `uv` installed once per machine. The official installer drops `uv`/`uvx` into
+`~/.local/bin/`; move both into `~/opt/uv/` so the tracked wrappers (`uv`, `uvx` above) can
+find them:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+mkdir -p ~/opt/uv && mv ~/.local/bin/uv ~/.local/bin/uvx ~/opt/uv/
+```
+All Python scripts under `bin/` and `agent_scripts/` follow this pattern.
 
 **One-time post-install for `webcrawl`:** `crawl4ai` depends on Playwright browsers, which install system-wide outside uv's cache. After a fresh machine setup, run once:
 ```bash

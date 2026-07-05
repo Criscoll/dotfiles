@@ -61,6 +61,31 @@ def find_chromium():
     return matches[-1] if matches else None
 
 
+def install_playwright_chromium():
+    """Download Playwright's bundled Chromium via uvx (one-time, ~180MB).
+
+    `python3 -m playwright install` fails unless the playwright pip package is
+    already installed system-wide, which it usually isn't. `uvx --from
+    playwright playwright install chromium` runs the installer ephemerally via
+    uv instead, so no system install is needed."""
+    if not shutil.which("uvx"):
+        return False
+    print(
+        "Chromium not found — installing Playwright's bundled Chromium via uvx "
+        "(one-time, ~180MB)...",
+        file=sys.stderr,
+    )
+    result = subprocess.run(["uvx", "--from", "playwright", "playwright", "install", "chromium"])
+    return result.returncode == 0
+
+
+def has_display():
+    """Whether an X11/Wayland display is available. On a headless VPS/SSH session
+    neither is set, and launching a browser without --headless silently fails to
+    open a window, which then never opens its CDP/WebDriver port."""
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
 def find_geckodriver():
     return shutil.which("geckodriver") or (
         os.path.expanduser("~/opt/geckodriver")
@@ -136,6 +161,10 @@ def start_firefox(args):
         shutil.copytree(src, cache, symlinks=True, ignore_dangling_symlinks=True)
         ff_args = ["-profile", cache]
 
+    headless = not has_display()
+    if headless:
+        ff_args.append("-headless")
+
     subprocess.Popen(
         [driver, "--port", str(args.port)],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -154,6 +183,7 @@ def start_firefox(args):
 
     write_state({"browser": "firefox", "driver_url": url, "session": sid, "port": args.port})
     suffix = " with your profile" if args.profile else ""
+    suffix += " (headless, no display detected)" if headless else ""
     print(f"✓ firefox started via geckodriver on :{args.port}{suffix}")
 
 
@@ -178,24 +208,59 @@ def start_chromium(args):
         os.makedirs(cache, exist_ok=True)
 
     binary = find_chromium()
+    if not binary and install_playwright_chromium():
+        binary = find_chromium()
     if not binary:
         print(
-            "✗ No Chromium/Chrome binary found. Install one of:\n"
+            "✗ No Chromium/Chrome binary found, and auto-install didn't produce one.\n"
+            "  Install one of:\n"
             "    - a system browser (chromium / google-chrome), or\n"
-            "    - Playwright's bundled Chromium:  python3 -m playwright install chromium",
+            "    - Playwright's bundled Chromium:  uvx --from playwright playwright install chromium",
             file=sys.stderr,
         )
         sys.exit(1)
+    headless = not has_display()
     cmd = [binary, f"--remote-debugging-port={args.port}", f"--user-data-dir={cache}"]
+    if headless:
+        cmd.append("--headless=new")
 
-    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    log_path = os.path.expanduser("~/.cache/browser-scraping/chromium.log")
+    no_sandbox = False
 
-    if wait_for_cdp(args.port):
+    def launch():
+        with open(log_path, "w") as log:
+            subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
+
+    launch()
+    ok = wait_for_cdp(args.port)
+
+    if not ok:
+        with open(log_path) as f:
+            tail = f.read()
+        if "No usable sandbox" in tail:
+            # Common in containers/CI without unprivileged user namespaces —
+            # Chromium's own suggested workaround is --no-sandbox.
+            no_sandbox = True
+            cmd.append("--no-sandbox")
+            launch()
+            ok = wait_for_cdp(args.port)
+
+    if ok:
         write_state({"browser": "chromium", "cdp_url": f"http://localhost:{args.port}"})
         suffix = " with your profile" if args.profile else ""
+        suffix += " (headless, no display detected)" if headless else ""
+        suffix += " (no sandbox — none usable in this environment)" if no_sandbox else ""
         print(f"✓ chromium started on :{args.port}{suffix}")
     else:
         print(f"✗ Failed to connect to chromium on :{args.port}", file=sys.stderr)
+        try:
+            with open(log_path) as f:
+                tail = f.read().strip()
+            if tail:
+                print(f"  Chromium output ({log_path}):", file=sys.stderr)
+                print("  " + tail.replace("\n", "\n  "), file=sys.stderr)
+        except OSError:
+            pass
         sys.exit(1)
 
 
