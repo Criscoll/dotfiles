@@ -65,6 +65,20 @@ the daemon starts, on every container start — not as a manual one-off
    base image's own directory-ensuring / `gosu paseo` daemon-launch logic runs
    unmodified.
 
+**Projects vs. workspaces gotcha:** Paseo's project auto-detection scans for
+git repos, tagging each one as its own project. `~/Repos` itself is **not** a
+git repo — it's a plain directory containing several git repos as
+subdirectories (`dotfiles/`, `spreadsheets/`, etc.). Because the whole thing is
+bind-mounted as one flat `/workspace`, Paseo registers `/workspace` itself as a
+single project rather than discovering the repos inside it as separate
+projects. That's why the "new workspace" picker only ever offers `/workspace`
+and can't browse down into e.g. `spreadsheets/` — workspace creation only
+works within an already-registered project, and per-project git worktrees
+require that project to actually be a git repo. To work on an individual repo
+with proper worktree-backed workspaces, register that subdirectory (e.g.
+`/workspace/spreadsheets`) as its own project in Paseo instead of expecting it
+to appear under the `/workspace` project.
+
 **Anonymous-volume gotcha:** the base image declares `/home/paseo` itself as a
 `VOLUME`. Anything under it *not* covered by an explicit bind mount in
 `docker-compose.yml` (e.g. `~/Repos`, `~/bin`, `~/.zshrc`, `~/.local`) is backed
