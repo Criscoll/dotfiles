@@ -1,6 +1,7 @@
 services:
   daemon:
-    build: .
+    build:
+      context: ${PASEO_REPO_DIR}
     image: paseo-with-agents
     container_name: paseo-daemon
     ports:
@@ -15,6 +16,8 @@ services:
       - ./paseo-home/.codex:/home/paseo/.codex
       - ./paseo-home/.config:/home/paseo/.config
       - ./paseo-home/.paseo:/home/paseo/.paseo
+      - ./paseo-home/.pi:/home/paseo/.pi
       - /home/cristian/Repos:/workspace
+      - /home/cristian/opt:/home/paseo/opt:ro
       - /tmp:/host-tmp
     restart: unless-stopped
