@@ -2,12 +2,14 @@
 name: docker
 description: >-
   Apply Docker best practices and known gotchas for on-demand containers, networking,
-  and container config — covers VPN/bridge routing failures, host networking, default
-  secret key rejections, and the on-demand lifecycle pattern. Auto-invoke BEFORE any
-  `docker run`, Docker networking task, container health check, or Docker-backed agent
-  skill setup. Trigger phrases: "docker", "docker run", "container", "host network",
-  "docker networking", "searxng", "granian", "--network", "port mapping", "bridge",
-  "docker pull", "docker exec".
+  container config, and memory-limit sizing — covers VPN/bridge routing failures, host
+  networking, default secret key rejections, the on-demand lifecycle pattern, and
+  deciding whether a container needs a `--memory` cap given the host's available RAM.
+  Auto-invoke BEFORE any `docker run`, Docker networking task, container health check,
+  or Docker-backed agent skill setup. Trigger phrases: "docker", "docker run",
+  "container", "host network", "docker networking", "searxng", "granian", "--network",
+  "port mapping", "bridge", "docker pull", "docker exec", "memory limit", "--memory",
+  "docker update", "OOM", "out of memory", "container crashed".
 disable-model-invocation: false
 ---
 
@@ -77,6 +79,42 @@ done
 
 Differences from the per-call pattern: omit `--rm`, omit the `trap cleanup EXIT`,
 and gate startup on a running-state check so concurrent callers don't collide.
+
+## Memory Limits — Size to Host Capacity
+
+By default a container has no memory ceiling — it can consume host RAM without
+limit. On a resource-constrained host (a small VPS, a shared dev box) this matters
+more than it looks: an uncapped container that spikes in usage doesn't just fail
+itself, it can push the whole host into a kernel OOM sweep that kills *anything*
+running there — another container, a system service, an unrelated SSH session —
+not necessarily the container that caused the pressure. See the `linux-host-audit`
+skill if this has already happened and needs diagnosing after the fact.
+
+Before starting (or restarting) a container, check what you're working with:
+
+```sh
+free -h                                                              # host capacity
+docker ps -q | xargs -r -I{} docker inspect {} \
+  --format '{{.Name}} mem_limit={{.HostConfig.Memory}}'              # existing caps
+```
+
+Set an explicit cap when the host has limited headroom or the image is a known
+memory-heavy workload — headless browsers (Chrome/Playwright/crawl4ai), build
+tools, or anything embedding its own JS/V8 runtime are the common offenders because
+their memory use scales with page/workload complexity rather than staying flat:
+
+```sh
+docker run -d --name my-service --memory=768m --memory-swap=768m ... some/image
+
+# on an already-running container — applies live, no restart needed:
+docker update --memory=768m --memory-swap=768m my-service
+```
+
+Size the cap to leave headroom for the OS and other services, not just to fit the
+container's typical usage — the point is containing a *spike*, and a cap set right
+at typical usage gets hit constantly. Set `--memory-swap` equal to `--memory` to
+disable swap for that container specifically, so it hits its own cgroup ceiling and
+gets OOM-killed within its own scope instead of pressuring the whole host.
 
 ## Networking
 
