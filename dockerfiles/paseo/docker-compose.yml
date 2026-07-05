@@ -10,6 +10,19 @@ services:
       - PASEO_PASSWORD=${PASEO_PASSWORD}
       - PASEO_HOSTNAMES=${TS_IP},${TS_HOSTNAME}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      # Point the web-search skill's `websearch` script at the sidecar below
+      # instead of having it manage its own container (no Docker socket in here).
+      - WEBSEARCH_URL=http://searxng:8080
+    # Cheap defense-in-depth. no-new-privileges is safe with the base image's
+    # gosu root→paseo drop (that drops privileges, never escalates). pids_limit
+    # bounds a runaway fork/thread storm while leaving headroom for a Chromium +
+    # node + claude session. cap_drop:[ALL] is intentionally NOT set: it strips
+    # CAP_SETUID/SETGID, which breaks the entrypoint's gosu user-drop.
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 2048
+    depends_on:
+      - searxng
     volumes:
       - ./paseo-home/.cache:/home/paseo/.cache
       - ./paseo-home/.claude:/home/paseo/.claude
@@ -20,4 +33,19 @@ services:
       - /home/cristian/Repos:/workspace
       - /home/cristian/opt:/home/paseo/opt:ro
       - /tmp:/host-tmp
+    restart: unless-stopped
+
+  # SearXNG backend for the web-search skill. Reachable only on the compose
+  # network as `searxng:8080` — no host port published, no Docker socket needed.
+  # GRANIAN_HOST must be 0.0.0.0 (not 127.0.0.1) so the daemon container can
+  # reach it across the network; loopback would only serve within this container.
+  searxng:
+    image: searxng/searxng
+    container_name: paseo-searxng
+    environment:
+      - GRANIAN_HOST=0.0.0.0
+      - GRANIAN_PORT=8080
+      - SEARXNG_SECRET=websearch-local-agent
+    volumes:
+      - /home/cristian/Repos/dotfiles/stow-managed/.config/searxng/settings.yml:/etc/searxng/settings.yml:ro
     restart: unless-stopped

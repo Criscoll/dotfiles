@@ -13,6 +13,10 @@
 #
 # Prerequisites: docker at /usr/bin/docker
 #                ~/.config/searxng/settings.yml (stow-managed)
+#
+# Override: if WEBSEARCH_URL is set, use that SearXNG endpoint directly and skip
+#           the docker prereq/config checks and container lifecycle entirely
+#           (e.g. the Paseo container's always-warm searxng compose sidecar).
 
 set -e
 
@@ -43,6 +47,11 @@ if [ $# -eq 0 ]; then
 fi
 
 QUERY="$*"
+
+if [ -n "$WEBSEARCH_URL" ]; then
+  # External endpoint supplied — no local docker lifecycle to manage.
+  BASE_URL="$WEBSEARCH_URL"
+else
 
 # ── Prerequisite checks ─────────────────────────────────────────────────────
 if [ ! -x "$DOCKER" ]; then
@@ -123,7 +132,8 @@ if ! _container_is_running; then
   esac
 fi
 
-BASE_URL="http://127.0.0.1:${PORT}"
+  BASE_URL="http://127.0.0.1:${PORT}"
+fi
 
 # ── Health check ─────────────────────────────────────────────────────────────
 # Always run — exits immediately if already healthy, waits if freshly started.

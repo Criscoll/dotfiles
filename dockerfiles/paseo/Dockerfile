@@ -1,4 +1,6 @@
-FROM ghcr.io/getpaseo/paseo:0.1.103
+# 0.1.103 — digest-pinned so the tag can't be silently repointed (supply-chain).
+# Bump this digest deliberately on upgrade.
+FROM ghcr.io/getpaseo/paseo@sha256:1479f62e0c5e5b8c479f623a1a40479faab805e264803da1428dc21eb95c2d23
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \

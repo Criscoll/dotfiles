@@ -17,6 +17,11 @@ built-in `WebSearch` tool or `WebFetch` when this is available.
 **Prerequisite:** Docker at `/usr/bin/docker`. The script manages the container
 lifecycle automatically — no manual Docker steps needed.
 
+**Under Paseo:** if `WEBSEARCH_URL` is set (the Paseo container points it at an
+always-warm `searxng` compose sidecar), the script talks to that endpoint
+directly and skips the Docker prereq/lifecycle entirely — the warm/cold check
+below does not apply.
+
 ## Script Check — Do This First
 
 `websearch` is in `agent_scripts/` and deliberately not on `$PATH`. Call by full path:
