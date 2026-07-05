@@ -16,4 +16,5 @@ services:
       - ./paseo-home/.config:/home/paseo/.config
       - ./paseo-home/.paseo:/home/paseo/.paseo
       - /home/cristian/Repos:/workspace
+      - /tmp:/host-tmp
     restart: unless-stopped
