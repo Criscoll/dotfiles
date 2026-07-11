@@ -43,7 +43,7 @@ Do not attempt a fallback.
 ~/bin/agent_scripts/websearch -n 5 "rust ownership tutorial"
 
 # Restrict to specific engines
-~/bin/agent_scripts/websearch -e "google,duckduckgo" "site:github.com fast JSON parser"
+~/bin/agent_scripts/websearch -e "bing,mojeek" "site:github.com fast JSON parser"
 
 # Filter by time range
 ~/bin/agent_scripts/websearch -t day "latest Claude API changes"
@@ -51,8 +51,13 @@ Do not attempt a fallback.
 ~/bin/agent_scripts/websearch -t year "LLM agent best practices"
 
 # Combine flags
-~/bin/agent_scripts/websearch -n 5 -e "brave" -t month "docker security vulnerabilities"
+~/bin/agent_scripts/websearch -n 5 -e "mojeek" -t month "docker security vulnerabilities"
 ```
+
+**Default engines** (`settings.yml`) are currently `bing`, `mojeek`, `yep`
+(plus `wikipedia`/`wikidata`). `duckduckgo`/`brave`/`startpage`/`google` are
+disabled — they reliably CAPTCHA/rate-limit-block this network. See
+`references/engine-blocking.md` before re-enabling any of them.
 
 ## Output Format
 
@@ -115,3 +120,13 @@ Do NOT use for:
 Requires Docker at `/usr/bin/docker`. If the script exits with
 "docker not found", Docker is not installed. Do not attempt a fallback —
 surface the error to the user.
+
+## Load Reference Files When Relevant
+
+Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do not guess their contents — read them.
+
+- **references/engine-blocking.md** — load when: a search returns an empty
+  results array (including for trivial queries), `docker logs
+  searxng-websearch` shows `SearxEngineCaptchaException` or `Suspended`
+  errors, or before re-enabling `duckduckgo`/`brave`/`startpage`/`google` in
+  `settings.yml`.

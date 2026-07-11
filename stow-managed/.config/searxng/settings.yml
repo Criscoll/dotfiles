@@ -4,3 +4,25 @@ search:
   formats:
     - html
     - json
+
+# Engine overrides — see ../../.claude/skills/web-search/references/engine-blocking.md
+# duckduckgo/brave/startpage/google are enabled by default but as of 2026-07
+# reliably CAPTCHA/rate-limit block this network's egress IP (confirmed via
+# container logs — SearxEngineCaptchaException / SuspendedException). google
+# fails silently (0 results, no error). bing/mojeek/yep are disabled by
+# default but confirmed working — enabling them here.
+engines:
+  - name: duckduckgo
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: startpage
+    disabled: true
+  - name: google
+    disabled: true
+  - name: bing
+    disabled: false
+  - name: mojeek
+    disabled: false
+  - name: yep
+    disabled: false
