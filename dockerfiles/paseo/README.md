@@ -88,6 +88,85 @@ Until that migration happens, the container config here (digest pin, sidecar,
 intentionally left unconfigured — it will be handled as part of, or after, the
 host-native move rather than worked around in-container.
 
+#### Decision analysis (2026-07-11) — pending, no action taken
+
+Revisited the host-native direction above with a full pros/cons + security
+pass before actually pulling the trigger. Full writeup:
+`/home/cristian/.claude/plans/i-m-not-convinced-the-noble-wreath.md` (not
+part of this repo — a local Claude Code plan file; summarized here so the
+decision context survives even if that file doesn't).
+
+**Confirmed today's container already covers most tooling parity** (bind-mounts
+`~/Repos` rw and `~/opt` ro, self-provisions via stow) — what's genuinely
+broken in-container is the MCP SSH tunnels, calendar OAuth (see "Known Gaps"
+below), and the flat `/workspace` single-project problem (see "Projects vs.
+workspaces gotcha" below). All three already work today for ordinary
+host-native Claude Code/pi sessions, for free, because those run as the
+primary user with normal `~/.ssh`, `~/.claude.json`, and `localhost` access —
+host-native Paseo would inherit exactly that.
+
+**Host-native pros:** zero provisioning/no Dockerfile-Compose-provisioning
+script to maintain, real per-repo project detection instead of one flat
+`/workspace` project, sibling Docker services (e.g. the `websearch` skill's
+`searxng-websearch` sidecar) reachable over plain `localhost` like any host
+process instead of compose-network wiring, calendar/MCP gaps close for free.
+
+**Host-native cons — the blast-radius wall disappears entirely:** no non-root
+boundary, no restricted mounts, full reach to `~/.ssh`, `~/.gnupg` (this
+repo's git-crypt signing key), every other repo, every credential. Matters
+more than usual here because Paseo is phone-triggered over the network,
+gated only by `PASEO_PASSWORD` + Tailscale reachability — not a
+locally-invoked tool. `npm i -g` also runs install scripts as the real host
+user rather than in a disposable image-build layer, and a version pin is a
+weaker guarantee than the current `@sha256:` digest pin (no lockfile
+enforcement on a global install).
+
+**Forking instead of `npm install -g`:** confirmed viable — `getpaseo/paseo`
+is a public AGPL-3.0 npm/turborepo monorepo (10.2k stars, solo-maintained,
+active), buildable via `npm run build:server`. Pinning to a reviewed git
+commit is stronger provenance than trusting an npm registry publish, and
+closes the "malicious version pushed to the registry" vector specifically.
+But it's **orthogonal to the sandboxing trade-off above** — host exposure is
+identical whether the code is forked or `npm install`ed — and it adds real
+ongoing merge/rebase burden against an active project. Best understood as a
+stronger pinning mechanism for host-native, not a way to get the container
+wall back.
+
+A **dedicated non-root OS user** (not the primary account, not a container)
+was considered as a middle ground but rejected: it wouldn't automatically
+inherit `~/.claude.json` MCP registrations, SSH agent, or GPG keyring without
+extra sharing setup — reintroducing the exact per-tool parity work
+host-native is meant to eliminate.
+
+**Status: no decision made.** Asked directly whether to proceed (and via
+`npm i -g` vs. fork-and-build) — both answered "not deciding yet." The
+container config below remains as-is until a decision is made.
+
+#### Source-build experiment (2026-07-11) — in progress, paused
+
+Cloned `getpaseo/paseo` to `/home/cristian/Repos/paseo` (plain clone, `origin`
+still points at `git@github.com:getpaseo/paseo.git` — not yet forked or
+repointed at a private remote) to try running the daemon from source, as a
+lower-commitment way to poke at host-native before deciding on the migration
+above.
+
+Toolchain gap found immediately: the repo pins `nodejs 22.20.0`
+(`.tool-versions` / `.mise.toml`); the host only had system `nodejs 18.19.1`
+(apt-installed) and no active version manager — `.zshrc` already references
+`NVM_DIR` but `~/.nvm` didn't actually exist on this machine. Installed `nvm`
+(official install script, into `~/.nvm`, matching what `.zshrc` already
+expected) and ran `nvm install 22.20.0` — done. Host `rustc` (1.95.0) is newer
+than the repo's pinned `1.85.1` but not yet verified to build cleanly against
+it. Java isn't installed; expected to only matter for the Android/mobile
+packages, not the headless daemon, but unconfirmed.
+
+**Paused here — not yet run:** `npm install`, `npm run build:server`, and
+actually starting the daemon. Relevant facts from `docs/development.md` for
+when this resumes: `npm run dev:server` runs the daemon on `127.0.0.1:6768`
+against a checkout-scoped `PASEO_HOME` (`$ROOT/.dev/paseo-home`), separate
+from the production `~/.paseo` used by `npm run start` / the packaged app on
+`:6767`; `npm run cli -- ...` talks to that same dev daemon automatically.
+
 ## Claude/pi Config Provisioning
 
 The container bind-mounts `/home/cristian/Repos` → `/workspace`, so
