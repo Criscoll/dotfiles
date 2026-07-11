@@ -118,11 +118,7 @@ gets OOM-killed within its own scope instead of pressuring the whole host.
 
 ## Networking
 
-**Read `references/networking.md` before any Docker networking task, port mapping setup, or when `curl` to a mapped port returns 000 or "Connection reset by peer".**
-
-```bash
-cat "$CLAUDE_SKILL_DIR/references/networking.md"
-```
+Read `references/networking.md` before any Docker networking task, port mapping setup, or when `curl` to a mapped port returns 000 or "Connection reset by peer" — see the load table at the end of this file for the exact command.
 
 ## Container Config Gotchas
 
