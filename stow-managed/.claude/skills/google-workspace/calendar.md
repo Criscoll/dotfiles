@@ -75,8 +75,16 @@ Default calendar is the authenticated account's primary calendar.
 ~/bin/agent_scripts/calendar-update <event-id> \
   --description "New notes" \
   --location "New place"
+```
 
-# Move event to a different calendar — NOT wrapped (use raw gws-cli is blocked)
+## Moving events between calendars
+
+```bash
+# Move an event from the primary calendar to another calendar
+~/bin/agent_scripts/calendar-move <event-id> <destination-calendar-id>
+
+# Move between two non-primary calendars
+~/bin/agent_scripts/calendar-move <event-id> <destination-calendar-id> --from <source-calendar-id>
 ```
 
 ## Batch updating events (use for 5+ events)
