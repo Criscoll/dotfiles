@@ -19,6 +19,27 @@ Apply these rules whenever you create, edit, or move tasks inside `02_Workbench/
 
 ---
 
+## Identifying the Target Task
+
+Before editing, moving, or reviewing an **existing** task, resolve exactly which
+task directory is meant:
+
+1. **Direct path given** — the request includes a full path to a task directory
+   or `outline.md` (e.g. `02_Workbench/03_Active/Project_Foo/outline.md`). Use
+   it as given; no confirmation needed.
+2. **Rough description given** — the request names a task by description only
+   (e.g. "the foo project task", "the thing we're doing with X"). Search
+   `02_Workbench/` for matching task directories, then **state the full
+   resolved path and ask the user to confirm it before making any edits.**
+   If multiple candidates match, list them and ask which one. Do not guess and
+   proceed silently — a wrong match edits the wrong task.
+
+This confirmation step applies to edits, moves, and reviews of existing tasks.
+It does not apply to creating a brand-new task (see "Creating a New Task"
+below), where the directory doesn't exist yet.
+
+---
+
 ## Task Lifecycle
 
 Tasks move through stages in this order:
