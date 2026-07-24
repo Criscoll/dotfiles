@@ -45,6 +45,16 @@ cat "${CLAUDE_SKILL_DIR}/gmail.md"
 cat "${CLAUDE_SKILL_DIR}/calendar.md"
 ```
 
+## Load reference files when relevant
+
+Read using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do not guess their contents — read them.
+
+- **references/auth-troubleshooting.md** — load when: `gmail-labels` or any gws-cli
+  call errors with an auth/token/scope problem — covers the `invalid_grant`
+  (7-day Testing-mode cap) and `invalid_scope` (incremental-authorization
+  mismatch) failure modes, how to tell them apart, and why the fix for each
+  differs.
+
 ## What is NOT available (hook-enforced)
 
 The following are denied by the PreToolUse allow-list hook and will be blocked
@@ -160,53 +170,9 @@ this repo and must be recreated on each new machine.
 
 ---
 
-## Fixing recurring re-auth every ~7 days
+## If auth errors after setup
 
-**Symptom:** auth from the steps above works, but expires and demands a fresh
-OAuth flow every 7 days or so, on every machine.
-
-**Cause:** the OAuth client's Google Cloud project has Publishing status =
-**Testing**. Google hard-caps refresh tokens at 7 days for any External app in
-Testing status, regardless of which scopes it requests. This is a project-level
-setting (shared by every machine using the same `client_secret.json`), not a
-per-machine one.
-
-**Fix (one-time, project-level):**
-
-1. Go to `console.cloud.google.com/auth/audience` (select the correct project
-   in the top bar first). Google merged the old "OAuth consent screen" page into
-   **Google Auth Platform**, split across Branding / Audience / Data Access tabs
-   — the publishing-status control now lives under **Audience**, not a page
-   literally named "consent screen." If the project never had a consent screen
-   configured interactively, that URL will prompt **Get Started** — step through
-   App name → Audience (choose **External**) → Contact info → agree to the
-   policy → Create, then return to `/auth/audience`.
-2. Click **Publish App**, confirm the dialog. Status flips from Testing to
-   **In production**.
-
-**Then, per machine:** tokens minted *before* publishing keep their 7-day cap
-even after the project is published — each machine needs one more re-auth pass
-to mint a token issued post-publish:
-
-```bash
-rm ~/.config/gws-cli/token.json.enc   # skip if the file doesn't exist yet
-OAUTHLIB_RELAX_TOKEN_SCOPE=1 uvx gws-cli@1.3.1 gmail labels
-```
-
-**The "Google hasn't verified this app" warning is expected and permanent** —
-Published + External + Unverified is the correct end state here, not a
-misconfiguration. Click **Advanced → Go to [app name] (unsafe)** every time you
-mint a fresh token. Do not submit for Google verification for a single-user
-personal tool like this — verification (privacy policy, homepage, review) is
-overhead with no benefit when you're the only consenting account.
-
-What "any Google user could access it" (shown in Google's own docs for this
-state) actually means: without the Testing allowlist, the consent screen will
-accept a login from any Google account, not just pre-approved testers. That
-lets someone else who obtained this app's `client_id`/`client_secret` run the
-OAuth flow and link *their own* account to it — it does not expose *your*
-Gmail/Calendar data to them. Each grant is scoped to whichever account
-consents. Since the credential file is only ever stored encrypted at rest and
-never committed to this repo, there's no realistic path for anyone else to
-have it. A hard cap of 100 total distinct consenting accounts applies to
-unverified Published apps — irrelevant for single-user use.
+Don't guess at a fix — the error string tells you which of two distinct failure
+modes you're in (`invalid_grant` vs `invalid_scope`), and they have different
+causes and fixes. Load `references/auth-troubleshooting.md` and match the
+symptom before acting.
