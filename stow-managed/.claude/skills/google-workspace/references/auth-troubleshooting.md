@@ -1,8 +1,29 @@
 # Auth Troubleshooting
 
-Three distinct auth failures show up as "it's asking me to log in again." They have
+Four distinct auth failures show up as "it's asking me to log in again." They have
 different causes and different fixes — check the error string first, and for
-`invalid_scope` specifically, check account type before assuming it's the generic case.
+`invalid_scope` specifically, don't theorize from `enabled_services` or account type
+alone — check what's actually granted first (see below), then match against Case A/B/C.
+
+## Fastest diagnostic for `invalid_scope`: check what's actually granted
+
+Before picking a case below, go to
+[`myaccount.google.com/permissions`](https://myaccount.google.com/permissions), find
+this app's entry (named after whatever you called the OAuth client — e.g. "Self-Hosted
+Tools"), and expand it. It lists, in plain language, exactly which permissions Google
+actually granted — independent of what `enabled_services` says gws-cli is *requesting*.
+Compare that list against the six services' scopes in `gws/auth/scopes.py` (`docs`,
+`sheets`, `slides`, `drive`, `gmail`, `calendar` — `contacts` too if enabled). Any
+requested service whose scope isn't in the granted list will fail `invalid_scope` on
+every refresh, forever, regardless of cause — this page is ground truth, reasoning
+about *why* a scope might not be granted (Case A vs B vs C below) is secondary to
+confirming *that* it isn't.
+
+This page also shows the original grant date, which can be misleading: it does **not**
+update when you complete an incremental-authorization re-consent, so a grant that looks
+weeks or months old may still be the one currently in effect even after you "re-minted"
+the token yesterday — don't assume a recent re-auth changed what's listed here without
+checking.
 
 ## `invalid_grant` — Testing-mode 7-day cap
 
@@ -55,7 +76,7 @@ never committed to this repo, there's no realistic path for anyone else to
 have it. A hard cap of 100 total distinct consenting accounts applies to
 unverified Published apps — irrelevant for single-user use.
 
-## `invalid_scope` — two different causes, check account type first
+## `invalid_scope` — three different causes, check granted permissions first
 
 **Symptom:** even on a Published (In production) project, a refresh attempt fails:
 
@@ -65,13 +86,19 @@ unverified Published apps — irrelevant for single-user use.
 
 ...followed by a fresh OAuth URL. This is a **different failure mode from the
 7-day Testing cap above** — don't confuse the two. `invalid_grant` = expired by
-policy; `invalid_scope` = the cached refresh token's scope set no longer matches
-what the client is requesting on refresh.
+policy (Google's own docs list the exhaustive reasons:
+`developers.google.com/identity/protocols/oauth2#expiration` — revocation, 6
+months unused, password change, the 100-token-per-client cap, admin policy,
+time-based access expiry; `invalid_scope` is not among them). `invalid_scope` =
+the cached refresh token's scope set no longer matches what the client is
+requesting on refresh — a client-side/request-shape problem, not a Google-side
+expiration event.
 
-There are two distinct reasons this scope mismatch happens. **Check which one
-you're in before picking a fix** — the generic case is genuinely a one-off; the
-personal-account case is structural and will recur on every single refresh
-until you address it, no matter how many times you re-consent.
+There are three distinct reasons this scope mismatch happens. **Check the
+[permissions page](https://myaccount.google.com/permissions) first** (see
+above), then match against these — Case A is genuinely a one-off; Case B and
+Case C are both structural and will recur on every single refresh until you
+address them, no matter how many times you re-consent.
 
 ### Case A: generic incremental-authorization mismatch (one-off, self-resolving)
 
@@ -181,7 +208,7 @@ a sign the fix didn't take. Run `calendar list` (or whichever command
 originally failed) too before considering it closed, since a single successful
 call doesn't confirm every scope path.
 
-**Nothing to change in Google Cloud Console for either case.** The **Data
+**Nothing to change in Google Cloud Console for any of these cases.** The **Data
 Access** tab (`console.cloud.google.com/auth/scopes`) is a self-declaration
 used only for the verification-submission process — it does not gate what an
 unverified Desktop-app client can request via the auth URL directly, and it
@@ -198,3 +225,64 @@ setting — there is nothing to flip there to fix it.
 **What would trigger Case B again:** re-enabling `contacts`
 (`config enable contacts` or `config reset`, which re-enables all services) on
 a personal (non-Workspace) account.
+
+### Case C: a requested service's scope was simply never granted for this account — structural, no account-type restriction involved
+
+**Symptom that distinguishes this from Case B:** the ungranted scope is *not*
+an admin-only one — `contacts`/`directory.readonly` may be disabled or absent
+from `enabled_services` entirely, and the account type is irrelevant. Any of
+the six ordinary service scopes (`docs`, `sheets`, `slides`, `drive`, `gmail`,
+`calendar`) can be missing from what was actually granted, for entirely
+mundane reasons: you clicked through a granular consent screen and didn't
+check every box, a service was added to `enabled_services` after the last time
+you completed a full consent flow, or you simply never use that service and it
+was never consciously granted in the first place.
+
+**Confirmed on this repo 2026-07-25:** `enabled_services` requested `docs`,
+`sheets`, `slides`, `drive`, `gmail`, `calendar`, `convert` (7 services, 6
+distinct scopes). The [permissions page](https://myaccount.google.com/permissions)
+showed only `gmail` (read/compose/send/labels), `calendar` (full), and `drive`
+(full) as actually granted — `docs`/`sheets`/`slides`/`convert` never had a
+grant, going back to the original consent on 29 June (the "Access given on"
+date does not update on incremental re-consent — see the diagnostic section
+above). Every refresh since then re-requested all seven services and failed on
+the three that were never granted, **even immediately after a same-day
+"successful" re-auth**, because the token that came back from that re-auth
+still didn't include them — the OAuth consent screen doesn't error out on a
+partial grant, it just silently issues a token covering less than what was
+requested. This looks identical to Case A/B from the error string alone; only
+the permissions page distinguishes it.
+
+**Permanent fix — request only what's actually granted (or actually needed):**
+
+```bash
+cat ~/.config/gws-cli/gws_config.json   # check current enabled_services
+```
+
+Edit `enabled_services` directly (plaintext JSON, safe to edit with a normal
+text edit — no `gws-cli` invocation needed) down to the services that are (a)
+actually used by a wrapper script in `~/bin/agent_scripts/` and (b) confirmed
+present on the permissions page. For this skill, that's just `gmail` and
+`calendar` — no `docs-*`/`sheets-*`/`slides-*`/`drive-*` wrapper scripts exist,
+so those services being ungrantable cost nothing functionally.
+
+**You will not need a new consent screen if you're only removing services** —
+same mechanism as Case B: shrinking the request to a subset of what's already
+granted lets the very next refresh succeed silently. Confirmed in practice:
+after trimming to `gmail` + `calendar`, `gmail-labels` and `calendar-list` both
+refreshed with no browser prompt.
+
+**Adding a granted-but-currently-unused service back is also safe without a
+new consent flow** — e.g. `drive` was re-added to `enabled_services` here even
+though no wrapper script uses it yet, because the permissions page confirmed
+it's already granted. Verify via the permissions page before re-adding
+anything, don't assume based on what "should" have been granted. Adding back
+`docs`/`sheets`/`slides`/`convert` **would** require a fresh consent pass
+(and, per this same failure mode, you'd need to explicitly check those
+permission boxes and then re-verify the grant landed via the permissions page
+before trusting it — don't just assume completing the flow means the scope
+was actually granted).
+
+**What would trigger Case C again:** adding any service to `enabled_services`
+whose scope isn't already listed on the permissions page, without completing a
+fresh consent *and* confirming the grant on the permissions page afterward.

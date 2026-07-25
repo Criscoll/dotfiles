@@ -51,8 +51,10 @@ Read using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do not g
 
 - **references/auth-troubleshooting.md** — load when: `gmail-labels` or any gws-cli
   call errors with an auth/token/scope problem — covers the `invalid_grant`
-  (7-day Testing-mode cap) and `invalid_scope` (incremental-authorization
-  mismatch) failure modes, how to tell them apart, and why the fix for each
+  (7-day Testing-mode cap) failure mode and three distinct `invalid_scope`
+  causes (incremental-authorization mismatch, admin-only scope on a personal
+  account, a requested scope simply never granted), how to tell them apart via
+  the account's actual granted-permissions page, and why the fix for each
   differs.
 
 ## What is NOT available (hook-enforced)
