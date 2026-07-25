@@ -25,3 +25,7 @@ stow-managed/.local/share/fonts/.uuid
 # Python bytecode caches — never commit
 __pycache__/
 **/__pycache__/
+
+# Pi agent credentials and session transcripts — never commit
+stow-managed/.pi/agent/auth.json
+stow-managed/.pi/agent/sessions/
