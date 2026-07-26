@@ -29,3 +29,5 @@ __pycache__/
 # Pi agent credentials and session transcripts — never commit
 stow-managed/.pi/agent/auth.json
 stow-managed/.pi/agent/sessions/
+stow-managed/.pi/agent/prompt-history.jsonl
+stow-managed/.pi/agent/trust.json
