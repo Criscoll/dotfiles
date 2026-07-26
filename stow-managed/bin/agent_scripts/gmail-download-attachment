@@ -4,7 +4,7 @@
 # dependencies = []
 # ///
 
-import os, subprocess, sys
+import json, os, subprocess, sys
 
 GWS = ["uvx", "gws-cli@1.3.0", "gmail", "download-attachment"]
 DEFAULT_OUT_DIR = os.path.expanduser("~/Downloads/gmail-attachments")
