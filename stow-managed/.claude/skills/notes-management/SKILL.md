@@ -3,14 +3,17 @@ name: notes-management
 description: >-
   Apply the notes conventions for the scribbles 01_Notes vault — folder
   taxonomy, note placement, file naming, frontmatter (aliases, tags, topics),
-  the 00_Aliases/ folder-alias pattern, and the Index.md folder-index
-  convention. Auto-invoke BEFORE creating a new note, choosing where a note
-  belongs, adding frontmatter, creating folder aliases, creating or updating
-  an Index.md, or reviewing 01_Notes structure. Trigger phrases: "create a
-  note", "new note", "add a note", "where does this note go", "note aliases",
-  "folder aliases", "semantic search notes", "note frontmatter", "01_Notes",
-  "scribbles notes", "note template", "which folder", "notes management",
-  "note naming", "Index.md", "folder index", "note index".
+  the 00_Aliases/ folder-alias pattern, the Index.md folder-index convention,
+  and citing sources when a note's content came from research (web search,
+  crawled pages, fetched docs). Auto-invoke BEFORE creating a new note,
+  choosing where a note belongs, adding frontmatter, creating folder aliases,
+  creating or updating an Index.md, writing up findings from a web search or
+  research task into a note, or reviewing 01_Notes structure. Trigger
+  phrases: "create a note", "new note", "add a note", "where does this note
+  go", "note aliases", "folder aliases", "semantic search notes", "note
+  frontmatter", "01_Notes", "scribbles notes", "note template", "which
+  folder", "notes management", "note naming", "Index.md", "folder index",
+  "note index", "cite sources", "save research to a note".
 disable-model-invocation: false
 ---
 
@@ -194,6 +197,43 @@ Software, hardware, AI, tools, CLI, programming notes.
 
 ---
 
+## Sourcing Research Findings
+
+If a note's content came from research — web search, a crawled page, a fetched
+doc, a paper — record where it came from, and mark *which claim* it backs
+inline, not just a source list at the bottom. A bare list can't tell a reader
+which sentence relies on which source; inline markers can.
+
+- Use numbered inline citation markers — `[1]`, `[2]` — placed right after the
+  claim they support, in first-use order through the note.
+- Add a `## Sources` section at the end of the note with a matching numbered
+  list: `1. [Title](URL) — accessed YYYY-MM-DD`. The number in the list must
+  match the inline marker, not just be sequential by coincidence.
+- Reuse a marker if the same source backs a later claim too — don't mint a new
+  number for a source already listed.
+- For a source with no meaningful title (a bare API response, a forum post),
+  describe it instead of leaving a naked link: `1. [Reddit thread on X](URL)`.
+- If only part of a note came from research (the rest is personal experience
+  or prior knowledge), only cite the researched claims — don't add markers to
+  sentences that didn't come from a source.
+- This applies regardless of which tool did the lookup (web-search skill,
+  WebFetch, web-crawl skill, pdf-parse skill) — the citation matters, not the
+  mechanism.
+
+Example:
+```markdown
+Bridge mode is the default Docker network driver on Linux [1]. Host mode
+skips network isolation entirely, which is faster but only safe for
+single-container setups [2].
+
+## Sources
+
+1. [Docker networking docs](https://docs.docker.com/network/) — accessed 2026-07-28
+2. [Stack Overflow: bridge vs host mode](https://stackoverflow.com/...) — accessed 2026-07-28
+```
+
+---
+
 ## Note Type Templates
 
 **Cheat sheet / command reference**
@@ -262,3 +302,5 @@ Entry.
 5. Check whether the parent folder's `Index.md` needs a new entry for this
    note; create the `Index.md` if the folder doesn't have one yet.
 6. Pick the appropriate template above and fill in the content.
+7. If any content came from research (web search, a crawled page, a fetched
+   doc), add a `## Sources` section listing each source used.
