@@ -3,13 +3,14 @@ name: notes-management
 description: >-
   Apply the notes conventions for the scribbles 01_Notes vault — folder
   taxonomy, note placement, file naming, frontmatter (aliases, tags, topics),
-  and the 00_Aliases/ folder-alias pattern. Auto-invoke BEFORE creating a new
-  note, choosing where a note belongs, adding frontmatter, creating folder
-  aliases, or reviewing 01_Notes structure. Trigger phrases: "create a note",
-  "new note", "add a note", "where does this note go", "note aliases",
+  the 00_Aliases/ folder-alias pattern, and the Index.md folder-index
+  convention. Auto-invoke BEFORE creating a new note, choosing where a note
+  belongs, adding frontmatter, creating folder aliases, creating or updating
+  an Index.md, or reviewing 01_Notes structure. Trigger phrases: "create a
+  note", "new note", "add a note", "where does this note go", "note aliases",
   "folder aliases", "semantic search notes", "note frontmatter", "01_Notes",
   "scribbles notes", "note template", "which folder", "notes management",
-  "note naming".
+  "note naming", "Index.md", "folder index", "note index".
 disable-model-invocation: false
 ---
 
@@ -153,6 +154,46 @@ resistance training.md
 
 ---
 
+## Folder Index Convention — `Index.md`
+
+Every directory in `01_Notes/` that contains subdirectories and/or notes of
+its own **should** have an `Index.md`. Where `00_Aliases/` helps filename
+search find a folder, `Index.md` helps a search — human or agent — navigate
+*down* through the vault: start at a top-level `Index.md`, follow a link to
+a child's `Index.md`, repeat until you land on the right note.
+
+**Structure:** a one-line description of the folder's theme, then a list of
+its *immediate* children (subdirectories and notes), each with a one-line
+description and a link:
+
+```markdown
+# 01_Tech Index
+
+Software, hardware, AI, tools, CLI, programming notes.
+
+- [AI/](AI/Index.md) — LLMs, agents, prompting, auxiliary AI services
+- [Programming/](Programming/Index.md) — languages, patterns, tooling
+- [Docker Cheat Sheet.md](Docker Cheat Sheet.md) — command reference for Docker
+```
+
+**Rules:**
+
+- List only **immediate** children — never the full recursive tree. Each
+  child directory owns its own `Index.md`, which is what keeps the chain
+  navigable instead of collapsing into one unmaintainable flat file.
+- Don't list `00_Aliases/` as a child — it holds no real notes, just search
+  aliases, so listing it would clutter the index without adding signal.
+- Update a folder's `Index.md` whenever a note or subdirectory is added,
+  moved, or removed from it. This is a lightweight, incremental habit done
+  alongside the change that touched the folder — not a separate batch job.
+- Going forward only: this convention isn't backfilled onto existing
+  folders. Create or update a folder's `Index.md` only when you're already
+  touching that folder (adding a note, creating a subdirectory, etc.) —
+  don't proactively add `Index.md` to unrelated folders you happen to pass
+  through.
+
+---
+
 ## Note Type Templates
 
 **Cheat sheet / command reference**
@@ -218,4 +259,6 @@ Entry.
    note's own title).
 4. Check whether the parent folder has a `00_Aliases/` directory; if not,
    create one with 3–8 empty alias files.
-5. Pick the appropriate template above and fill in the content.
+5. Check whether the parent folder's `Index.md` needs a new entry for this
+   note; create the `Index.md` if the folder doesn't have one yet.
+6. Pick the appropriate template above and fill in the content.
