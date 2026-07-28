@@ -1,0 +1,80 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import json, subprocess, sys
+
+GWS = ["uvx", "gws-cli@1.3.1", "drive", "search"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    args = sys.argv[1:]
+    query = None
+    extra = []
+
+    i = 0
+    while i < len(args):
+        if args[i] in ("--max", "--page-token") and i + 1 < len(args):
+            extra += [args[i], args[i + 1]]
+            i += 2
+        elif query is None:
+            query = args[i]
+            i += 1
+        else:
+            extra.append(args[i])
+            i += 1
+
+    if not query:
+        eprint("Usage: drive-search [--max N] [--page-token T] <query>")
+        sys.exit(2)
+
+    result = subprocess.run(GWS + [query] + extra, capture_output=True, text=True)
+    if result.returncode != 0:
+        msg = result.stderr.strip()
+        if result.stdout:
+            try:
+                err = json.loads(result.stdout)
+                msg = err.get("message", msg) or msg
+            except json.JSONDecodeError:
+                pass
+        eprint(msg)
+        sys.exit(result.returncode)
+
+    try:
+        outer = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        eprint("Unexpected non-JSON output:")
+        print(result.stdout, end="")
+        sys.exit(1)
+
+    def extract(wrapped):
+        if isinstance(wrapped, dict) and "data" in wrapped:
+            return wrapped["data"]
+        return wrapped
+
+    data_str = extract(outer.get("files"))
+    if not data_str:
+        print("No files found.")
+        return
+
+    files = json.loads(data_str) if isinstance(data_str, str) else data_str
+
+    if not files:
+        print("No files found.")
+        return
+
+    for f in files:
+        print(
+            f"{f.get('id','')} | {f.get('name','')} | {f.get('mime_type','')} | "
+            f"{f.get('modified_time','')} | {f.get('size','')}"
+        )
+
+
+if __name__ == "__main__":
+    main()

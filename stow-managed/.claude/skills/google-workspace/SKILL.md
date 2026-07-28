@@ -2,21 +2,23 @@
 name: google-workspace
 description: >-
   Read Gmail (list/search/read/label-move), download and view email attachments
-  (PDFs, etc.), and manage Calendar (list/get/create/update) via gws-cli wrapper
+  (PDFs, etc.), manage Calendar (list/get/create/update), and search/download
+  Google Drive files (list/search/get/download/export) via gws-cli wrapper
   scripts in `~/bin/agent_scripts/`.
   Enforced at the harness layer by a deny-by-default allow-list hook —
-  send, delete, and destructive Calendar operations are structurally blocked and
-  cannot be invoked regardless of how the command is phrased.
+  send, delete, and destructive Calendar/Drive operations are structurally blocked
+  and cannot be invoked regardless of how the command is phrased.
   Trigger phrases: "check email", "search gmail", "list emails", "read email",
   "archive email", "label email", "mark as read", "list calendar events",
   "create event", "update event", "google calendar", "gmail", "workspace",
-  "attachment", "download attachment", "email pdf", "has attachment".
+  "attachment", "download attachment", "email pdf", "has attachment",
+  "search drive", "find file", "download file", "google drive", "drive file".
 disable-model-invocation: false
 ---
 
-You are running the google-workspace skill. Drive `gws-cli` for Gmail and Calendar
-work. **Send, delete, and destructive calendar operations are structurally unavailable
-— the harness hook blocks them even if attempted.**
+You are running the google-workspace skill. Drive `gws-cli` for Gmail, Calendar, and
+Drive work. **Send, delete, and destructive calendar/Drive operations are structurally
+unavailable — the harness hook blocks them even if attempted.**
 
 Always pin the exact version: `uvx gws-cli@1.3.1 <service> <subcommand> [flags]`
 
@@ -31,18 +33,20 @@ Before doing any real work, verify gws-cli is authenticated:
 If this errors with an auth/token error, point the user to the per-machine setup
 section below rather than continuing.
 
-For Gmail list, search, and read operations and Calendar list, get, create, and update
-operations, always use the wrapper scripts in `~/bin/agent_scripts/` rather than raw
-`gws-cli`. The wrappers unwrap the outer JSON envelope, truncate long bodies, and format
-output as compact one-line-per-item listings, cutting token usage by an order of magnitude.
+For Gmail list, search, and read operations, Calendar list, get, create, and update
+operations, and Drive list, search, get, download, and export operations, always use
+the wrapper scripts in `~/bin/agent_scripts/` rather than raw `gws-cli`. The wrappers
+unwrap the outer JSON envelope, truncate long bodies, and format output as compact
+one-line-per-item listings, cutting token usage by an order of magnitude.
 
 ## Load the reference files
 
-Read both reference files before doing any Gmail or Calendar work:
+Read all three reference files before doing any Gmail, Calendar, or Drive work:
 
 ```bash
 cat "${CLAUDE_SKILL_DIR}/gmail.md"
 cat "${CLAUDE_SKILL_DIR}/calendar.md"
+cat "${CLAUDE_SKILL_DIR}/drive.md"
 ```
 
 ## Load reference files when relevant
@@ -69,6 +73,16 @@ even if you attempt them. Do not suggest or attempt these:
 
 **Calendar:** `delete`, `clear-calendar`, `delete-calendar`, `create-calendar`,
 `add-acl`, `remove-acl`, `update-acl`, `subscribe`, `unsubscribe`, `clear-reminders`
+
+**Drive:** `upload`, `delete`, `share`, `unshare`, `move`, `copy`, `rename`, `update`,
+`create-folder`, `trash`, `untrash`, `empty-trash`, `add-comment`, `update-comment`,
+`delete-comment`, `list-comments`, `get-comment`, `add-permission`, `update-permission`,
+`remove-permission`, `list-permissions`, `list-revisions`, `get-revision`,
+`delete-revision`, `transfer-ownership`, `list-changes`, `watch-changes`
+
+This list is not hook-structurally-enforced the way `.enc` file access is — it's
+enforced by which wrapper scripts exist. Do not attempt these via raw `gws-cli` even
+if you believe a legitimate use case exists; ask the user to add a wrapper instead.
 
 ---
 
