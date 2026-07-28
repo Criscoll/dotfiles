@@ -139,3 +139,4 @@ Only include fields that need to change; omitted fields are left as-is. Events i
 - Time formats: ISO 8601 (`2024-01-15T10:00:00`) for timed events; `2024-01-15` (date-only) for all-day events. Timed events should include timezone offset (e.g. `+01:00`) to avoid "Missing time zone definition" errors.
 - `calendar-list` output format: `start_datetime | summary | location | event_id` (one line per event). All-day events show just the date; timed events show `start -- end`.
 - `calendar-list --json` prints raw JSON for all events (useful for programmatic access).
+- **A calendar visible in the API/browser but missing on the Google Calendar Android app** is usually a per-calendar sync toggle, not a data or permissions issue: app Settings → tap the account → find the calendar in the full list → check "Sync" is on (separate from cache/restart, which won't fix it).
