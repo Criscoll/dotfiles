@@ -44,7 +44,10 @@ which isn't recoverable from the file alone.
 
 Batch every open item into a single question (or one `AskUserQuestion` call
 with multiple questions) rather than asking one at a time — per this
-project's global convention on batching decisions.
+project's global convention on batching decisions. For re-deriving a
+task-linked item's sub-items from the task's current outline, use the same
+round-based `AskUserQuestion` pattern as first-ever population — see
+`askuserquestion-population.md`.
 
 For each open item, the possible outcomes are:
 

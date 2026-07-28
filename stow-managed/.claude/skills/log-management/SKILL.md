@@ -103,6 +103,18 @@ format on it.
 
 ---
 
+## Populating the Outline — Default to AskUserQuestion
+
+When creating a new week's log — first-ever population, weekly rollover
+migration, or a mid-week addition with more than one plausible candidate —
+default to driving it with `AskUserQuestion` rounds (discover candidate
+tasks, batch multi-select questions, then batch again for each task's
+near-term slice) rather than asking the user to freehand list everything.
+This was validated as fast and low-effort for the user. Load
+`references/askuserquestion-population.md` for the full procedure.
+
+---
+
 ## capture.md — The Un-triaged Inbox
 
 `00_Weekly_Logs/capture.md` is a single persistent file (not per-week) for
@@ -151,3 +163,7 @@ Do not guess their contents — read them.
 - **references/outline-sync.md** — load when: auditing a week file's
   task-linked items against their actual task outlines, or before migrating
   items during rollover (so migration reflects current reality).
+- **references/askuserquestion-population.md** — load when: populating a new
+  week's Outline (first-ever creation, rollover migration, or a mid-week
+  addition), or any time you'd otherwise ask the user to freehand list
+  active tasks/items.
