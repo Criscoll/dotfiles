@@ -86,6 +86,56 @@ else
   echo "docker not installed/available"
 fi
 
+hr "Storage — filesystem usage"
+df -h
+echo
+df -i
+echo "--- top-level usage breakdown for filesystems at or above 80% full ---"
+# overlay/tmpfs/devtmpfs/squashfs excluded: overlay is docker's per-container merged
+# view (already reflected in the real disk mount underneath it), the rest are RAM.
+df -x tmpfs -x devtmpfs -x squashfs -x overlay --output=pcent,target 2>&1 | tail -n +2 | \
+while read -r pct mnt; do
+  pct_num="${pct%\%}"
+  if [ "${pct_num:-0}" -ge 80 ] 2>/dev/null; then
+    echo "=== $mnt ($pct full) ==="
+    du -xh --max-depth=1 "$mnt" 2>&1 | sort -rh | head -15
+    echo
+  fi
+done
+
+hr "Storage — deleted-but-open files (invisible to du, still billed by df)"
+# +L1 lists open files with link count 0 (unlinked/deleted but still held open by a
+# process) — the classic cause of a df/du mismatch on a disk-backed filesystem.
+# /dev/shm and /run entries are tmpfs (RAM), not real disk, and don't explain a gap.
+deleted_open="$(lsof +L1 2>/dev/null | awk '$7+0 > 10485760 {print}')"
+if [ -n "$deleted_open" ]; then
+  echo "$deleted_open" | sort -k7 -rn
+else
+  echo "None found above 10MB."
+fi
+
+hr "Storage — Docker breakdown"
+if command -v docker >/dev/null 2>&1; then
+  docker system df 2>&1
+  echo
+  echo "--- local volumes with no container reference (docker volume prune candidates) ---"
+  volumes="$(docker volume ls -q 2>&1)"
+  if [ $? -ne 0 ]; then
+    echo "$volumes"
+  else
+    orphaned=0
+    for v in $volumes; do
+      if ! docker ps -a --filter "volume=$v" --format '{{.ID}}' 2>/dev/null | grep -q .; then
+        echo "$v"
+        orphaned=$((orphaned + 1))
+      fi
+    done
+    [ "$orphaned" -eq 0 ] && echo "None — every volume is attached to a container."
+  fi
+else
+  echo "docker not installed/available"
+fi
+
 if [ "$IS_ROOT" -eq 0 ]; then
   hr "Root-only sections SKIPPED"
   echo "The kernel OOM-killer victim log, panic traces, prior-boot tails, and auth.log"
@@ -132,5 +182,14 @@ done
 hr "OOM-protection posture"
 dpkg -l systemd-oomd 2>&1 | tail -1
 dpkg -l earlyoom 2>&1 | tail -1
+
+hr "Storage — root-only Docker directory breakdown"
+if [ -d /var/lib/docker ]; then
+  du -xh --max-depth=1 /var/lib/docker/* 2>&1 | sort -rh
+  echo
+  docker info 2>&1 | grep -i "storage driver"
+else
+  echo "/var/lib/docker not present"
+fi
 
 hr "Done — see the linux-host-audit skill's references/ for how to interpret this and pick a fix."
