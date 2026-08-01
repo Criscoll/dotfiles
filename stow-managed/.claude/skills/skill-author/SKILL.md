@@ -115,6 +115,7 @@ Rules:
 - [ ] If multi-topic: detail extracted to `references/`, one level deep, one sub-topic per file.
 - [ ] If it ships scripts or spawns subagents: `references/quality-scripts-subagents.md` rules applied (declared deps, no voodoo constants, inlined subagent context).
 - [ ] If it drives a noisy CLI or API: wrapper scripts exist for the common read paths so agents don't re-derive parsing each session (token-efficiency wrapper pattern — see `references/quality-scripts-subagents.md`). Skill-specific scripts live in the skill directory alongside `SKILL.md`; scripts shared across multiple skills go in `~/bin/agent_scripts/`.
+- [ ] If it runs a script requiring root: a narrowly-scoped `NOPASSWD` sudoers rule is set up per `references/privileged-scripts.md`, not a blanket grant, and it's been verified with `sudo -n` (not plain `sudo`).
 - [ ] Symlink verified via `ls -la` (global skills only).
 - [ ] For project-local skills: `.pi/settings.json` created/updated with `"../.claude/skills"` bridge.
 
@@ -126,3 +127,4 @@ Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do
 - **references/instruction-design.md** — load when: writing the SKILL.md body, deciding how rigid an instruction should be, setting degrees of freedom, or naming the skill.
 - **references/quality-scripts-subagents.md** — load when: the skill ships scripts, spawns subagents, or needs workflow checklists, validator feedback loops, or output-format templates.
 - **references/language-skills.md** — load when: the skill being authored covers a programming language, framework, library, or technology stack (e.g. Python, TypeScript, Svelte, React, Go).
+- **references/privileged-scripts.md** — load when: a skill needs to run a script or command as root/sudo without an interactive password prompt, or is failing to reproduce a previously-working `sudo -n` invocation.
