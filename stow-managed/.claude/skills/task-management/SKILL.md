@@ -200,3 +200,30 @@ Once you have enough to proceed:
 3. Write the brief first — capture the motivation, constraints, and any decisions still open.
 4. Add `# Success Criteria` if there's a clear definition of done.
 5. Break the outline down until every leaf task is atomic and actionable.
+
+---
+
+## Staleness Review
+
+There is no manual `updated:` frontmatter — it rots the moment an outline is edited
+without touching it. Instead, use two zero-upkeep signals when triaging `03_Active/`:
+
+1. **Git-derived last-touched date (exact, always current).** For each active task
+   directory, the last commit that touched it is its true "last worked" signal:
+
+   ```bash
+   for d in 02_Workbench/03_Active/*/; do
+     echo "$(git log -1 --format='%ci' -- "$d") $d"
+   done | sort
+   ```
+
+   Oldest-first ordering surfaces the stalest tasks — no per-file maintenance, no drift.
+
+2. **Weekly-log cross-check (human-facing).** The weekly logs (`00_Weekly_Logs/`,
+   per the `log-management` skill) already link tasks worked each week. Rule of thumb:
+   a task in `03_Active/` that is absent from the last N weekly logs is a stall
+   candidate — either action it or move it back to `02_Backlog/`.
+
+Run both as part of a periodic active-list triage: the git command flags what hasn't
+been committed against recently; the weekly-log check confirms whether it's genuinely
+stalled or just quietly in progress.
