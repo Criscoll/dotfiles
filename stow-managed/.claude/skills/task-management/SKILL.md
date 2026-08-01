@@ -126,6 +126,18 @@ Key rules:
 
 ---
 
+## Supporting Files
+
+Additional files within a task directory are optional and free-form. Common patterns:
+
+- `links.md` — URLs and external resources
+- `notes.md` — additional context or research
+- `concepts.md` — high-level design or concept documentation
+- `ideas.md` — brainstorming that hasn't been promoted to outline tasks yet
+- Subdirectories like `learning/`, `work/`, `research/` for larger projects
+
+---
+
 ## Sub-Tasks
 
 When a task spawns sub-tasks, use this structure:
