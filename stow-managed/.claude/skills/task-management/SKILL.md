@@ -50,16 +50,8 @@ Tasks move through stages in this order:
 
 `04_Archived/` is grouped by half-year subdirectory (e.g. `2025_H1/`, `2026_H1/`).
 
-`02_Backlog/` uses an Eisenhower-style priority structure — pick the right bucket
-rather than dumping everything into one:
-
-```
-00_Up_Next/
-01_Important_and_Urgent/
-02_Important_Not_Urgent/
-03_Unimportant_and_Urgent/
-04_Unimportant_Not_Urgent/
-```
+`02_Backlog/` is a **flat list** of task directories — no priority sub-buckets.
+Drop a promoted idea straight into `02_Backlog/` root.
 
 ---
 
