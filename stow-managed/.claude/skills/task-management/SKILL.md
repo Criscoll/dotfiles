@@ -65,6 +65,10 @@ Project_  Goal_  Travel_  Tooling_  Shopping_  Health_
 Renovation_  Relationship_  Chore_  Investing_  Home_
 ```
 
+`01_Ideas/` is a loose inbox and is **exempt** from this convention — free-form,
+sentence-style names are fine there. Names get normalized to `Category_Name` when
+an idea is promoted to `02_Backlog/`.
+
 ---
 
 ## outline.md — The Required Landing Page
