@@ -1,0 +1,78 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Probe the configured Duffel token: mode, write scope, billing currency, timing.
+
+This is the "test at n=1" health check for the vetted Duffel workflow (see the
+travel-agent skill's flight-search-tools.md) — one minimal offer_request that
+exercises auth, write scope, and currency in a single safe call.
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _duffel
+
+# LHR-CDG: a common, always-served short-haul route — cheap, reliable liveness probe.
+PROBE_ORIGIN = "LHR"
+PROBE_DESTINATION = "CDG"
+# Far enough ahead to avoid same-day/near-term inventory edge cases skewing the probe.
+PROBE_DAYS_AHEAD = 14
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="duffel-check",
+        description="Probe the configured Duffel token: mode, write scope, billing currency, timing.",
+    )
+    parser.add_argument("--test", action="store_true", help="Force the test token (DUFFEL_TOKEN_READ_WRITE)")
+    args = parser.parse_args()
+
+    token, mode = _duffel.load_token(force_test=args.test)
+    today_local = datetime.now(timezone.utc).astimezone().date()
+    depart_date = (today_local + timedelta(days=PROBE_DAYS_AHEAD)).isoformat()
+
+    body = {
+        "data": {
+            "slices": [{"origin": PROBE_ORIGIN, "destination": PROBE_DESTINATION, "departure_date": depart_date}],
+            "passengers": [{"type": "adult"}],
+            "cabin_class": "economy",
+        }
+    }
+
+    eprint(f"Probing Duffel ({mode} mode) with {PROBE_ORIGIN}->{PROBE_DESTINATION} on {depart_date} …")
+    start = time.monotonic()
+    try:
+        resp = _duffel.request("POST", "/air/offer_requests", token, body)
+    except _duffel.DuffelAPIError as e:
+        eprint(f"Duffel API error ({e.status}): {e.message}")
+        sys.exit(1)
+    elapsed_ms = round((time.monotonic() - start) * 1000)
+
+    data = resp.get("data", {})
+    offers = data.get("offers", [])
+
+    result = {
+        "token_mode": mode,
+        "live_mode": data.get("live_mode"),
+        "billing_currency": offers[0].get("total_currency") if offers else None,
+        "offer_count": len(offers),
+        "offer_request_id": data.get("id"),
+        "elapsed_ms": elapsed_ms,
+    }
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()

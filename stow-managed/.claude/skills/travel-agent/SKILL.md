@@ -54,7 +54,15 @@ the setup cost of API automation, and — see
 carry real risks (autonomous payment enrollment, undisclosed limits) that are
 easy to trip over without noticing.
 
-If the user wants a scripted/API approach, hold these rules:
+If the user wants a scripted/API approach, use the `~/bin/agent_scripts/duffel-*`
+wrapper scripts (`duffel-check`, `duffel-flight-search`, `duffel-offer-get`) —
+they wrap **Duffel**, the currently vetted flight-search API, and are
+search-only: a guard hook denies raw API access, booking/charging endpoints,
+and token exposure on the command line. See `references/flight-search-tools.md`
+for the wrapper usage, setup steps, token-scope gotcha, and API shape — Duffel
+passed the evaluation checklist below in 2026-08 testing, unlike a prior
+attempt with LetsFG. Still hold these rules when using it or evaluating
+anything new:
 
 - **Never link a payment method, API key, or account autonomously.** Several
   flight-search tools built for agents document a "headless" flow for handing
@@ -101,5 +109,6 @@ Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`).
 Do not guess their contents — read them.
 
 - **references/flight-search-tools.md** — load when: evaluating or using any
-  flight/hotel search SDK, CLI, or API (LetsFG or otherwise), especially
-  before writing automation against one.
+  flight/hotel search SDK, CLI, or API (Duffel or otherwise), especially
+  before writing automation against one. Covers Duffel setup/API shape and
+  why a prior tool (LetsFG) was rejected.

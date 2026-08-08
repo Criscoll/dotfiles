@@ -1,0 +1,60 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Fetch deep detail on one Duffel offer by ID (from duffel-flight-search output).
+
+Disables available-services in the request — that field is an ancillaries
+firehose (seats, bags, etc.) not needed for a search/compare decision.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _duffel
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="duffel-offer-get",
+        description="Fetch and summarize one Duffel offer (an off_... ID from duffel-flight-search).",
+    )
+    parser.add_argument("offer_id", metavar="OFFER_ID")
+    parser.add_argument("--json", action="store_true", help="Structured output instead of human-readable text")
+    parser.add_argument("--test", action="store_true", help="Force the test token (DUFFEL_TOKEN_READ_WRITE)")
+    args = parser.parse_args()
+
+    token, _mode = _duffel.load_token(force_test=args.test)
+
+    try:
+        resp = _duffel.request(
+            "GET", f"/air/offers/{args.offer_id}?return_available_services=false", token,
+        )
+    except _duffel.DuffelAPIError as e:
+        if e.status == 404:
+            eprint("Offer expired (offers live ~20 min) — re-run duffel-flight-search.")
+        else:
+            eprint(f"Duffel API error ({e.status}): {e.message}")
+        sys.exit(1)
+
+    offer = resp.get("data", {})
+    if not offer:
+        eprint("Offer expired (offers live ~20 min) — re-run duffel-flight-search.")
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(_duffel.build_offer_summary(offer), indent=2))
+    else:
+        print(_duffel.offer_detail(offer))
+
+
+if __name__ == "__main__":
+    main()

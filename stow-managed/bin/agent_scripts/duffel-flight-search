@@ -1,0 +1,156 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Search Duffel Air flights: one-way, round-trip, or multi-city.
+
+One flat line per offer on stdout, sorted and limited. Offers come back
+synchronously from Duffel — no polling loop needed.
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _duffel
+
+# Enough candidates to compare without flooding the agent's context.
+DEFAULT_LIMIT = 20
+
+CABIN_CHOICES = ["economy", "premium_economy", "business", "first"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def parse_slice_arg(raw):
+    parts = raw.split(":")
+    if len(parts) != 3:
+        eprint(f"Invalid --slice {raw!r}; expected ORIGIN:DEST:DATE (e.g. SYD:HKG:2026-11-20)")
+        sys.exit(2)
+    origin, destination, dep_date = parts
+    return {"origin": origin.upper(), "destination": destination.upper(), "departure_date": dep_date}
+
+
+def build_slices(args):
+    using_simple = bool(args.origin or args.destination or args.depart or args.return_date)
+    using_slices = bool(args.slices)
+
+    if using_simple and using_slices:
+        eprint("Use either --from/--to/--depart (+ optional --return) or repeatable --slice, not both.")
+        sys.exit(2)
+
+    if using_slices:
+        return [parse_slice_arg(s) for s in args.slices]
+
+    if not (args.origin and args.destination and args.depart):
+        eprint(
+            "Usage: duffel-flight-search --from ORIGIN --to DEST --depart YYYY-MM-DD "
+            "[--return YYYY-MM-DD] | --slice ORIGIN:DEST:DATE [--slice ORIGIN:DEST:DATE ...]"
+        )
+        sys.exit(2)
+
+    slices = [{"origin": args.origin.upper(), "destination": args.destination.upper(), "departure_date": args.depart}]
+    if args.return_date:
+        slices.append({
+            "origin": args.destination.upper(),
+            "destination": args.origin.upper(),
+            "departure_date": args.return_date,
+        })
+    return slices
+
+
+def build_passengers(args):
+    passengers = [{"type": "adult"} for _ in range(args.adults)]
+    passengers += [{"type": "child"} for _ in range(args.children)]
+    passengers += [{"type": "infant_without_seat"} for _ in range(args.infants)]
+    if not passengers:
+        eprint("At least one passenger is required (--adults/--children/--infants).")
+        sys.exit(2)
+    return passengers
+
+
+def sort_key(offer, sort_by):
+    if sort_by == "duration":
+        return sum(_duffel.parse_duration_minutes(sl.get("duration")) or 0 for sl in offer.get("slices", []))
+    try:
+        return float(offer.get("total_amount", "inf"))
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="duffel-flight-search",
+        description="Search Duffel Air flights: one-way, round-trip, or multi-city (repeatable --slice).",
+    )
+    parser.add_argument("-f", "--from", dest="origin", metavar="IATA")
+    parser.add_argument("-t", "--to", dest="destination", metavar="IATA")
+    parser.add_argument("-d", "--depart", dest="depart", metavar="YYYY-MM-DD")
+    parser.add_argument("-r", "--return", dest="return_date", metavar="YYYY-MM-DD")
+    parser.add_argument(
+        "--slice", dest="slices", action="append", metavar="ORIGIN:DEST:DATE",
+        help="Repeatable multi-city leg. Mutually exclusive with --from/--to/--depart/--return.",
+    )
+    parser.add_argument("--adults", type=int, default=1)
+    parser.add_argument("--children", type=int, default=0)
+    parser.add_argument("--infants", type=int, default=0)
+    parser.add_argument("--cabin", choices=CABIN_CHOICES, default="economy")
+    parser.add_argument("--max-connections", dest="max_connections", type=int, default=None)
+    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="0 = no limit")
+    parser.add_argument("--sort", choices=["price", "duration"], default="price")
+    parser.add_argument("--json", action="store_true", help="Structured summarized output instead of flat lines")
+    parser.add_argument("--raw", action="store_true", help="Escape hatch: dump raw offer JSON instead of a summary")
+    parser.add_argument("--test", action="store_true", help="Force the test token (DUFFEL_TOKEN_READ_WRITE)")
+    args = parser.parse_args()
+
+    if args.limit < 0:
+        eprint("--limit must be >= 0 (0 means no limit).")
+        sys.exit(2)
+
+    slices = build_slices(args)
+    passengers = build_passengers(args)
+
+    if args.max_connections is not None:
+        for sl in slices:
+            sl["max_connections"] = args.max_connections
+
+    body = {"data": {"slices": slices, "passengers": passengers, "cabin_class": args.cabin}}
+
+    token, mode = _duffel.load_token(force_test=args.test)
+    start = time.monotonic()
+    try:
+        resp = _duffel.request("POST", "/air/offer_requests", token, body)
+    except _duffel.DuffelAPIError as e:
+        eprint(f"Duffel API error ({e.status}): {e.message}")
+        sys.exit(1)
+    elapsed_ms = round((time.monotonic() - start) * 1000)
+
+    data = resp.get("data", {})
+    offers = data.get("offers", [])
+    eprint(f"offer_request {data.get('id', '?')} | mode={mode} | {len(offers)} offers | {elapsed_ms}ms")
+
+    if not offers:
+        print("No results found.")
+        return
+
+    offers.sort(key=lambda o: sort_key(o, args.sort))
+    if args.limit:
+        offers = offers[:args.limit]
+
+    if args.raw:
+        print(json.dumps(offers, indent=2))
+    elif args.json:
+        print(json.dumps([_duffel.build_offer_summary(o) for o in offers], indent=2))
+    else:
+        for offer in offers:
+            print(_duffel.summarize_offer(offer))
+
+
+if __name__ == "__main__":
+    main()
