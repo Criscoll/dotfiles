@@ -61,8 +61,21 @@ search-only: a guard hook denies raw API access, booking/charging endpoints,
 and token exposure on the command line. See `references/flight-search-tools.md`
 for the wrapper usage, setup steps, token-scope gotcha, and API shape — Duffel
 passed the evaluation checklist below in 2026-08 testing, unlike a prior
-attempt with LetsFG. Still hold these rules when using it or evaluating
-anything new:
+attempt with LetsFG.
+
+For a **multi-date or multi-leg sweep** (the common case for a flexible-date
+or open-jaw trip — see Date Planning below), don't write the sweep loop and
+preference filters from scratch: `import _duffel_sweep` from
+`~/bin/agent_scripts/` and build the trip's sweep script on top of it. It
+holds the date-windowing, per-leg preference filtering (red-eye, layover cap,
+overnight layover, latest-arrival-day), multi-leg total summing, and the
+segment-level detail formatting that Deal-Finding below requires — a trip
+script should only need to supply its own routes, dates, and filter choices.
+Read the module's own docstrings and dataclass fields for the exact interface
+rather than relying on a description here going stale.
+
+Still hold these rules when using Duffel (via the wrappers, `_duffel_sweep`,
+or evaluating anything new):
 
 - **Never link a payment method, API key, or account autonomously.** Several
   flight-search tools built for agents document a "headless" flow for handing
@@ -102,6 +115,11 @@ single fixed-date search:
   well enough (day-of-week effects aside). Before running a batch of
   searches, confirm the tool/site can actually sustain that many requests —
   see Deal-Finding above.
+- **A scripted sweep builds on `_duffel_sweep.py`, not from scratch.** The
+  date-windowing, per-leg filters, and multi-leg summing are shared mechanics
+  now (see Deal-Finding above) — a trip's own sweep script should stay
+  limited to trip-specific config (routes, day offsets, filter choices) and a
+  short `main()` that wires the shared module's functions together.
 
 ## Load Reference Files When Relevant
 
