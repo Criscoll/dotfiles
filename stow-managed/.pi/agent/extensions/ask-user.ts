@@ -19,7 +19,7 @@
  *           Space toggle selection (stay on tab)  |  Esc cancel
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Editor, type EditorTheme, Key, matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
@@ -176,6 +176,136 @@ function padTo(s: string, target: number): string {
 	const current = visibleLen(s);
 	if (current >= target) return truncateToWidth(s, target);
 	return s + " ".repeat(target - current);
+}
+
+// ── RPC-mode question flow ──────────────────────────────────────────────────
+//
+// ctx.ui.custom() (the rich tabbed AskUserRenderer below) has no RPC
+// representation — it's TUI-only. Under RPC mode we fall back to the
+// dialog primitives (ctx.ui.select / ctx.ui.input), which Paseo's daemon
+// (and any other RPC client) already bridges generically. Sentinels use
+// glyph prefixes to avoid colliding with real LLM-authored option labels,
+// since select() has to string-match the returned choice.
+
+const RPC_FREEFORM_SENTINEL = "✎ Write your own...";
+
+function formatOptionLabel(opt: AskOption): string {
+	let label = opt.label;
+	if (opt.description) label += ` — ${opt.description}`;
+	if (opt.recommended) label += " ★ Recommended";
+	return label;
+}
+
+function buildRpcOptionAnswer(q: AskQuestion, opt: AskOption): AskAnswer {
+	const optionIndex = q.options.indexOf(opt) + 1;
+	return {
+		questionId: q.id,
+		value: opt.value,
+		label: opt.label,
+		isCustom: false,
+		optionIndex,
+		wasRecommended: opt.recommended === true,
+	};
+}
+
+async function askRpcFreeform(
+	ctx: ExtensionContext,
+	q: AskQuestion,
+	progress: string,
+): Promise<AskAnswer | undefined> {
+	const value = await ctx.ui.input(`${progress}${q.header}`, "Type your answer...");
+	if (value === undefined) return undefined;
+	const trimmed = value.trim() || "(no response)";
+	return {
+		questionId: q.id,
+		value: trimmed,
+		label: trimmed,
+		isCustom: true,
+	};
+}
+
+/** Returns true if the user cancelled. */
+async function runRpcSingleSelectQuestion(
+	ctx: ExtensionContext,
+	q: AskQuestion,
+	answers: AskAnswer[],
+	progress: string,
+): Promise<boolean> {
+	const optionLabels = q.options.map(formatOptionLabel);
+	const labels = q.allowOther ? [...optionLabels, RPC_FREEFORM_SENTINEL] : optionLabels;
+
+	const picked = await ctx.ui.select(`${progress}${q.header}`, labels);
+	if (picked === undefined) return true;
+
+	if (picked === RPC_FREEFORM_SENTINEL) {
+		const answer = await askRpcFreeform(ctx, q, progress);
+		if (!answer) return true;
+		answers.push(answer);
+		return false;
+	}
+
+	const opt = q.options[optionLabels.indexOf(picked)];
+	answers.push(buildRpcOptionAnswer(q, opt));
+	return false;
+}
+
+/** Returns true if the user cancelled. */
+async function runRpcMultiSelectQuestion(
+	ctx: ExtensionContext,
+	q: AskQuestion,
+	answers: AskAnswer[],
+	progress: string,
+): Promise<boolean> {
+	let remaining = [...q.options];
+	let pickedCount = 0;
+
+	for (;;) {
+		const doneLabel = `✓ Done selecting (${pickedCount} chosen)`;
+		const optionLabels = remaining.map(formatOptionLabel);
+		const labels = [...optionLabels, doneLabel];
+		if (q.allowOther) labels.push(RPC_FREEFORM_SENTINEL);
+
+		const selection = await ctx.ui.select(`${progress}${q.header}`, labels);
+		if (selection === undefined) return true;
+
+		if (selection === doneLabel) {
+			if (pickedCount === 0) {
+				ctx.ui.notify("Pick at least one option before finishing", "warning");
+				continue;
+			}
+			return false;
+		}
+
+		if (selection === RPC_FREEFORM_SENTINEL) {
+			const answer = await askRpcFreeform(ctx, q, progress);
+			if (!answer) return true;
+			answers.push(answer);
+			pickedCount++;
+			continue;
+		}
+
+		const opt = remaining[optionLabels.indexOf(selection)];
+		answers.push(buildRpcOptionAnswer(q, opt));
+		pickedCount++;
+		remaining = remaining.filter((o) => o !== opt);
+
+		if (remaining.length === 0 && !q.allowOther) return false;
+	}
+}
+
+async function runRpcQuestions(ctx: ExtensionContext, questions: AskQuestion[]): Promise<AskResult> {
+	const answers: AskAnswer[] = [];
+	for (let i = 0; i < questions.length; i++) {
+		const q = questions[i];
+		const progress = questions.length > 1 ? `[${i + 1}/${questions.length}] ` : "";
+		const cancelled = q.multi
+			? await runRpcMultiSelectQuestion(ctx, q, answers, progress)
+			: await runRpcSingleSelectQuestion(ctx, q, answers, progress);
+		if (cancelled) {
+			return { questions, answers, cancelled: true };
+		}
+	}
+	return { questions, answers, cancelled: false };
 }
 
 // ── The Renderer ─────────────────────────────────────────────────────────────
@@ -779,8 +909,10 @@ export default function askUser(pi: ExtensionAPI) {
 		parameters: AskUserParams,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			if (ctx.mode !== "tui") {
-				return errorResult("Error: ask_user requires interactive mode (TUI not available)");
+			if (!ctx.hasUI) {
+				return errorResult(
+					"Error: ask_user requires an interactive session (no UI available in print/json mode)",
+				);
 			}
 
 			const rawQuestions = params.questions as Array<{
@@ -825,16 +957,21 @@ export default function askUser(pi: ExtensionAPI) {
 				}
 			}
 
-			const result = await ctx.ui.custom<AskResult>((tui, theme, _kb, done) => {
-				const renderer = new AskUserRenderer(tui, questions, done);
-				return {
-					render: (w: number) => renderer.render(w),
-					invalidate: () => {
-						renderer.cachedLines = undefined;
-					},
-					handleInput: (data: string) => renderer.handleInput(data),
-				};
-			});
+			let result: AskResult;
+			if (ctx.mode === "tui") {
+				result = await ctx.ui.custom<AskResult>((tui, theme, _kb, done) => {
+					const renderer = new AskUserRenderer(tui, questions, done);
+					return {
+						render: (w: number) => renderer.render(w),
+						invalidate: () => {
+							renderer.cachedLines = undefined;
+						},
+						handleInput: (data: string) => renderer.handleInput(data),
+					};
+				});
+			} else {
+				result = await runRpcQuestions(ctx, questions);
+			}
 
 			if (result.cancelled) {
 				return {
