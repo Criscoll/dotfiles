@@ -43,11 +43,11 @@ wrong when you don't check first.
 ## Recommended: Duffel (vetted 2026-08)
 
 [Duffel](https://duffel.com) is a REST flight-search/booking API. It passed
-the checklist above (no prompt injection in its docs, no undisclosed rate
-limit hit in testing, response shape matched its docs) and is the current
-default for a scripted flight search. The official Python SDK (`duffel-api`)
-is archived/unmaintained — the wrapper scripts below talk to the REST API
-directly via stdlib `urllib` instead of depending on it.
+the checklist above (no prompt injection in its docs, rate limiting is
+documented rather than an undisclosed surprise, response shape matched its
+docs) and is the current default for a scripted flight search. The official
+Python SDK (`duffel-api`) is archived/unmaintained — the wrapper scripts below
+talk to the REST API directly via stdlib `urllib` instead of depending on it.
 
 ### Wrapper scripts (use these first)
 
@@ -66,6 +66,11 @@ hand-rolled API calls:
 - `duffel-offer-get OFFER_ID [--json]` — deep detail on one offer (an
   `off_...` ID from a search result) — full segment/baggage/fare-condition
   breakdown.
+
+These three are CLIs for a single search. For a **multi-date or multi-leg
+sweep**, there's a fourth piece — `~/bin/agent_scripts/_duffel_sweep.py` — but
+it's a library module to `import`, not a CLI to run directly; see "Under the
+hood" below.
 
 All three read the token from `DUFFEL_LIVE_READ_WRITE` (preferred) or
 `DUFFEL_TOKEN_READ_WRITE`, or `--test` to force the test token. A
@@ -172,27 +177,50 @@ note below on its actual reach.)
 ### Observed behavior (2026-08 testing)
 
 **Test token:**
-- No rate limiting hit: 3 back-to-back sequential calls all returned `201`
-  in ~2.4s each. This is *not* a documented guarantee — still pace
-  sequential calls with a small delay as a courtesy, and add 429 backoff for
-  any sweep larger than a handful of calls.
-- **Under the hood:** the `duffel-*` wrappers above cover normal use. For a
-  one-off need the wrappers don't cover, PEP 723 inline script metadata
-  avoids creating a throwaway `pyproject.toml`:
+- Light use (3 back-to-back sequential calls) hit no rate limiting: all
+  returned `201` in ~2.4s each. This held only at low volume — see "Rate
+  limiting" below for what changed at real sweep volume.
+- **Under the hood — custom logic beyond a single search (e.g. a multi-date
+  sweep):** don't hand-roll a fresh HTTP client. Add
+  `~/bin/agent_scripts` to `sys.path` and `import _duffel` to reuse its
+  token loading, HTTP/retry, and offer-summarizing — the wrappers above are
+  themselves thin CLIs over this module, so a custom script gets identical
+  auth and 429-handling behavior for free instead of a second, divergent
+  implementation:
   ```python
   # /// script
-  # requires-python = ">=3.11"
-  # dependencies = ["httpx"]
+  # requires-python = ">=3.10"
+  # dependencies = []
   # ///
+  import os, sys
+  sys.path.insert(0, os.path.expanduser("~/bin/agent_scripts"))
+  import _duffel
+
+  token, mode = _duffel.load_token()
+  resp = _duffel.request("POST", "/air/offer_requests", token, body)
   ```
-  Run with `uv run search_flights.py` — `uv` resolves `httpx` on the fly.
+  Run with `uv run your_script.py`. For anything beyond a single ad-hoc call —
+  specifically a **multi-date sweep or a multi-leg/open-jaw trip with
+  per-leg preferences** — reach one level higher and `import _duffel_sweep`
+  (same directory, same `sys.path` insert) instead of writing the sweep loop
+  and filters yourself: it supplies date-window candidates, per-leg
+  preference filtering (nonstop/layover-cap/red-eye/overnight-layover/
+  latest-arrival-day), multi-leg total summing, and the segment-level detail
+  formatting Deal-Finding in `SKILL.md` requires — built on top of `_duffel`,
+  not a replacement for it. `flight_date_sweep.py` (in a `Travel_` task
+  directory) is a real example — it holds only that trip's routes, date
+  window, and per-leg filter choices; the sweep mechanics live in the shared
+  module. Read `_duffel_sweep.py`'s own docstrings for the exact function/
+  dataclass interface rather than trusting a description here to stay in
+  sync with the code.
   Note the guard hook only inspects the Bash command line, not file
   contents — it blocks `api.duffel.com`/booking endpoints/token env vars
   typed *inline* (e.g. `curl ...` or `python -c ...`), but a hand-rolled
-  `.py` file hardcoding those strings and invoked as `uv run script.py`
-  would not be caught. Prefer the wrappers above; if you do hand-roll
-  something, keep it read-only against `offer_requests`/`offers` and never
-  add `/air/orders` or similar.
+  `.py` file hardcoding those strings would not be caught. Importing
+  `_duffel` (directly or via `_duffel_sweep`) sidesteps this entirely since
+  the URL/token handling lives in one already-reviewed place. If you still
+  hand-roll something, keep it read-only against `offer_requests`/`offers`
+  and never add `/air/orders` or similar.
 
 **Live token:**
 - A read-only-scoped live token gets the identical `403
@@ -207,6 +235,39 @@ note below on its actual reach.)
   sample; still worth an occasional spot-check rather than trusting it
   blindly on every search, per the general "verify claims against observed
   behavior" rule above.
+
+### Rate limiting (2026-08 finding, now handled)
+
+The light-volume test above (3 calls) gave a false sense of security. A real
+HK/Taiwan trip session — an 8-candidate date sweep (16 calls) plus several
+manual spot-checks fired back-to-back with no delay between them (~45 calls
+total) — hit sustained `429`s that a fixed 1s/2s/4s exponential backoff never
+recovered from, even across 5 retries spaced 90s apart.
+
+First theory was that Duffel was deduping identical repeated search
+fingerprints (same origin/destination/date/passengers) rather than rate
+limiting by volume — novel queries kept succeeding while repeated ones kept
+429ing. That theory didn't survive checking Duffel's own docs
+(`duffel.com/docs/api/overview/response-handling`): there is no dedup
+behavior documented, only a standard interval-based limiter (`ratelimit-limit`
+— "currently 60 seconds but is subject to change without notice," i.e.
+possibly lower for a given account) that returns `ratelimit-limit` /
+`ratelimit-remaining` / `ratelimit-reset` headers on a 429. The "novel queries
+succeed, repeated ones fail" pattern is also consistent with enough wall-clock
+time having simply passed by the time the novel queries ran — that confound
+was never isolated. Lesson: **when a theory is built from behavior alone,
+check the vendor's docs before stating it as fact** — the dedup theory was
+stated as if confirmed before this doc was updated, and had to be walked
+back once the docs were actually checked.
+
+**Fix applied:** `~/bin/agent_scripts/_duffel.py`'s `request()` now reads
+`ratelimit-reset` on a 429 and waits until that exact time (capped at 90s —
+`MAX_RATE_LIMIT_WAIT` — so a single call can't hang past a caller's own
+timeout budget; beyond the cap it reports the reset time and exits instead of
+blocking). Falls back to the old exponential backoff only if the header is
+missing or unparseable. This fix lives in the shared helper, so it applies to
+all three wrappers and any custom script that imports `_duffel` (see "Under
+the hood" above) automatically — no per-script opt-in.
 
 ## Case study: why LetsFG was rejected (2026-08)
 

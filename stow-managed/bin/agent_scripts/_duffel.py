@@ -12,7 +12,8 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 API_BASE = "https://api.duffel.com"
 DUFFEL_VERSION = "v2"
@@ -25,6 +26,14 @@ REQUEST_TIMEOUT = 30
 # Retry budget for 429s: courtesy pacing + recovery from a transient rate limit
 # without hammering the API (flight-search-tools.md's "don't spam" rule).
 MAX_RETRIES = 3
+
+# Duffel returns a `ratelimit-reset` header (RFC 2616 HTTP-date) on a 429 telling
+# us exactly when the current window clears — a 2026-08 sweep found a fixed
+# exponential backoff (1s/2s/4s) gives up long before that, so honor the header
+# instead of guessing. Cap how long we'll auto-wait so a single call can't hang
+# past a caller's own timeout budget; beyond the cap we surface the reset time
+# and let the caller decide whether to wait.
+MAX_RATE_LIMIT_WAIT = 90
 
 SETUP_HINT = (
     "See stow-managed/.claude/skills/travel-agent/references/flight-search-tools.md "
@@ -93,11 +102,35 @@ def _error_message(payload):
     return "; ".join(parts)
 
 
+def _rate_limit_wait_seconds(headers, attempt):
+    """Seconds to wait before retrying a 429.
+
+    Prefers the `ratelimit-reset` header (exact reset time from Duffel); falls
+    back to a short exponential backoff if the header is missing or unparseable.
+    Returns (wait_seconds, source_label).
+    """
+    reset_header = headers.get("ratelimit-reset")
+    if reset_header:
+        try:
+            reset_at = parsedate_to_datetime(reset_header)
+        except (TypeError, ValueError):
+            reset_at = None
+        if reset_at is not None:
+            if reset_at.tzinfo is None:
+                reset_at = reset_at.replace(tzinfo=timezone.utc)
+            wait = (reset_at - datetime.now(timezone.utc)).total_seconds()
+            # Floor at 1s rather than 0 — a reset boundary that just passed can
+            # still 429 for a moment on the server side (bucket refill lag).
+            return max(wait, 1), "ratelimit-reset"
+    return 2 ** attempt, "fallback backoff (no ratelimit-reset header)"
+
+
 def request(method, path, token, body=None):
     """POST/GET against the Duffel API. Returns the parsed JSON body.
 
-    Handles 429 with exponential backoff (then exits — no unattended hammering)
-    and 403 with the read-write-scope remediation. Any other error status raises
+    Handles 429 by waiting for Duffel's own reset time (falling back to
+    exponential backoff, then exiting — no unattended hammering) and 403 with
+    the read-write-scope remediation. Any other error status raises
     DuffelAPIError for the caller to handle (e.g. 404 means different things to
     different callers).
     """
@@ -126,9 +159,16 @@ def request(method, path, token, body=None):
                 payload = {}
 
             if e.code == 429:
+                wait, source = _rate_limit_wait_seconds(e.headers, attempt)
+                if wait > MAX_RATE_LIMIT_WAIT:
+                    eprint(
+                        f"Rate limited (429) — resets in {wait:.0f}s per {source}, "
+                        f"longer than this tool auto-waits (cap {MAX_RATE_LIMIT_WAIT}s). "
+                        "Retry after that."
+                    )
+                    sys.exit(1)
                 if attempt < MAX_RETRIES:
-                    wait = 2 ** attempt
-                    eprint(f"Rate limited (429) — retrying in {wait}s ({attempt + 1}/{MAX_RETRIES}) …")
+                    eprint(f"Rate limited (429) — waiting {wait:.0f}s per {source} ({attempt + 1}/{MAX_RETRIES}) …")
                     time.sleep(wait)
                     attempt += 1
                     continue
