@@ -69,6 +69,24 @@ non-zero steal means another VM on the same physical host is taking CPU cycles a
 from this one. This is throttling, not something the OOM killer or swap can fix; it's
 a hosting-provider/plan-tier issue.
 
+## Reading inotify limits & usage
+
+`fs.inotify.max_user_watches` and `max_user_instances` are enforced **per real UID**,
+not system-wide or per-process — so a single user running several editors, dev
+servers, and file-watching tools at once can exhaust the limit even though no
+individual process looks abusive. Once exhausted, the symptom is silent breakage
+rather than a crash: editors stop noticing file changes, dev-server hot-reload stops
+firing, `docker` and other inotify-based tools start throwing `ENOSPC` on watch
+creation — easy to mistake for an application bug instead of a host limit.
+
+Compare the script's per-user `watches=` total against `max_user_watches` from the
+same section. Above ~80% of the limit is worth investigating even if nothing has
+broken yet; at or near 100%, whatever tries to add the next watch will fail. The
+per-process breakdown right above the per-user totals identifies the offender
+directly — usually a build tool or language server (`node`/`tsserver`, `webpack`,
+`vite`) recursively watching a large `node_modules` tree rather than the user's own
+processes individually being at fault.
+
 ## When the output looks clean
 
 If no OOM lines, no panics, and PSI/steal are near zero across the requested window,

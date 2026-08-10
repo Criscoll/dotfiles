@@ -13,7 +13,8 @@ description: >-
   "getting kicked off ssh", "server health check", "OOM killer", "out of memory",
   "system crashed", "vps unstable", "disk space", "storage space", "out of disk
   space", "no space left on device", "disk full", "where is storage going", "check
-  storage usage".
+  storage usage", "inotify limit", "too many open files", "ENOSPC watch",
+  "file watcher not working", "hot reload not working".
 disable-model-invocation: false
 ---
 
@@ -26,7 +27,8 @@ bash "$CLAUDE_SKILL_DIR/host-audit.sh"
 It runs two tiers. Non-root checks (memory/swap snapshot, PSI pressure, steal-time,
 reboot history, installed monitoring tools, sar history if already being collected,
 Docker container/image/volume inventory, filesystem usage, deleted-but-open file
-handles) always run and are usually enough for a first pass. The root-gated tier —
+handles, inotify watch/instance limits and per-user usage) always run and are usually
+enough for a first pass. The root-gated tier —
 where the actual kernel OOM-killer victim log, panic traces, prior-boot tails,
 auth.log disconnects, and the `/var/lib/docker` subdirectory breakdown live — only
 runs under `sudo`, and the script says so explicitly rather than failing silently if

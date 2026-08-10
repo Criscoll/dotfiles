@@ -103,6 +103,44 @@ while read -r pct mnt; do
   fi
 done
 
+hr "inotify limits & usage (exhaustion breaks editors, dev-server hot-reload, file watchers)"
+sysctl fs.inotify.max_user_watches fs.inotify.max_user_instances fs.inotify.max_user_queued_events 2>&1
+echo
+echo "--- current usage per process (only visible for processes this user owns, unless run as root) ---"
+# fs.inotify.max_user_watches/max_user_instances are enforced per real UID, not
+# system-wide or per-process — so a single user with many editor/watcher instances
+# open can exhaust the limit even while no individual process looks abusive. Sum
+# both dimensions per UID as well as listing the per-process breakdown.
+declare -A uid_instances uid_watches
+found=0
+for fd_path in /proc/[0-9]*/fd/*; do
+  [ -e "$fd_path" ] || continue
+  link="$(readlink "$fd_path" 2>/dev/null)" || continue
+  [ "$link" = "anon_inode:inotify" ] || continue
+  pid="${fd_path#/proc/}"; pid="${pid%%/*}"
+  fdnum="${fd_path##*/}"
+  fdinfo="/proc/$pid/fdinfo/$fdnum"
+  [ -r "$fdinfo" ] || continue
+  watches=$(grep -c '^inotify' "$fdinfo" 2>/dev/null)
+  uid=$(awk '/^Uid:/{print $2}' "/proc/$pid/status" 2>/dev/null)
+  comm=$(cat "/proc/$pid/comm" 2>/dev/null || echo "?")
+  user=$(getent passwd "$uid" 2>/dev/null | cut -d: -f1)
+  [ -z "$user" ] && user="uid:$uid"
+  echo "pid=$pid user=$user comm=$comm watches=$watches"
+  uid_instances["$user"]=$(( ${uid_instances["$user"]:-0} + 1 ))
+  uid_watches["$user"]=$(( ${uid_watches["$user"]:-0} + watches ))
+  found=1
+done
+if [ "$found" -eq 0 ]; then
+  echo "No inotify instances found (or insufficient permission to inspect other users' fds — re-run with sudo for full coverage)."
+else
+  echo
+  echo "--- totals per user (compare 'watches' against max_user_watches above) ---"
+  for user in "${!uid_watches[@]}"; do
+    echo "$user: instances=${uid_instances[$user]} watches=${uid_watches[$user]}"
+  done
+fi
+
 hr "Storage — deleted-but-open files (invisible to du, still billed by df)"
 # +L1 lists open files with link count 0 (unlinked/deleted but still held open by a
 # process) — the classic cause of a df/du mismatch on a disk-backed filesystem.

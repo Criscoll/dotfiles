@@ -81,6 +81,35 @@ sudo apt install earlyoom
 sudo systemctl enable --now earlyoom
 ```
 
+## inotify watch/instance limit near or at capacity
+
+Identified via `diagnosis-playbook.md`: a user's `watches=` total from the script's
+inotify section is close to (or hitting) `fs.inotify.max_user_watches`, usually
+driven by one build tool or language server watching a large tree.
+
+The durable fix is raising the limit — the per-process offender (e.g. a `tsserver`
+watching `node_modules`) is typically legitimate, not a bug, so killing it only
+buys temporary headroom:
+
+```bash
+# Check current value first (also shown in the script's inotify section):
+sysctl fs.inotify.max_user_watches
+
+# Raise it — 15052 is a common small-VPS/container default; 524288 is a typical
+# desktop-distro default and comfortably covers multiple watchers on large repos:
+echo 'fs.inotify.max_user_watches=524288' | sudo tee /etc/sysctl.d/60-inotify-watches.conf
+sudo sysctl --system
+```
+
+No restart needed for existing processes to benefit — the new ceiling applies
+immediately to new watch registrations. If `max_user_instances` (default is often as
+low as 128) is also near capacity, raise it the same way:
+
+```bash
+echo 'fs.inotify.max_user_instances=1024' | sudo tee -a /etc/sysctl.d/60-inotify-watches.conf
+sudo sysctl --system
+```
+
 ## Applying multiple fixes in one session
 
 Do them one at a time and verify each before moving to the next, per this repo's
