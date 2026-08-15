@@ -86,37 +86,83 @@ def _pmt(pv, i, n):
     return pv * i / (1 - (1 + i) ** -n)
 
 
-def _simulate_payoff(balance, i, payment, extra, lumps):
-    """Month-by-month (period-by-period) payoff simulation.
+def _run_payoff(loan, rate_at, payment, extra, lumps,
+                offset_start, offset_contribution, offset_mode, collect_schedule):
+    """Period-by-period payoff simulation with an offset account and a rate path.
 
-    Returns (periods, final_payment, total_paid, total_interest). Exact by
-    construction — the only clean way to handle a recurring `extra`, one-off
-    `lumps` at specific periods, and a partial final payment.
+    `rate_at(period)` returns the per-period rate fraction for that period, so a
+    single run can carry a variable rate. An offset account sits against the loan:
+    interest each period accrues only on the net position `max(loan − offset, 0)`.
 
-    Assumes `payment + extra > i*balance` (checked by the caller) so the balance
-    strictly decreases and the loop terminates.
+    Two "paid off" definitions, by `offset_mode`:
+      - "loan": offset only lowers interest; the loan still amortizes to zero
+        (standard offset mortgage). Terminates on the partial-final-payment clamp.
+      - "net": payoff is reached when the offset catches the loan (`loan <= offset`)
+        — the point you could withdraw the offset and clear the balance outright.
+
+    Returns (periods, final_payment, total_paid, total_interest, schedule). When
+    `collect_schedule`, `schedule` is a list of raw per-period rows (the caller
+    formats them); otherwise it is None.
+
+    A variable rate can stall a loan mid-way, so hitting MAX_PERIODS with the loan
+    still outstanding is a hard error rather than a bogus period count.
     """
     periodic = payment + extra
-    bal = balance
+    bal = loan
+    offset = offset_start
     total_paid = 0.0
     total_interest = 0.0
     final_payment = 0.0
+    schedule = [] if collect_schedule else None
+
+    if offset_mode == "net" and offset >= bal:
+        return 0, 0.0, 0.0, 0.0, schedule  # offset already covers the loan
+
     period = 0
-    while bal > 1e-9 and period < MAX_PERIODS:
+    done = False
+    while period < MAX_PERIODS:
         period += 1
-        interest = bal * i  # interest accrues on the outstanding balance
+        rate = rate_at(period)
+        opening = bal
+        net = max(bal - offset, 0.0)  # interest accrues only on the net position
+        interest = net * rate
         bal += interest
         total_interest += interest
+        offset += offset_contribution
         pay_this = periodic + lumps.get(period, 0.0)
-        if pay_this >= bal:
-            pay_this = bal  # partial final payment clears exactly the remainder
+
+        if offset_mode == "loan" and pay_this >= bal:
+            pay_this = bal  # partial final payment clears the loan exactly
             final_payment = pay_this
-            total_paid += pay_this
             bal = 0.0
+            total_paid += pay_this
+            done = True
+        else:
+            bal -= pay_this
+            total_paid += pay_this
+            if offset_mode == "net" and bal <= offset:
+                final_payment = pay_this  # offset catches the loan this period
+                done = True
+
+        if collect_schedule:
+            schedule.append({
+                "period": period,
+                "rate": rate,
+                "opening_balance": opening,
+                "interest": interest,
+                "payment": pay_this,
+                "principal": pay_this - interest,
+                "offset": offset,
+                "closing_balance": bal,
+            })
+
+        if done:
             break
-        bal -= pay_this
-        total_paid += pay_this
-    return period, final_payment, total_paid, total_interest
+
+    if not done:
+        _die("payment does not amortize the loan under this rate path")
+
+    return period, final_payment, total_paid, total_interest, schedule
 
 
 def _years_months(periods, periods_per_year):
@@ -178,13 +224,74 @@ def _parse_lumps(values):
     return lumps
 
 
+def _parse_rate_steps(values, ppy):
+    """Parse repeated --rate-step PCT@PERIOD flags into a sorted rate path.
+
+    Each step means "from PERIOD onward, use PCT" (annual %). Returns a list of
+    (period, per_period_fraction) sorted by period, for building `rate_at`.
+    """
+    steps: list[tuple[int, float]] = []
+    for raw in values or []:
+        parts = raw.split("@")
+        if len(parts) != 2:
+            _die(f"--rate-step must be PCT@PERIOD (e.g. 8@60), got {raw!r}")
+        try:
+            pct = float(parts[0])
+            period = int(parts[1])
+        except ValueError:
+            _die(f"--rate-step PCT@PERIOD must be number@integer, got {raw!r}")
+        if pct < 0 or period < 1:
+            _die(f"--rate-step PCT must be >= 0 and PERIOD >= 1, got {raw!r}")
+        steps.append((period, (pct / 100) / ppy))
+    steps.sort(key=lambda s: s[0])
+    return steps
+
+
+def _parse_rate_band(raw):
+    """Parse --rate-band LOW,HIGH into two annual-percent floats (LOW <= HIGH)."""
+    parts = raw.split(",")
+    if len(parts) != 2:
+        _die(f"--rate-band must be LOW,HIGH (e.g. 5,8), got {raw!r}")
+    try:
+        low = float(parts[0])
+        high = float(parts[1])
+    except ValueError:
+        _die(f"--rate-band LOW,HIGH must be two numbers, got {raw!r}")
+    if low < 0 or high < 0:
+        _die(f"--rate-band values must be non-negative, got {raw!r}")
+    if low > high:
+        _die(f"--rate-band LOW must not exceed HIGH, got {raw!r}")
+    return low, high
+
+
+def _band_run(args, annual_pct, ppy, payment, lumps):
+    """Flat-rate payoff run for one edge of a --rate-band sensitivity bracket."""
+    i = (annual_pct / 100) / ppy
+    periods, final_payment, _, total_interest, _ = _run_payoff(
+        args.balance, lambda period: i, payment, args.extra, lumps,
+        args.offset, args.offset_contribution, args.offset_mode, False,
+    )
+    years, months = _years_months(periods, ppy)
+    return {
+        "annual_rate_pct": _pct(annual_pct),
+        "periods_to_payoff": periods,
+        "years_months": f"{years}y {months}m",
+        "final_payment": _money(final_payment, args.dp),
+        "total_interest": _money(total_interest, args.dp),
+    }
+
+
 def cmd_payoff(args):
     if args.balance <= 0:
         _die("--balance must be positive")
     if args.rate < 0:
         _die("--rate must be non-negative")
+    if args.offset < 0:
+        _die("--offset must be non-negative")
+    if args.offset_contribution < 0:
+        _die("--offset-contribution must be non-negative")
     ppy = PERIODS_PER_YEAR[args.pay_freq]
-    i = (args.rate / 100) / ppy
+    base_i = (args.rate / 100) / ppy
 
     derived_payment = None
     if args.income is not None:
@@ -203,20 +310,36 @@ def cmd_payoff(args):
         _die("payment (or income − expenses) must be positive")
 
     lumps = _parse_lumps(args.lump)
+    steps = _parse_rate_steps(args.rate_step, ppy)
+
+    def rate_at(period):
+        """Per-period rate for `period`: the most recent applicable step, else base."""
+        rate = base_i
+        for step_period, step_i in steps:
+            if period >= step_period:
+                rate = step_i
+            else:
+                break  # steps are sorted ascending
+        return rate
+
     periodic = payment + args.extra
 
-    # Interest-only guard: if the periodic payment can't cover the interest that
-    # accrues on the full balance, the balance grows without bound and never
-    # amortizes. Report the exact per-period interest-only figure.
-    interest_only = i * args.balance
-    if i > 0 and periodic <= interest_only:
+    # Interest-only guard on the *net* opening position at the *opening* rate: if
+    # the periodic payment can't cover the interest that accrues on what the offset
+    # doesn't cover, the balance grows without bound and never amortizes. If the net
+    # position starts at/below zero (offset covers the loan) it trivially amortizes.
+    i_opening = rate_at(1)
+    net_opening = max(args.balance - args.offset, 0.0)
+    interest_only = i_opening * net_opening
+    if i_opening > 0 and net_opening > 0 and periodic <= interest_only:
         _die(
             f"payment of {_money(periodic, args.dp)} per {args.pay_freq} period does not cover "
             f"the interest-only amount of {_money(interest_only, args.dp)}; the balance never amortizes"
         )
 
-    periods, final_payment, total_paid, total_interest = _simulate_payoff(
-        args.balance, i, payment, args.extra, lumps
+    periods, final_payment, total_paid, total_interest, schedule = _run_payoff(
+        args.balance, rate_at, payment, args.extra, lumps,
+        args.offset, args.offset_contribution, args.offset_mode, args.schedule,
     )
     years, months = _years_months(periods, ppy)
 
@@ -239,6 +362,35 @@ def cmd_payoff(args):
         out["derived_payment"] = _money(derived_payment, args.dp)
         out["income"] = _money(args.income, args.dp)
         out["expenses"] = _money(args.expenses, args.dp)
+    # Echo offset inputs only when the offset feature is actually engaged.
+    if args.offset > 0 or args.offset_contribution > 0 or args.offset_mode != "loan":
+        out["offset_start"] = _money(args.offset, args.dp)
+        out["offset_contribution_per_period"] = _money(args.offset_contribution, args.dp)
+        out["offset_mode"] = args.offset_mode
+    if steps:
+        out["rate_steps"] = [
+            {"period": p, "annual_rate_pct": _pct(step_i * ppy * 100)} for p, step_i in steps
+        ]
+    if args.rate_band is not None:
+        low, high = _parse_rate_band(args.rate_band)
+        out["sensitivity"] = {
+            "low": _band_run(args, low, ppy, payment, lumps),
+            "high": _band_run(args, high, ppy, payment, lumps),
+        }
+    if args.schedule:
+        out["schedule"] = [
+            {
+                "period": r["period"],
+                "rate_pct": _pct(r["rate"] * ppy * 100),
+                "opening_balance": _money(r["opening_balance"], args.dp),
+                "interest": _money(r["interest"], args.dp),
+                "payment": _money(r["payment"], args.dp),
+                "principal": _money(r["principal"], args.dp),
+                "offset": _money(r["offset"], args.dp),
+                "closing_balance": _money(r["closing_balance"], args.dp),
+            }
+            for r in schedule
+        ]
     return out
 
 
@@ -542,6 +694,18 @@ def build_parser():
     p.add_argument("--extra", type=float, default=0.0, help="Extra paid every period")
     p.add_argument("--lump", action="append", metavar="AMT@PERIOD",
                    help="One-off lump payment at a period (repeatable, e.g. 5000@12)")
+    p.add_argument("--offset", type=float, default=0.0,
+                   help="Offset account balance; interest accrues only on balance − offset")
+    p.add_argument("--offset-contribution", type=float, default=0.0,
+                   help="Amount added to the offset account each period")
+    p.add_argument("--offset-mode", choices=["loan", "net"], default="loan",
+                   help="Paid off when the loan hits 0 (loan) or when offset catches the loan (net)")
+    p.add_argument("--rate-step", action="append", metavar="PCT@PERIOD",
+                   help="Rate change from PERIOD onward, annual %% (repeatable, e.g. 8@60)")
+    p.add_argument("--rate-band", metavar="LOW,HIGH",
+                   help="Sensitivity bracket: also project at LOW and HIGH annual %% (e.g. 5,8)")
+    p.add_argument("--schedule", action="store_true",
+                   help="Include the per-period amortization schedule in the output")
     p.add_argument("--pay-freq", choices=PERIODS_PER_YEAR, default="monthly")
     p.set_defaults(func=cmd_payoff)
 
