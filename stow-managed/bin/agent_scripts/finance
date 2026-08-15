@@ -1,0 +1,632 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Deterministic financial calculations: mortgage, payoff, compounding, depreciation, TVM."""
+
+import argparse
+import json
+import sys
+from decimal import ROUND_HALF_UP, Decimal
+
+# Compounding / pay periods per year, keyed by frequency name.
+PERIODS_PER_YEAR = {"monthly": 12, "fortnightly": 26, "weekly": 52}
+# Safety ceiling on the month-by-month payoff loop: 200 years of weekly payments.
+# A payment above the interest-only threshold always amortizes, so this is never
+# reached in practice — it just prevents a runaway loop on pathological input.
+MAX_PERIODS = 200 * 52
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def _die(msg):
+    eprint(f"Error: {msg}")
+    sys.exit(2)
+
+
+def _money(x, dp=2):
+    """Round a monetary amount to `dp` decimal places, half-up (not banker's).
+
+    Compute the TVM core in float (≈15 significant digits — far more than cents
+    need), then quantize the *display* value here to kill float artifacts like
+    1798.6500000001 and to round half-up the way money conventionally does.
+    """
+    quantum = Decimal(1).scaleb(-dp)  # 10**-dp, e.g. Decimal("0.01") for dp=2
+    return float(Decimal(str(x)).quantize(quantum, rounding=ROUND_HALF_UP))
+
+
+def _pct(x):
+    """Round a rate/percentage to 6 dp — enough resolution for basis points."""
+    return round(x, 6)
+
+
+# --- Core time-value-of-money helpers (shared across subcommands) -------------
+
+
+def _fv(pv, pmt, i, n, timing):
+    """Future value of a starting balance `pv` plus a level annuity of `pmt`.
+
+    `i` = per-period rate, `n` = number of periods. `timing` is "end" (ordinary
+    annuity, payment at period end) or "begin" (annuity-due, payment at start —
+    each contribution earns one extra period of growth).
+    """
+    if i == 0:
+        return pv + pmt * n
+    growth = (1 + i) ** n
+    annuity = pmt * (growth - 1) / i  # FV of an ordinary annuity of 1
+    if timing == "begin":
+        annuity *= 1 + i  # annuity-due: one extra compounding period
+    return pv * growth + annuity
+
+
+def _pv(fv, pmt, i, n, timing):
+    """Present value: the balance today that grows to `fv` given `pmt` deposits.
+
+    Inverse of `_fv`: fv = pv*(1+i)^n + annuity(pmt)  →  pv = (fv - annuity)/growth.
+    """
+    if i == 0:
+        return fv - pmt * n
+    growth = (1 + i) ** n
+    annuity = pmt * (growth - 1) / i
+    if timing == "begin":
+        annuity *= 1 + i
+    return (fv - annuity) / growth
+
+
+def _pmt(pv, i, n):
+    """Level payment that fully amortizes `pv` over `n` periods at rate `i`.
+
+    PMT = P·i / (1 − (1+i)^−N). With i=0 it's just the principal split evenly.
+    """
+    if i == 0:
+        return pv / n
+    return pv * i / (1 - (1 + i) ** -n)
+
+
+def _simulate_payoff(balance, i, payment, extra, lumps):
+    """Month-by-month (period-by-period) payoff simulation.
+
+    Returns (periods, final_payment, total_paid, total_interest). Exact by
+    construction — the only clean way to handle a recurring `extra`, one-off
+    `lumps` at specific periods, and a partial final payment.
+
+    Assumes `payment + extra > i*balance` (checked by the caller) so the balance
+    strictly decreases and the loop terminates.
+    """
+    periodic = payment + extra
+    bal = balance
+    total_paid = 0.0
+    total_interest = 0.0
+    final_payment = 0.0
+    period = 0
+    while bal > 1e-9 and period < MAX_PERIODS:
+        period += 1
+        interest = bal * i  # interest accrues on the outstanding balance
+        bal += interest
+        total_interest += interest
+        pay_this = periodic + lumps.get(period, 0.0)
+        if pay_this >= bal:
+            pay_this = bal  # partial final payment clears exactly the remainder
+            final_payment = pay_this
+            total_paid += pay_this
+            bal = 0.0
+            break
+        bal -= pay_this
+        total_paid += pay_this
+    return period, final_payment, total_paid, total_interest
+
+
+def _years_months(periods, periods_per_year):
+    """Express a period count as whole years + months, for any pay frequency."""
+    total_months = periods / periods_per_year * 12
+    years = int(total_months // 12)
+    months = round(total_months - years * 12)
+    if months == 12:  # rounding can push to a full year
+        years += 1
+        months = 0
+    return years, months
+
+
+# --- Subcommand handlers ------------------------------------------------------
+
+
+def cmd_mortgage(args):
+    if args.principal <= 0:
+        _die("--principal must be positive")
+    if args.years <= 0:
+        _die("--years must be positive")
+    if args.rate < 0:
+        _die("--rate must be non-negative")
+    ppy = PERIODS_PER_YEAR[args.pay_freq]
+    n = round(args.years * ppy)
+    i = (args.rate / 100) / ppy  # annual percent → per-period fraction
+    payment = _pmt(args.principal, i, n)
+    total_paid = payment * n
+    total_interest = total_paid - args.principal
+    return {
+        "command": "mortgage",
+        "result": _money(payment, args.dp),
+        "payment_per_period": _money(payment, args.dp),
+        "pay_freq": args.pay_freq,
+        "periods_per_year": ppy,
+        "num_payments": n,
+        "principal": _money(args.principal, args.dp),
+        "annual_rate_pct": _pct(args.rate),
+        "total_paid": _money(total_paid, args.dp),
+        "total_interest": _money(total_interest, args.dp),
+    }
+
+
+def _parse_lumps(values):
+    """Parse repeated --lump AMT@PERIOD flags into {period: total_amount}."""
+    lumps: dict[int, float] = {}
+    for raw in values or []:
+        parts = raw.split("@")
+        if len(parts) != 2:
+            _die(f"--lump must be AMT@PERIOD (e.g. 5000@12), got {raw!r}")
+        try:
+            amount = float(parts[0])
+            period = int(parts[1])
+        except ValueError:
+            _die(f"--lump AMT@PERIOD must be number@integer, got {raw!r}")
+        if amount <= 0 or period <= 0:
+            _die(f"--lump amount and period must be positive, got {raw!r}")
+        lumps[period] = lumps.get(period, 0.0) + amount
+    return lumps
+
+
+def cmd_payoff(args):
+    if args.balance <= 0:
+        _die("--balance must be positive")
+    if args.rate < 0:
+        _die("--rate must be non-negative")
+    ppy = PERIODS_PER_YEAR[args.pay_freq]
+    i = (args.rate / 100) / ppy
+
+    derived_payment = None
+    if args.income is not None:
+        if args.payment is not None:
+            _die("give either --payment or --income/--expenses, not both")
+        if args.expenses is None:
+            _die("income mode requires --expenses alongside --income")
+        payment = args.income - args.expenses
+        derived_payment = payment
+    elif args.payment is not None:
+        payment = args.payment
+    else:
+        _die("provide --payment, or --income with --expenses")
+
+    if payment <= 0:
+        _die("payment (or income − expenses) must be positive")
+
+    lumps = _parse_lumps(args.lump)
+    periodic = payment + args.extra
+
+    # Interest-only guard: if the periodic payment can't cover the interest that
+    # accrues on the full balance, the balance grows without bound and never
+    # amortizes. Report the exact per-period interest-only figure.
+    interest_only = i * args.balance
+    if i > 0 and periodic <= interest_only:
+        _die(
+            f"payment of {_money(periodic, args.dp)} per {args.pay_freq} period does not cover "
+            f"the interest-only amount of {_money(interest_only, args.dp)}; the balance never amortizes"
+        )
+
+    periods, final_payment, total_paid, total_interest = _simulate_payoff(
+        args.balance, i, payment, args.extra, lumps
+    )
+    years, months = _years_months(periods, ppy)
+
+    out = {
+        "command": "payoff",
+        "result": periods,
+        "periods_to_payoff": periods,
+        "years_months": f"{years}y {months}m",
+        "pay_freq": args.pay_freq,
+        "periods_per_year": ppy,
+        "balance": _money(args.balance, args.dp),
+        "annual_rate_pct": _pct(args.rate),
+        "payment_per_period": _money(payment, args.dp),
+        "extra_per_period": _money(args.extra, args.dp),
+        "final_payment": _money(final_payment, args.dp),
+        "total_paid": _money(total_paid, args.dp),
+        "total_interest": _money(total_interest, args.dp),
+    }
+    if derived_payment is not None:
+        out["derived_payment"] = _money(derived_payment, args.dp)
+        out["income"] = _money(args.income, args.dp)
+        out["expenses"] = _money(args.expenses, args.dp)
+    return out
+
+
+def cmd_compound(args):
+    if args.principal < 0:
+        _die("--principal must be non-negative")
+    if args.years <= 0:
+        _die("--years must be positive")
+    if args.n <= 0:
+        _die("--n (compounding periods per year) must be positive")
+    i = (args.rate / 100) / args.n
+    periods = round(args.years * args.n)
+    fv = _fv(args.principal, args.contribution, i, periods, args.timing)
+    total_contributions = args.contribution * periods
+    interest = fv - args.principal - total_contributions
+    return {
+        "command": "compound",
+        "result": _money(fv, args.dp),
+        "future_value": _money(fv, args.dp),
+        "principal": _money(args.principal, args.dp),
+        "annual_rate_pct": _pct(args.rate),
+        "years": args.years,
+        "periods_per_year": args.n,
+        "num_periods": periods,
+        "contribution_per_period": _money(args.contribution, args.dp),
+        "timing": args.timing,
+        "total_contributions": _money(total_contributions, args.dp),
+        "interest_earned": _money(interest, args.dp),
+    }
+
+
+def cmd_pv(args):
+    if args.future_value <= 0:
+        _die("--future-value must be positive")
+    if args.years <= 0:
+        _die("--years must be positive")
+    if args.n <= 0:
+        _die("--n must be positive")
+    i = (args.rate / 100) / args.n
+    periods = round(args.years * args.n)
+    pv = _pv(args.future_value, args.payment, i, periods, "end")
+    return {
+        "command": "pv",
+        "result": _money(pv, args.dp),
+        "present_value": _money(pv, args.dp),
+        "future_value": _money(args.future_value, args.dp),
+        "payment_per_period": _money(args.payment, args.dp),
+        "annual_rate_pct": _pct(args.rate),
+        "years": args.years,
+        "periods_per_year": args.n,
+        "num_periods": periods,
+    }
+
+
+def cmd_fv(args):
+    if args.present_value < 0:
+        _die("--present-value must be non-negative")
+    if args.years <= 0:
+        _die("--years must be positive")
+    if args.n <= 0:
+        _die("--n must be positive")
+    i = (args.rate / 100) / args.n
+    periods = round(args.years * args.n)
+    fv = _fv(args.present_value, args.payment, i, periods, args.timing)
+    return {
+        "command": "fv",
+        "result": _money(fv, args.dp),
+        "future_value": _money(fv, args.dp),
+        "present_value": _money(args.present_value, args.dp),
+        "payment_per_period": _money(args.payment, args.dp),
+        "annual_rate_pct": _pct(args.rate),
+        "years": args.years,
+        "periods_per_year": args.n,
+        "num_periods": periods,
+        "timing": args.timing,
+    }
+
+
+def cmd_appreciate(args):
+    if args.value <= 0:
+        _die("--value must be positive")
+    if args.years <= 0:
+        _die("--years must be positive")
+    if args.n <= 0:
+        _die("--n must be positive")
+    i = (args.rate / 100) / args.n
+    periods = round(args.years * args.n)
+    final = args.value * (1 + i) ** periods
+    gain = final - args.value
+    return {
+        "command": "appreciate",
+        "result": _money(final, args.dp),
+        "final_value": _money(final, args.dp),
+        "initial_value": _money(args.value, args.dp),
+        "annual_rate_pct": _pct(args.rate),
+        "years": args.years,
+        "periods_per_year": args.n,
+        "total_gain": _money(gain, args.dp),
+        "total_gain_pct": _pct(gain / args.value * 100),
+    }
+
+
+def cmd_depreciate(args):
+    if args.cost <= 0:
+        _die("--cost must be positive")
+    if args.salvage < 0:
+        _die("--salvage must be non-negative")
+    if args.salvage > args.cost:
+        _die("--salvage cannot exceed --cost")
+    if args.life <= 0:
+        _die("--life must be a positive number of years")
+    if args.year is not None and args.year < 0:
+        _die("--year must be non-negative")
+
+    schedule = []
+    book = args.cost
+    if args.method == "straight":
+        annual = (args.cost - args.salvage) / args.life  # even spread to salvage
+        for year in range(1, args.life + 1):
+            depreciation = annual
+            book -= depreciation
+            schedule.append(
+                {"year": year, "depreciation": _money(depreciation, args.dp), "book_value": _money(book, args.dp)}
+            )
+        headline = annual
+    else:  # declining balance
+        rate = args.factor / args.life  # e.g. factor 2 → double-declining
+        for year in range(1, args.life + 1):
+            depreciation = book * rate
+            if book - depreciation < args.salvage:
+                depreciation = book - args.salvage  # floor book value at salvage
+            book -= depreciation
+            schedule.append(
+                {"year": year, "depreciation": _money(depreciation, args.dp), "book_value": _money(book, args.dp)}
+            )
+        headline = schedule[0]["depreciation"] if schedule else 0.0
+
+    # Book value at a specific year: entry `year` is end-of-year; year 0 = cost.
+    if args.year is not None:
+        if args.year == 0:
+            book_at_year = args.cost
+        elif args.year <= args.life:
+            book_at_year = schedule[args.year - 1]["book_value"]
+        else:
+            book_at_year = args.salvage  # fully depreciated past its useful life
+        result = _money(book_at_year, args.dp)
+    else:
+        result = _money(headline, args.dp)
+
+    out = {
+        "command": "depreciate",
+        "result": result,
+        "method": args.method,
+        "cost": _money(args.cost, args.dp),
+        "salvage": _money(args.salvage, args.dp),
+        "life_years": args.life,
+        "schedule": schedule,
+    }
+    if args.method == "declining":
+        out["factor"] = args.factor
+    if args.year is not None:
+        out["book_value_at_year"] = result
+        out["year"] = args.year
+    else:
+        out["annual_depreciation" if args.method == "straight" else "first_year_depreciation"] = result
+    return out
+
+
+def cmd_cagr(args):
+    if args.start <= 0:
+        _die("--start must be positive")
+    if args.end <= 0:
+        _die("--end must be positive")
+    if args.years <= 0:
+        _die("--years must be positive")
+    rate = (args.end / args.start) ** (1 / args.years) - 1
+    return {
+        "command": "cagr",
+        "result": _pct(rate * 100),
+        "cagr_pct": _pct(rate * 100),
+        "start": _money(args.start, args.dp),
+        "end": _money(args.end, args.dp),
+        "years": args.years,
+    }
+
+
+def cmd_roi(args):
+    if args.cost <= 0:
+        _die("--cost must be positive")
+    if args.gain is not None and args.final_value is not None:
+        _die("give either --gain or --final-value, not both")
+    if args.gain is not None:
+        gain = args.gain
+    elif args.final_value is not None:
+        gain = args.final_value - args.cost
+    else:
+        _die("provide --gain or --final-value")
+    roi_pct = gain / args.cost * 100
+    out = {
+        "command": "roi",
+        "result": _pct(roi_pct),
+        "roi_pct": _pct(roi_pct),
+        "cost": _money(args.cost, args.dp),
+        "gain": _money(gain, args.dp),
+    }
+    if args.years is not None:
+        if args.years <= 0:
+            _die("--years must be positive")
+        total_return = gain / args.cost
+        if 1 + total_return <= 0:
+            _die("annualized ROI undefined: total loss ≥ 100% of cost")
+        annualized = ((1 + total_return) ** (1 / args.years) - 1) * 100
+        out["years"] = args.years
+        out["annualized_roi_pct"] = _pct(annualized)
+    return out
+
+
+def cmd_pct_change(args):
+    if args.from_val == 0:
+        _die("--from cannot be zero (percentage change is undefined)")
+    change = args.to_val - args.from_val
+    return {
+        "command": "pct-change",
+        "result": _pct(change / args.from_val * 100),
+        "pct_change": _pct(change / args.from_val * 100),
+        "absolute_change": _money(change, args.dp),
+        "from": _money(args.from_val, args.dp),
+        "to": _money(args.to_val, args.dp),
+    }
+
+
+def cmd_ear(args):
+    if args.n <= 0:
+        _die("--n (compounding periods per year) must be positive")
+    r = args.rate / 100
+    ear = (1 + r / args.n) ** args.n - 1
+    return {
+        "command": "ear",
+        "result": _pct(ear * 100),
+        "effective_annual_rate_pct": _pct(ear * 100),
+        "nominal_rate_pct": _pct(args.rate),
+        "compounds_per_year": args.n,
+    }
+
+
+def cmd_savings_goal(args):
+    if args.target <= 0:
+        _die("--target must be positive")
+    if args.years <= 0:
+        _die("--years must be positive")
+    if args.n <= 0:
+        _die("--n must be positive")
+    if args.principal < 0:
+        _die("--principal must be non-negative")
+    i = (args.rate / 100) / args.n
+    periods = round(args.years * args.n)
+    if i == 0:
+        payment = (args.target - args.principal) / periods
+    else:
+        growth = (1 + i) ** periods
+        # Required periodic deposit so that P0 grown + annuity = target:
+        # PMT = (FV − P0(1+i)^N)·i / ((1+i)^N − 1)
+        payment = (args.target - args.principal * growth) * i / (growth - 1)
+    return {
+        "command": "savings-goal",
+        "result": _money(payment, args.dp),
+        "required_contribution_per_period": _money(payment, args.dp),
+        "target": _money(args.target, args.dp),
+        "starting_principal": _money(args.principal, args.dp),
+        "annual_rate_pct": _pct(args.rate),
+        "years": args.years,
+        "periods_per_year": args.n,
+        "num_periods": periods,
+    }
+
+
+def build_parser():
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--dp", type=int, default=2, metavar="N",
+                        help="Decimal places for money outputs (default 2)")
+
+    parser = argparse.ArgumentParser(
+        prog="finance",
+        description="Deterministic financial calculations (currency-agnostic — plain numbers).",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("mortgage", parents=[common], help="Amortized loan payment")
+    p.add_argument("--principal", type=float, required=True)
+    p.add_argument("--rate", type=float, required=True, metavar="PCT", help="Annual rate %% (e.g. 6)")
+    p.add_argument("--years", type=float, required=True)
+    p.add_argument("--pay-freq", choices=PERIODS_PER_YEAR, default="monthly")
+    p.set_defaults(func=cmd_mortgage)
+
+    p = sub.add_parser("payoff", parents=[common], help="Time to clear a balance")
+    p.add_argument("--balance", type=float, required=True)
+    p.add_argument("--rate", type=float, required=True, metavar="PCT", help="Annual rate %%")
+    p.add_argument("--payment", type=float, help="Payment per period (payment mode)")
+    p.add_argument("--income", type=float, help="Income per period (income mode)")
+    p.add_argument("--expenses", type=float, help="Expenses per period (income mode)")
+    p.add_argument("--extra", type=float, default=0.0, help="Extra paid every period")
+    p.add_argument("--lump", action="append", metavar="AMT@PERIOD",
+                   help="One-off lump payment at a period (repeatable, e.g. 5000@12)")
+    p.add_argument("--pay-freq", choices=PERIODS_PER_YEAR, default="monthly")
+    p.set_defaults(func=cmd_payoff)
+
+    p = sub.add_parser("compound", parents=[common], help="Future value with compounding")
+    p.add_argument("--principal", type=float, required=True)
+    p.add_argument("--rate", type=float, required=True, metavar="PCT")
+    p.add_argument("--years", type=float, required=True)
+    p.add_argument("--n", type=int, default=12, help="Compounding periods per year (default 12)")
+    p.add_argument("--contribution", type=float, default=0.0, help="Deposit added each period")
+    p.add_argument("--timing", choices=["end", "begin"], default="end")
+    p.set_defaults(func=cmd_compound)
+
+    p = sub.add_parser("pv", parents=[common], help="Present value")
+    p.add_argument("--future-value", type=float, required=True)
+    p.add_argument("--payment", type=float, default=0.0, help="Deposit per period")
+    p.add_argument("--rate", type=float, required=True, metavar="PCT")
+    p.add_argument("--years", type=float, required=True)
+    p.add_argument("--n", type=int, default=12)
+    p.set_defaults(func=cmd_pv)
+
+    p = sub.add_parser("fv", parents=[common], help="Future value")
+    p.add_argument("--present-value", type=float, required=True)
+    p.add_argument("--payment", type=float, default=0.0, help="Deposit per period")
+    p.add_argument("--rate", type=float, required=True, metavar="PCT")
+    p.add_argument("--years", type=float, required=True)
+    p.add_argument("--n", type=int, default=12)
+    p.add_argument("--timing", choices=["end", "begin"], default="end")
+    p.set_defaults(func=cmd_fv)
+
+    p = sub.add_parser("appreciate", parents=[common], help="Appreciated value")
+    p.add_argument("--value", type=float, required=True)
+    p.add_argument("--rate", type=float, required=True, metavar="PCT")
+    p.add_argument("--years", type=float, required=True)
+    p.add_argument("--n", type=int, default=1, help="Compounding periods per year (default 1)")
+    p.set_defaults(func=cmd_appreciate)
+
+    p = sub.add_parser("depreciate", parents=[common], help="Asset depreciation schedule")
+    p.add_argument("--cost", type=float, required=True)
+    p.add_argument("--salvage", type=float, default=0.0)
+    p.add_argument("--life", type=int, required=True, help="Useful life in years")
+    p.add_argument("--method", choices=["straight", "declining"], default="straight")
+    p.add_argument("--factor", type=float, default=2.0, help="Declining-balance factor (default 2 = double)")
+    p.add_argument("--year", type=int, help="Report book value at end of this year")
+    p.set_defaults(func=cmd_depreciate)
+
+    p = sub.add_parser("cagr", parents=[common], help="Compound annual growth rate")
+    p.add_argument("--start", type=float, required=True)
+    p.add_argument("--end", type=float, required=True)
+    p.add_argument("--years", type=float, required=True)
+    p.set_defaults(func=cmd_cagr)
+
+    p = sub.add_parser("roi", parents=[common], help="Return on investment")
+    p.add_argument("--cost", type=float, required=True)
+    p.add_argument("--gain", type=float, help="Net gain (profit)")
+    p.add_argument("--final-value", type=float, help="Final value (gain = final − cost)")
+    p.add_argument("--years", type=float, help="Holding period → annualized ROI")
+    p.set_defaults(func=cmd_roi)
+
+    p = sub.add_parser("pct-change", parents=[common], help="Percentage change")
+    p.add_argument("--from", dest="from_val", type=float, required=True)
+    p.add_argument("--to", dest="to_val", type=float, required=True)
+    p.set_defaults(func=cmd_pct_change)
+
+    p = sub.add_parser("ear", parents=[common], help="Effective annual rate")
+    p.add_argument("--rate", type=float, required=True, metavar="PCT", help="Nominal annual rate %%")
+    p.add_argument("--n", type=int, required=True, help="Compounding periods per year")
+    p.set_defaults(func=cmd_ear)
+
+    p = sub.add_parser("savings-goal", parents=[common], help="Required periodic contribution")
+    p.add_argument("--target", type=float, required=True)
+    p.add_argument("--rate", type=float, required=True, metavar="PCT")
+    p.add_argument("--years", type=float, required=True)
+    p.add_argument("--n", type=int, default=12)
+    p.add_argument("--principal", type=float, default=0.0, help="Starting balance (default 0)")
+    p.set_defaults(func=cmd_savings_goal)
+
+    return parser
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    result = args.func(args)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
