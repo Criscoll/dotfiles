@@ -1,0 +1,141 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Evaluate a single arithmetic/math expression exactly — deterministic, no builtin eval.
+
+Reach for this instead of doing non-trivial arithmetic in your head: LLM mental math is
+unreliable and non-repeatable. Expressions are evaluated by walking a strict AST allow-list
+(the security boundary), so big-int and float results are exact and auditable.
+"""
+
+import argparse
+import ast
+import json
+import math
+import operator
+import sys
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+# Whitelisted callables/constants — the ENTIRE surface an expression can reach. Anything not
+# named here (attribute access, __import__, arbitrary names) is rejected by the AST walk below,
+# which is what lets us evaluate safely without the builtin eval().
+_MATH_FUNCS = [
+    "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sinh", "cosh", "tanh",
+    "log", "log2", "log10", "exp", "floor", "ceil", "factorial", "comb", "perm", "gcd",
+    "lcm", "hypot", "degrees", "radians", "copysign", "fabs", "trunc",
+]
+_MATH_CONSTS = ["pi", "e", "tau", "inf", "nan"]
+_BUILTINS = {
+    "abs": abs, "round": round, "min": min, "max": max, "sum": sum,
+    "pow": pow, "int": int, "float": float, "divmod": divmod,
+}
+
+NAMESPACE = {name: getattr(math, name) for name in _MATH_FUNCS + _MATH_CONSTS}
+NAMESPACE.update(_BUILTINS)
+
+# Operators mapped to their exact Python implementations.
+_BIN_OPS = {
+    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+    ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod, ast.Pow: operator.pow,
+}
+_UNARY_OPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+_CMP_OPS = {
+    ast.Lt: operator.lt, ast.LtE: operator.le, ast.Gt: operator.gt,
+    ast.GtE: operator.ge, ast.Eq: operator.eq, ast.NotEq: operator.ne,
+}
+
+
+class UnsafeExpression(ValueError):
+    """Raised when an expression contains a node outside the allow-list."""
+
+
+def _eval(node):
+    if isinstance(node, ast.Expression):
+        return _eval(node.body)
+    if isinstance(node, ast.Constant):
+        # bool is a subclass of int; exclude it so only real numeric literals pass.
+        if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
+            raise UnsafeExpression(f"only numeric literals allowed, got {node.value!r}")
+        return node.value
+    if isinstance(node, ast.BinOp):
+        op = _BIN_OPS.get(type(node.op))
+        if op is None:
+            raise UnsafeExpression(f"operator {type(node.op).__name__} not allowed")
+        return op(_eval(node.left), _eval(node.right))
+    if isinstance(node, ast.UnaryOp):
+        op = _UNARY_OPS.get(type(node.op))
+        if op is None:
+            raise UnsafeExpression(f"unary operator {type(node.op).__name__} not allowed")
+        return op(_eval(node.operand))
+    if isinstance(node, ast.Compare):
+        # Evaluate chained comparisons (1 < x <= 10) the way Python does.
+        left = _eval(node.left)
+        result = True
+        for op_node, right_node in zip(node.ops, node.comparators):
+            op = _CMP_OPS.get(type(op_node))
+            if op is None:
+                raise UnsafeExpression(f"comparison {type(op_node).__name__} not allowed")
+            right = _eval(right_node)
+            result = result and op(left, right)
+            left = right
+        return result
+    if isinstance(node, (ast.List, ast.Tuple)):
+        # Allow list/tuple literals so sum([1,2,3]) / min((4,5,6)) work.
+        return [_eval(e) for e in node.elts]
+    if isinstance(node, ast.Name):
+        if node.id not in NAMESPACE:
+            raise UnsafeExpression(f"name {node.id!r} is not defined")
+        return NAMESPACE[node.id]
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise UnsafeExpression("only direct calls to whitelisted functions are allowed")
+        if node.keywords or any(isinstance(a, ast.Starred) for a in node.args):
+            raise UnsafeExpression("keyword and *-unpacking arguments are not allowed")
+        func = NAMESPACE.get(node.func.id)
+        if func is None or not callable(func):
+            raise UnsafeExpression(f"function {node.func.id!r} is not allowed")
+        return func(*[_eval(a) for a in node.args])
+    raise UnsafeExpression(f"{type(node).__name__} is not allowed in an expression")
+
+
+def evaluate(expr: str):
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError as e:
+        raise UnsafeExpression(f"could not parse expression: {e.msg}") from e
+    return _eval(tree)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="calculator",
+        description="Evaluate an arithmetic/math expression exactly (safe AST walk, no builtin eval).",
+        epilog="Example: calculator '2**10 + sqrt(144)'  ->  result 1036.0",
+    )
+    parser.add_argument(
+        "expression",
+        help="Expression to evaluate, e.g. '2**64 - 1', 'factorial(20)', 'log2(1024)'",
+    )
+    args = parser.parse_args()
+
+    try:
+        result = evaluate(args.expression)
+    except UnsafeExpression as e:
+        eprint(f"Error: {e}")
+        sys.exit(2)
+    except (ArithmeticError, ValueError, TypeError) as e:
+        eprint(f"Error evaluating expression: {e}")
+        sys.exit(2)
+
+    print(json.dumps({"expression": args.expression, "result": result}, indent=2))
+
+
+if __name__ == "__main__":
+    main()
