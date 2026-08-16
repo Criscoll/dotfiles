@@ -71,5 +71,5 @@ Check the relevant file before crawling these sites — they have known restrict
 
 | You need to… | Context | Read |
 |---|---|---|
-| Crawl Reddit posts, comments, or subreddits | Access is heavily restricted; most paths are blocked without credentials; RSS and Playwright behave differently | [`reddit.md`](reddit.md) |
+| Crawl Reddit posts, comments, or subreddits | Direct `webcrawl`/curl/WebFetch access is blocked by Cloudflare anti-bot; preferred workaround is fetching through a Redlib mirror | [`reddit.md`](reddit.md) |
 | Extract transcript or spoken content from a YouTube video | `webcrawl` on a YouTube URL returns only title/description HTML — use `video-transcript` instead | [`youtube.md`](youtube.md) |
