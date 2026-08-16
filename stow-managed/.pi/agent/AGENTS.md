@@ -77,6 +77,10 @@ Other redaction types (email, phone, etc.) are available in OpenRouter but are *
 
 Before using a flag you haven't verified, run `<cmd> --help` to confirm it exists. Never invent flags from naming intuition — unknown flags often fail silently (exit 1, no error printed) or behave unexpectedly.
 
+## Shell Command Timeouts
+
+Default to a 60 second timeout on bash tool calls. Pass a longer explicit `timeout` only when the command is known to run longer (builds, test suites, JS-rendered crawls, etc).
+
 ## What Not to Do
 
 - Don't add features, refactors, or improvements beyond what was asked

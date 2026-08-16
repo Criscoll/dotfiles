@@ -55,12 +55,14 @@ Every ~10 actions, re-read the original goal. Long threads drift. Re-derive from
 
 MCP servers are registered via `claude mcp add` and stored in `~/.claude.json` (not in `settings.json`). Never manually add `mcpServers` to `settings.json` — always use `claude mcp add`. This file is not tracked in dotfiles — re-run the relevant commands on each new machine after setting up any required prerequisites (e.g. SSH tunnels).
 
+Both backends below run as Docker containers on the VPS (`134.199.169.64`, hostname `SploomVPS`). The SSH tunnel is only needed when connecting *from a different machine*. When Claude Code is running directly on the VPS itself, both services are already reachable on `localhost` at the ports below and no tunnel is required.
+
 **Current user-scoped MCPs:**
 
 | Name | Transport | URL / Command | Prerequisites |
 |---|---|---|---|
-| `c4ai-sse` | SSE | `http://localhost:11235/mcp/sse` | SSH tunnel to VPS: `ssh -L 11235:localhost:11235 -N cristian@134.199.169.64` |
-| `playwright` | SSE | `http://localhost:8931/sse` | SSH tunnel to VPS: `ssh -L 8931:localhost:3001 -N cristian@134.199.169.64` |
+| `c4ai-sse` | SSE | `http://localhost:11235/mcp/sse` | On the VPS: none, already local. Elsewhere: SSH tunnel `ssh -L 11235:localhost:11235 -N cristian@134.199.169.64` |
+| `playwright` | SSE | `http://localhost:8931/sse` | On the VPS: none, already local. Elsewhere: SSH tunnel `ssh -L 8931:localhost:3001 -N cristian@134.199.169.64` |
 
 The `playwright` MCP uses the official `mcr.microsoft.com/playwright/mcp` image, running on container port 8931, mapped to VPS host port 3001. The tunnel must forward local port 8931 → VPS port 3001 (not 8931→8931) because the server enforces a Host header check and will reject requests that don't arrive as `localhost:8931`. The Docker container was started with: `docker run -d -p 127.0.0.1:3001:8931 --name playwright-mcp --init --restart unless-stopped mcr.microsoft.com/playwright/mcp node /app/cli.js --headless --browser chromium --no-sandbox --port 8931 --host 0.0.0.0`
 
