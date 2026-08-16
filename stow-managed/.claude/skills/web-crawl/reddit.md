@@ -2,6 +2,35 @@
 
 Last updated: 2026-08-16
 
+## Preferred: Use the Scripts
+
+For threads and search, use the wrapper scripts instead of hand-rolling a
+fetch — they encapsulate the mirror-fetch/retry logic and parse the Redlib
+markdown into structured post/comment data:
+
+```bash
+~/bin/agent_scripts/reddit-thread <reddit-or-redlib-url> [--limit N] [--chars N] [--json]
+~/bin/agent_scripts/reddit-search <query> [--subreddit SUB] [--sort hot|new|top|relevance] [--json]
+```
+
+Examples:
+
+```bash
+~/bin/agent_scripts/reddit-thread "https://www.reddit.com/r/technology/comments/1vay198/amazon_accidentally_spent_18_million_using_claude/"
+~/bin/agent_scripts/reddit-search "claude code" --subreddit ClaudeAI --sort top
+```
+
+`reddit-thread` accepts a canonical `reddit.com`/`old.reddit.com` URL directly
+(it normalizes the host to the mirror) or a Redlib URL unchanged.
+`reddit-search` is discovery/triage only (no self-text in default output) —
+call `reddit-thread <permalink>` on a result for full content. Both support
+`--mirror HOST` / the `REDLIB_MIRROR` env var to override the pinned default
+mirror, and `--json` for structured output.
+
+Fall back to the manual pattern below only for Redlib page types the scripts
+don't cover (e.g. a user profile page) — don't hand-roll thread/search
+fetching, the scripts already do it.
+
 ## Why Direct Fetches Fail
 
 `webcrawl https://www.reddit.com/r/...` (and `old.reddit.com`) returns `Blocked by
@@ -31,23 +60,31 @@ https://www.reddit.com/r/HongKong/comments/abc123/some_title/
 → https://<mirror-host>/r/HongKong/comments/abc123/some_title/
 ```
 
-**Known-working public mirror (as of 2026-08-16):** `redlib.privacyredirect.com`.
-Public mirrors churn — some run their own Cloudflare JS challenge or an "Anubis"
-proof-of-work block page, and instances go down entirely. If this one stops
-working, pull a fresh candidate from the maintained list instead of guessing:
+**Known-working public mirror (confirmed live 2026-08-16):**
+`redlib.privacyredirect.com`. It's gated by an "Anubis" JS proof-of-work
+challenge that a headless browser (`webcrawl`'s Playwright backend) only
+solves intermittently — both thread pages and search pages typically succeed
+within a handful of retries, but any single attempt can hit the challenge
+page instead of content. This is normal, not a sign the mirror is down; don't
+conclude a mirror is dead from a small number of failures — retry first.
+Public mirrors do still churn over longer timescales. If this one stops
+working entirely after a real retry campaign, pull a fresh candidate from the
+maintained list instead of guessing:
 
 ```bash
-webcrawl https://github.com/redlib-org/redlib-instances/blob/main/instances.md --raw
+webcrawl https://raw.githubusercontent.com/redlib-org/redlib-instances/main/instances.md --raw
 ```
+
+(Use the raw URL, not the `github.com/.../blob/...` UI — the blob page is a
+JS-heavy SPA that renders mostly nav chrome under `webcrawl`.)
 
 Cite the canonical `reddit.com` URL in any saved notes/citations — the mirror is
 only the retrieval mechanism, not the durable source.
 
-## Retry Pattern — Mirrors Are Flaky Too
+## Retry Pattern — Mirrors Are Flaky Too (Manual Fallback)
 
-Even a working mirror intermittently serves its own bot-check page instead of
-content, especially under rapid repeated requests. Retry with backoff and verify
-the response actually contains thread content before accepting it:
+`reddit-thread`/`reddit-search` already implement this (6 attempts, 3s/attempt
+backoff) — only hand-roll it for page types those scripts don't cover:
 
 ```bash
 fetch_reddit() {
@@ -55,13 +92,13 @@ fetch_reddit() {
   local mirror_host="redlib.privacyredirect.com"
   local mirror_url="${url/https:\/\/www.reddit.com/https:\/\/$mirror_host}"
   mirror_url="${mirror_url/https:\/\/reddit.com/https:\/\/$mirror_host}"
-  for i in 1 2 3 4; do
-    out=$(webcrawl "$mirror_url" 2>&1)
+  for i in 1 2 3 4 5 6; do
+    out=$(webcrawl "$mirror_url" --raw 2>&1)
     if echo "$out" | grep -qE "comments sorted by|Upvotes"; then
       echo "$out"
       return 0
     fi
-    sleep 4
+    sleep $((3 * i))
   done
   echo "FAILED to fetch $url after retries" >&2
   return 1

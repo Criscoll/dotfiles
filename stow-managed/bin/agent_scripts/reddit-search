@@ -1,0 +1,214 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Search Reddit through a Redlib mirror and print matching post summaries.
+
+Usage: reddit-search <query> [--subreddit SUB] [--sort hot|new|top|relevance]
+                      [--limit N] [--chars N] [--mirror HOST] [--json]
+
+Reddit's Cloudflare layer blocks direct webcrawl/curl/WebFetch access; see
+~/.claude/skills/web-crawl/reddit.md for why. This script fetches through a
+Redlib mirror instead. Results are discovery/triage only (no self-text body
+by default) — call reddit-thread <permalink> for full thread content.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from urllib.parse import quote
+
+DEFAULT_MIRROR = "redlib.privacyredirect.com"  # empirically working as of 2026-08-16; see reddit.md
+MAX_ATTEMPTS = 6
+BASE_DELAY = 3
+
+INTERSTITIAL_RE = re.compile(
+    r"# You are about to leave Redlib.*?\]\([^)]*\)\n?", re.DOTALL
+)
+RESULT_HEADER_RE = re.compile(
+    r'^\[r/([^\]]+)\]\([^)]*\)\s*•\s*\[u/([^\]]+)\]\([^)]*\)\s*•\s*(.+)$'
+)
+TITLE_RE = re.compile(r'^##\s+(?:\[[^\]]*\]\([^)]*\)\s+)?\[([^\]]+)\]\(([^)]+)\)\s*$')
+SCORE_RE = re.compile(r'^([\d][\d,.]*k?)\s+Upvotes\s*$')
+COMMENTS_RE = re.compile(r'^\[([\d][\d,.]*k?)\s+comments?\]\(([^ )]+)')
+
+NO_RESULTS_MARKERS = ["No posts were found"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def build_url(query: str, subreddit: str | None, sort: str, mirror: str) -> str:
+    q = quote(query)
+    if subreddit:
+        return f"https://{mirror}/r/{subreddit}/search?q={q}&restrict_sr=on&sort={sort}"
+    return f"https://{mirror}/search?q={q}&type=link&sort={sort}"
+
+
+def fetch_via_mirror(url: str, content_markers: list[str], mirror: str) -> str:
+    last_out = ""
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        eprint(f"reddit-search: fetch attempt {attempt}/{MAX_ATTEMPTS} — {url}")
+        result = subprocess.run(["webcrawl", url, "--raw"], capture_output=True, text=True, check=False)
+        out = result.stdout
+        last_out = out
+        if any(marker in out for marker in content_markers) or any(
+            marker in out for marker in NO_RESULTS_MARKERS
+        ):
+            return INTERSTITIAL_RE.sub("", out)
+        if attempt < MAX_ATTEMPTS:
+            time.sleep(BASE_DELAY * attempt)
+    eprint(
+        f"reddit-search: FAILED to fetch content after {MAX_ATTEMPTS} attempts.\n"
+        "Try --mirror HOST with a fresh instance from "
+        "https://raw.githubusercontent.com/redlib-org/redlib-instances/main/instances.md"
+    )
+    eprint(f"reddit-search: last response head:\n{last_out[:500]}")
+    sys.exit(1)
+
+
+def truncate(text: str, chars: int) -> str:
+    text = text.strip()
+    if chars and len(text) > chars:
+        return text[:chars].rstrip() + "..."
+    return text
+
+
+def collapse(text: str) -> str:
+    return " ".join(text.split())
+
+
+def parse_results(md: str, limit: int, chars: int) -> list[dict]:
+    lines = md.splitlines()
+    results = []
+    n = len(lines)
+    i = 0
+    while i < n:
+        header_m = RESULT_HEADER_RE.match(lines[i].strip())
+        if not header_m:
+            i += 1
+            continue
+        subreddit, author, age = header_m.groups()
+
+        title = ""
+        permalink = ""
+        score = ""
+        num_comments = ""
+        body_lines = []
+        j = i + 1
+        while j < n:
+            stripped = lines[j].strip()
+            if RESULT_HEADER_RE.match(stripped):
+                break
+            title_m = TITLE_RE.match(stripped)
+            if title_m:
+                title, permalink = title_m.groups()
+                j += 1
+                continue
+            score_m = SCORE_RE.match(stripped)
+            if score_m:
+                score = score_m.group(1)
+                j += 1
+                continue
+            comments_m = COMMENTS_RE.match(stripped)
+            if comments_m:
+                num_comments = comments_m.group(1)
+                j += 1
+                break  # comment count marks the end of a result block
+            if stripped and not stripped.startswith("["):
+                body_lines.append(stripped)
+            j += 1
+
+        if title:
+            results.append(
+                {
+                    "subreddit": subreddit,
+                    "author": author,
+                    "age": age.strip(),
+                    "title": title,
+                    "permalink": permalink,
+                    "score": score,
+                    "num_comments": num_comments,
+                    "self_text_preview": truncate(collapse(" ".join(body_lines)), chars),
+                }
+            )
+        i = j
+
+    if limit:
+        results = results[:limit]
+    return results
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        sys.exit(0 if args and args[0] in ("-h", "--help") else 2)
+
+    query = None
+    subreddit = None
+    sort = "relevance"
+    limit = 25
+    chars = 300
+    mirror = os.environ.get("REDLIB_MIRROR", DEFAULT_MIRROR)
+    json_output = False
+
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--subreddit" and i + 1 < len(args):
+            subreddit = args[i + 1]
+            i += 2
+        elif a == "--sort" and i + 1 < len(args):
+            sort = args[i + 1]
+            i += 2
+        elif a == "--limit" and i + 1 < len(args):
+            limit = int(args[i + 1])
+            i += 2
+        elif a == "--chars" and i + 1 < len(args):
+            chars = int(args[i + 1])
+            i += 2
+        elif a == "--mirror" and i + 1 < len(args):
+            mirror = args[i + 1]
+            i += 2
+        elif a == "--json":
+            json_output = True
+            i += 1
+        elif query is None:
+            query = a
+            i += 1
+        else:
+            eprint(f"Unknown argument: {a}")
+            sys.exit(2)
+
+    if not query:
+        eprint(
+            "Usage: reddit-search <query> [--subreddit SUB] [--sort hot|new|top|relevance] "
+            "[--limit N] [--chars N] [--mirror HOST] [--json]"
+        )
+        sys.exit(2)
+
+    url = build_url(query, subreddit, sort, mirror)
+    md = fetch_via_mirror(url, ["Upvotes"], mirror)
+    results = parse_results(md, limit, chars)
+
+    if json_output:
+        print(json.dumps({"query": query, "results": results}, ensure_ascii=False, indent=2))
+        return
+
+    if not results:
+        print("No results found.")
+        return
+    for r in results:
+        print(
+            f"{r['subreddit']} | {r['score']} | {r['num_comments']} | {r['age']} | "
+            f"{r['title']} | {r['permalink']}"
+        )
+
+
+if __name__ == "__main__":
+    main()

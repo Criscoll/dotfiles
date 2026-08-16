@@ -69,6 +69,8 @@ check_matches "find | xargs" 'find . -name "*.ts" | xargs rm'
 check_matches "find -name" 'find . -name "*.ts"'
 check_matches "find -type f" "find . -type f"
 check_matches "find -type d" "find . -type d"
+check_matches "webcrawl reddit.com thread URL" "webcrawl https://www.reddit.com/r/test/comments/abc123/title/"
+check_matches "webcrawl old.reddit.com" "webcrawl https://old.reddit.com/r/test"
 
 echo ""
 echo "=== Should NOT match (empty output) ==="
@@ -78,6 +80,8 @@ check_no_match "find -type f with -perm exception" "find . -type f -perm 755"
 check_no_match "find -type f with -user exception" "find . -type f -user root"
 check_no_match "find -type f with -group exception" "find . -type f -group staff"
 check_no_match "rtk prefix skips grep -r check" "rtk grep -r foo ."
+check_no_match "webcrawl against redlib mirror (not reddit.com)" "webcrawl https://redlib.catsarch.com/r/test"
+check_no_match "curl against reddit.com (not webcrawl, different tool)" "curl https://www.reddit.com/r/test.rss"
 
 echo ""
 echo "=== git commit guard (message text must not be blocked) ==="

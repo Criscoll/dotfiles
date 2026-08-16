@@ -84,6 +84,13 @@ rules=(
     "fd has no --search-path flag. Pass multiple search paths as positional arguments after the pattern: fd <pattern> path1 path2"
     ''
     'fd'
+
+    # webcrawl against reddit.com always 403s (Cloudflare blocks it) — redirect to the
+    # documented Redlib-mirror workaround instead of letting the agent burn a call.
+    'webcrawl[[:space:]]+[^&|;]*reddit\.com'
+    "webcrawl on reddit.com will fail — Reddit's Cloudflare layer blocks it (HTTP 403), even from headless browsers. Read ~/.claude/skills/web-crawl/reddit.md for why, then use ~/bin/agent_scripts/reddit-thread <url> or ~/bin/agent_scripts/reddit-search <query> instead, which fetch through a Redlib mirror."
+    ''
+    ''
 )
 
 for ((i=0; i<${#rules[@]}; i+=4)); do

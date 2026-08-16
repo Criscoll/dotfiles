@@ -1,0 +1,240 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Fetch a Reddit thread through a Redlib mirror and print post + comments.
+
+Usage: reddit-thread <reddit-or-redlib-url> [--limit N] [--chars N] [--mirror HOST] [--json]
+
+Reddit's Cloudflare layer blocks direct webcrawl/curl/WebFetch access; see
+~/.claude/skills/web-crawl/reddit.md for why. This script fetches through a
+Redlib mirror instead (retrying since public mirrors are flaky) and parses
+the resulting markdown into structured post + comment data.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from urllib.parse import urlsplit, urlunsplit
+
+DEFAULT_MIRROR = "redlib.privacyredirect.com"  # empirically working as of 2026-08-16; see reddit.md
+MAX_ATTEMPTS = 6  # thread pages succeed ~1/3 of the time per-attempt (live-tested)
+BASE_DELAY = 3  # seconds
+
+INTERSTITIAL_RE = re.compile(
+    r"# You are about to leave Redlib.*?\]\([^)]*\)\n?", re.DOTALL
+)
+COMMENT_SCORE_RE = re.compile(r"^(>*)\s*([\d][\d,.]*k?)\s*$")
+AUTHOR_LINE_RE = re.compile(
+    r'^>*\s*\[u/([^\]]+)\]\([^)]*\)(?:\s+[^\[\]]+?)?\s*\[([^\]]+)\]\(([^ )]+)(?:\s+"[^"]*")?\)(?:\s.*)?$'
+)
+MORE_REPLIES_RE = re.compile(r"^>*\s*\[→ More replies")
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def to_mirror_url(url: str, mirror: str) -> str:
+    parts = urlsplit(url)
+    if parts.netloc in ("www.reddit.com", "reddit.com", "old.reddit.com"):
+        parts = parts._replace(netloc=mirror, scheme="https")
+        return urlunsplit(parts)
+    return url
+
+
+def fetch_via_mirror(url: str, content_markers: list[str], mirror: str) -> str:
+    mirror_url = to_mirror_url(url, mirror)
+    last_out = ""
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        eprint(f"reddit-thread: fetch attempt {attempt}/{MAX_ATTEMPTS} — {mirror_url}")
+        result = subprocess.run(
+            ["webcrawl", mirror_url, "--raw"], capture_output=True, text=True, check=False
+        )
+        out = result.stdout
+        last_out = out
+        if any(marker in out for marker in content_markers):
+            return INTERSTITIAL_RE.sub("", out)
+        if attempt < MAX_ATTEMPTS:
+            time.sleep(BASE_DELAY * attempt)
+    eprint(
+        f"reddit-thread: FAILED to fetch content after {MAX_ATTEMPTS} attempts.\n"
+        "Try --mirror HOST with a fresh instance from "
+        "https://raw.githubusercontent.com/redlib-org/redlib-instances/main/instances.md"
+    )
+    eprint(f"reddit-thread: last response head:\n{last_out[:500]}")
+    sys.exit(1)
+
+
+def truncate(text: str, chars: int) -> str:
+    text = text.strip()
+    if chars and len(text) > chars:
+        return text[:chars].rstrip() + "..."
+    return text
+
+
+def collapse(text: str) -> str:
+    return " ".join(text.split())
+
+
+def parse_thread(md: str, limit: int, chars: int) -> dict:
+    lines = md.splitlines()
+
+    title = ""
+    title_raw = ""
+    author = ""
+    score = ""
+    upvoted_pct = ""
+    for line in lines:
+        stripped = line.strip()
+        if not title and stripped.startswith("# ") and "leave Redlib" not in stripped:
+            title_raw = stripped.lstrip("# ").strip()
+            # Strip a leading flair link (e.g. "[Discussion](url) Actual title")
+            title = re.sub(r"^\[[^\]]*\]\([^)]*\)\s*", "", title_raw).strip()
+        m = re.match(r"^\[u/([^\]]+)\]", stripped)
+        if not author and m:
+            author = m.group(1)
+        if not score:
+            m = re.match(r"^([\d][\d,.]*k?)\s+Upvotes\s*$", stripped)
+            if m:
+                score = m.group(1)
+        if not upvoted_pct:
+            m = re.match(r"^(\d+)%\s+Upvoted\s*$", stripped)
+            if m:
+                upvoted_pct = m.group(1) + "%"
+
+    # Self-text body: lines between the title and the score line, excluding
+    # the author/permalink/interstitial furniture.
+    self_text_lines = []
+    started = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("# ") and title_raw and stripped.lstrip("# ").strip() == title_raw:
+            started = True
+            continue
+        if not started:
+            continue
+        if re.match(r"^[\d][\d,.]*k?\s+Upvotes\s*$", stripped):
+            break
+        if not stripped or stripped.startswith(("*", "[")):
+            continue
+        if stripped.startswith("<") and stripped.endswith(">"):
+            continue  # bare link-post URL, not self-text
+        self_text_lines.append(stripped)
+    self_text = collapse(" ".join(self_text_lines))
+
+    # Comment tree: walk lines looking for a score line at some `>` depth
+    # immediately followed by an author/age/permalink line, then body lines
+    # until the next score+author pair or a "More replies" marker.
+    comments = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        score_m = COMMENT_SCORE_RE.match(lines[i])
+        if score_m and i + 1 < n:
+            author_m = AUTHOR_LINE_RE.match(lines[i + 1])
+            if author_m:
+                depth = len(score_m.group(1))
+                c_score = score_m.group(2)
+                c_author = author_m.group(1)
+                c_age = author_m.group(2)
+                c_permalink = author_m.group(3)
+                body_lines = []
+                j = i + 2
+                while j < n:
+                    if COMMENT_SCORE_RE.match(lines[j]) and j + 1 < n and AUTHOR_LINE_RE.match(lines[j + 1]):
+                        break
+                    if MORE_REPLIES_RE.match(lines[j]):
+                        break
+                    stripped = lines[j].lstrip(">").strip()
+                    if stripped:
+                        body_lines.append(stripped)
+                    j += 1
+                comments.append(
+                    {
+                        "depth": depth,
+                        "score": c_score,
+                        "author": c_author,
+                        "age": c_age,
+                        "permalink": c_permalink,
+                        "body": truncate(collapse(" ".join(body_lines)), chars),
+                    }
+                )
+                i = j
+                continue
+        i += 1
+
+    if limit:
+        comments = comments[:limit]
+
+    return {
+        "title": title,
+        "author": author,
+        "score": score,
+        "upvoted_pct": upvoted_pct,
+        "self_text": truncate(self_text, chars),
+        "comments": comments,
+    }
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        sys.exit(0 if args and args[0] in ("-h", "--help") else 2)
+
+    url = None
+    limit = 40
+    chars = 500
+    mirror = os.environ.get("REDLIB_MIRROR", DEFAULT_MIRROR)
+    json_output = False
+
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--limit" and i + 1 < len(args):
+            limit = int(args[i + 1])
+            i += 2
+        elif a == "--chars" and i + 1 < len(args):
+            chars = int(args[i + 1])
+            i += 2
+        elif a == "--mirror" and i + 1 < len(args):
+            mirror = args[i + 1]
+            i += 2
+        elif a == "--json":
+            json_output = True
+            i += 1
+        elif url is None:
+            url = a
+            i += 1
+        else:
+            eprint(f"Unknown argument: {a}")
+            sys.exit(2)
+
+    if not url:
+        eprint("Usage: reddit-thread <reddit-or-redlib-url> [--limit N] [--chars N] [--mirror HOST] [--json]")
+        sys.exit(2)
+
+    md = fetch_via_mirror(url, ["comments sorted by"], mirror)
+    data = parse_thread(md, limit, chars)
+    data["url"] = url
+
+    if json_output:
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+
+    print(f"POST | {data['score']} | {data['author']} | {data['title']}")
+    if data["self_text"]:
+        print(f"BODY: {data['self_text']}")
+    if not data["comments"]:
+        print("No comments found.")
+        return
+    for c in data["comments"]:
+        print(f"{c['depth']} | {c['score']} | {c['author']} | {c['age']} | {c['body']}")
+
+
+if __name__ == "__main__":
+    main()
