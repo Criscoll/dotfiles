@@ -667,6 +667,101 @@ def cmd_savings_goal(args):
     }
 
 
+def _parse_brackets(values):
+    """Parse repeated --bracket UPTO:RATE_PCT flags into an ascending bracket list.
+
+    `UPTO` is the upper income threshold for that bracket, or the literal `inf` for
+    the top (uncapped) bracket. Exactly one bracket must use `inf`, and it must be
+    the last one given; thresholds must be strictly ascending.
+    """
+    brackets: list[tuple[float, float]] = []
+    for raw in values or []:
+        parts = raw.split(":")
+        if len(parts) != 2:
+            _die(f"--bracket must be UPTO:RATE_PCT (e.g. 45000:16 or inf:45), got {raw!r}")
+        upto_raw, rate_raw = parts
+        try:
+            upto = float("inf") if upto_raw == "inf" else float(upto_raw)
+            rate_pct = float(rate_raw)
+        except ValueError:
+            _die(f"--bracket UPTO:RATE_PCT must be a number (or 'inf'):number, got {raw!r}")
+        if rate_pct < 0:
+            _die(f"--bracket rate must be non-negative, got {raw!r}")
+        brackets.append((upto, rate_pct))
+    if not brackets:
+        _die("at least one --bracket is required")
+    if sum(1 for upto, _ in brackets if upto == float("inf")) != 1:
+        _die("exactly one --bracket must use 'inf' as its upper threshold")
+    if brackets[-1][0] != float("inf"):
+        _die("the 'inf' --bracket must be last")
+    prev = 0.0
+    for upto, _ in brackets:
+        if upto != float("inf") and upto <= prev:
+            _die(f"--bracket thresholds must be strictly ascending, got {upto} after {prev}")
+        prev = upto
+    return brackets
+
+
+def cmd_progressive_tax(args):
+    if args.income < 0:
+        _die("--income must be non-negative")
+    if args.surcharge < 0:
+        _die("--surcharge must be non-negative")
+    if args.flat_rate is not None and args.flat_rate < 0:
+        _die("--flat-rate must be non-negative")
+    brackets = _parse_brackets(args.bracket)
+
+    prev = 0.0
+    tax_by_bracket = []
+    base_tax = 0.0
+    for upto, rate_pct in brackets:
+        slice_top = args.income if upto == float("inf") else min(args.income, upto)
+        slice_amt = max(0.0, slice_top - prev)
+        slice_tax = slice_amt * rate_pct / 100
+        tax_by_bracket.append({
+            "upto": None if upto == float("inf") else _money(upto, args.dp),
+            "rate_pct": _pct(rate_pct),
+            "amount_in_bracket": _money(slice_amt, args.dp),
+            "tax": _money(slice_tax, args.dp),
+        })
+        base_tax += slice_tax
+        prev = upto
+        if args.income <= upto:
+            break
+
+    surcharge_amount = args.income * args.surcharge / 100
+    progressive_total = base_tax + surcharge_amount
+    result = progressive_total
+
+    out = {
+        "command": "progressive-tax",
+        "result": _money(result, args.dp),
+        "income": _money(args.income, args.dp),
+        "brackets": [
+            {"upto": None if upto == float("inf") else _money(upto, args.dp), "rate_pct": _pct(rate_pct)}
+            for upto, rate_pct in brackets
+        ],
+        "tax_by_bracket": tax_by_bracket,
+        "base_tax": _money(base_tax, args.dp),
+        "surcharge_pct": _pct(args.surcharge),
+        "surcharge_amount": _money(surcharge_amount, args.dp),
+        "progressive_total": _money(progressive_total, args.dp),
+    }
+
+    if args.flat_rate is not None:
+        flat_tax = args.income * args.flat_rate / 100
+        result = min(progressive_total, flat_tax)
+        out["result"] = _money(result, args.dp)
+        out["methods"] = {
+            "progressive": _money(progressive_total, args.dp),
+            "flat": _money(flat_tax, args.dp),
+        }
+        out["method_used"] = "flat" if flat_tax < progressive_total else "progressive"
+
+    out["effective_rate_pct"] = _pct(result / args.income * 100) if args.income > 0 else 0.0
+    return out
+
+
 def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--dp", type=int, default=2, metavar="N",
@@ -781,6 +876,17 @@ def build_parser():
     p.add_argument("--n", type=int, default=12)
     p.add_argument("--principal", type=float, default=0.0, help="Starting balance (default 0)")
     p.set_defaults(func=cmd_savings_goal)
+
+    p = sub.add_parser("progressive-tax", parents=[common], help="Tax across progressive brackets")
+    p.add_argument("--income", type=float, required=True)
+    p.add_argument("--bracket", action="append", required=True, metavar="UPTO:RATE_PCT",
+                   help="Bracket upper threshold and marginal rate %% (repeatable, e.g. 45000:16; "
+                        "top bracket uses inf:RATE)")
+    p.add_argument("--surcharge", type=float, default=0.0, metavar="PCT",
+                   help="Flat surcharge %% of income, added on top of bracket tax (default 0)")
+    p.add_argument("--flat-rate", type=float, metavar="PCT",
+                   help="Alternative flat-rate tax %% of income; result is the lower of progressive and flat")
+    p.set_defaults(func=cmd_progressive_tax)
 
     return parser
 

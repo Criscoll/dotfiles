@@ -21,8 +21,9 @@ house pattern (`currency`, `landed-cost` are the reference implementations):
   (`finance mortgage --principal 300000 --rate 6 --years 30`). Covers `mortgage`, `payoff`
   (payment or income−expenses mode, exact month-by-month simulation with extra/lump payments),
   `compound`, `pv`, `fv`, `appreciate`, `depreciate`, `cagr`, `roi`, `pct-change`, `ear`,
-  `savings-goal`. Float TVM core, money rounded to cents half-up via `decimal`. Currency-agnostic
-  (no FX). Surfaced to the agent via the `finance` skill.
+  `savings-goal`, `progressive-tax` (bracket-based tax with optional flat-rate surcharge and
+  flat-rate alternative comparison). Float TVM core, money rounded to cents half-up via
+  `decimal`. Currency-agnostic (no FX). Surfaced to the agent via the `finance` skill.
 
 ## Planned (not yet built)
 
