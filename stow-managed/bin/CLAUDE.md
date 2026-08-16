@@ -106,3 +106,18 @@ Mechanical enforcement runs via `agent_scripts/lint-file.sh`, called by both the
 
 1. Add one case arm to `agent_scripts/lint-file.sh` with a `command -v <tool>` guard
 2. No changes needed to `settings.json`, `lint-on-edit.ts`, or any other config
+
+## Testing Calculator-Style Scripts (`agent_scripts/tests/`)
+
+Scripts like `calculator` and `finance` get pytest unit tests colocated in
+`agent_scripts/tests/`, one `test_<script>.py` per script. Each test file is
+its own PEP 723 `uv run --script` (pytest pinned as a test-only dependency —
+the scripts under test stay dependency-free) and loads its target via
+`importlib.machinery.SourceFileLoader` since these scripts are extensionless
+(`importlib.util.spec_from_file_location` returns `None` without an explicit
+loader for a file with no recognized extension). Run directly:
+
+    uv run --script stow-managed/bin/agent_scripts/tests/test_calculator.py
+    uv run --script stow-managed/bin/agent_scripts/tests/test_finance.py
+
+Not wired into a hook or CI yet — run manually after changing either script.
