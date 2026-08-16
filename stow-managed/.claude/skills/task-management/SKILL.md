@@ -95,6 +95,12 @@ Structure follows this order (only `# Brief` and `# Outline` are required):
 
 Use `# Outline` (not `# Recursive Outline`) going forward.
 
+If any section cites sourced research findings inline (e.g. a `# Brief` or
+`# Details` section drawing on a linked note in `01_Notes/`), follow the
+citation-marker conventions in the `notes-management` skill — notably,
+separate adjacent markers with a space (`[1] [2]`, not `[1][2]`) so Markdown
+doesn't misparse them as a reference-style link and silently conceal one.
+
 For tasks with distinct workstreams, split the outline into `## Deep Work` and
 `## Shallow Work`. For long-horizon goals, use `## Phase 1`, `## Phase 2`, etc.
 

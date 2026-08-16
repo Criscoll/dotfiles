@@ -206,6 +206,11 @@ which sentence relies on which source; inline markers can.
 
 - Use numbered inline citation markers — `[1]`, `[2]` — placed right after the
   claim they support, in first-use order through the note.
+- **Separate adjacent markers with a space: `[1] [3] [4]`, never `[1][3][4]`.**
+  Without a space, Markdown parses `[1][3]` as a reference-style link (link
+  text `1`, reference label `3`) — Obsidian and Neovim's treesitter-based
+  markdown rendering both conceal the reference-label half, so `[1][3][4]`
+  visually renders as `14` with the middle marker silently swallowed.
 - Add a `## Sources` section at the end of the note with a matching numbered
   list: `1. [Title](URL) — accessed YYYY-MM-DD`. The number in the list must
   match the inline marker, not just be sequential by coincidence.
@@ -224,7 +229,7 @@ Example:
 ```markdown
 Bridge mode is the default Docker network driver on Linux [1]. Host mode
 skips network isolation entirely, which is faster but only safe for
-single-container setups [2].
+single-container setups [2]. Both trade off differently under load [1] [2].
 
 ## Sources
 
