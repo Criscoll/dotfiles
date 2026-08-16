@@ -221,6 +221,16 @@ financial figure is not.
 
 Skip it only for a trivial single step you'd stake your reputation on (e.g. 10% of 200).
 
+## Presenting the Result
+
+When the output will be shown to the user as more than a single figure — any comparison,
+scenario model, projection, or multi-step result, whether a chat reply or a written document —
+read `references/presenting-quantitative-results.md` first
+(`cat "$CLAUDE_SKILL_DIR/references/presenting-quantitative-results.md"`). Correct numbers
+presented in the order you computed them are hard to follow; that reference covers leading with
+the answer, marking which inputs are guesses (known/estimate/unknown), and keeping the raw
+command trail out of the reader's way.
+
 ## Not This Script — Use These Instead
 
 - **Raw arithmetic / expressions** (no financial formula) → `~/bin/agent_scripts/calculator`.

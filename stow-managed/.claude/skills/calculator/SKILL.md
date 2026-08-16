@@ -79,6 +79,15 @@ Use it for anything you'd otherwise risk getting wrong:
 Skip it only for genuine one-glance sanity checks (single-digit `2+2`). When in doubt, use it —
 loading and running the script is cheap; a wrong number is not.
 
+## Presenting the Result
+
+When you'll show the user more than a single figure — a comparison, a multi-step derivation, or a
+set of results — read the presentation standard first:
+`cat ~/.claude/skills/finance/references/presenting-quantitative-results.md`. It covers leading
+with the answer, marking which inputs are guesses (known/estimate/unknown), and keeping the raw
+command trail out of the reader's way. It lives in the `finance` skill but is unit-agnostic — the
+guidance applies to plain arithmetic results too.
+
 ## Not This Script — Use These Instead
 
 - **Currency / FX conversion** → `~/bin/agent_scripts/currency` (live + historical rates).
