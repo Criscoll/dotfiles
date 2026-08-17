@@ -253,9 +253,12 @@ or open-jaw trip — see Date Planning below), don't write the sweep loop and
 preference filters from scratch: `import _duffel_sweep` from
 `~/bin/agent_scripts/` and build the trip's sweep script on top of it. It
 holds the date-windowing, per-leg preference filtering (red-eye, layover cap,
-overnight layover, latest-arrival-day), multi-leg total summing, and the
-segment-level detail formatting that Deal-Finding below requires — a trip
-script should only need to supply its own routes, dates, and filter choices.
+overnight layover, latest-arrival-day), and the segment-level detail formatting
+that Deal-Finding below requires. By default it prices each candidate as one
+bundled multi-slice itinerary (the offer's own total, not a sum of legs); a
+`separate_tickets=True` flag falls back to independent per-leg one-way searches
+summed, for genuinely separately-booked legs only. A trip script should only
+need to supply its own routes, dates, and filter choices.
 Read the module's own docstrings and dataclass fields for the exact interface
 rather than relying on a description here going stale.
 
@@ -291,9 +294,19 @@ single fixed-date search:
   work/leave constraints can usually cut a multi-month window down to a
   handful of candidate weeks before any price search runs. Record this
   reasoning in the outline's Details section so it isn't re-derived later.
-- **Open-jaw is two one-way searches, not one round-trip search.** Most
-  flight-search tools have no native open-jaw endpoint — search the inbound
-  and outbound legs separately and sum them.
+- **Price multi-city / open-jaw / round-trip as ONE multi-slice request, not
+  a sum of one-ways.** Duffel's `offer_requests` takes a `slices` array — one
+  object per leg — and returns a single bundled offer for the whole journey.
+  Search it that way: `duffel-flight-search --slice ORIGIN:DEST:DATE --slice …`
+  for fixed dates, or the sweep's default itinerary mode (`_duffel_sweep.sweep`
+  with `separate_tickets=False`) for a flexible window. **Summing separate
+  one-way searches systematically overprices a journey booked on one ticket** —
+  airlines bundle a multi-slice fare far below the sum of its independent legs.
+  A real case here summed multi-city one-ways into a figure far above the true
+  bundled fare (~$2,698, matching Google Flights) before the itinerary search
+  was used. Deliberate exception: search a leg as its own one-way *only* when
+  it is genuinely booked independently (e.g. a budget domestic hop on a separate
+  ticket) — that's the `separate_tickets=True` fallback, not the default.
 - **Sweep candidates sparingly.** Checking every single day across a
   multi-month window is rarely worth it, whether searching manually or via a
   script — weekly or fortnightly candidates usually reveal the price trend
@@ -301,10 +314,12 @@ single fixed-date search:
   searches, confirm the tool/site can actually sustain that many requests —
   see Deal-Finding above.
 - **A scripted sweep builds on `_duffel_sweep.py`, not from scratch.** The
-  date-windowing, per-leg filters, and multi-leg summing are shared mechanics
-  now (see Deal-Finding above) — a trip's own sweep script should stay
-  limited to trip-specific config (routes, day offsets, filter choices) and a
-  short `main()` that wires the shared module's functions together.
+  date-windowing, per-leg filters, and itinerary pricing are shared mechanics
+  now (see Deal-Finding above) — the default sweep prices each candidate as one
+  bundled multi-slice offer, with `separate_tickets=True` as the fallback for
+  independently-booked legs. A trip's own sweep script should stay limited to
+  trip-specific config (routes, day offsets, filter choices) and a short
+  `main()` that wires the shared module's functions together.
 
 ## Load Reference Files When Relevant
 

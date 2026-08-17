@@ -60,9 +60,11 @@ hand-rolled API calls:
   (test/live), write scope, billing currency, and round-trip latency in one
   safe call. Run this first when setting up a new token.
 - `duffel-flight-search --from ORIGIN --to DEST --depart YYYY-MM-DD [--return YYYY-MM-DD] [--cabin ...] [--adults N] [--sort price|duration] [--json]` —
-  one-way/round-trip/multi-city (repeatable `--slice ORIGIN:DEST:DATE`)
-  search. One flat summary line per offer by default, sorted and capped at
-  `--limit` (default 20, `0` for no limit).
+  one-way/round-trip search. **For any journey with more than one leg
+  (multi-city, open-jaw, round-trip) use the repeatable `--slice ORIGIN:DEST:DATE`
+  form** — one `--slice` per leg, priced as a single bundled offer. This is the
+  correct model; do not run a search per leg and sum. One flat summary line per
+  offer by default, sorted and capped at `--limit` (default 20, `0` for no limit).
 - `duffel-offer-get OFFER_ID [--json]` — deep detail on one offer (an
   `off_...` ID from a search result) — full segment/baggage/fare-condition
   breakdown.
@@ -131,9 +133,14 @@ note below on its actual reach.)
 - **Currency is not a request parameter.** Offers come back in your
   account's billing currency (set at signup) — check `total_currency` on a
   test call rather than assuming a currency code.
-- **Open-jaw has no native endpoint** — same general rule as in
-  `SKILL.md`'s Date Planning section: search each leg as a separate one-way
-  `offer_requests` call and sum them.
+- **Multi-city and open-jaw are native — one request, not a sum of one-ways.**
+  The `slices` array models any multi-leg journey directly: one object per leg
+  (`origin`, `destination`, `departure_date`), returned as a single bundled
+  offer with one `total_amount`. Prefer this over searching each leg as its own
+  one-way and summing — a bundled multi-slice fare is systematically cheaper
+  than the sum of independent legs, so summing overprices the trip. Only search
+  a leg separately when it is genuinely booked on its own ticket (e.g. a budget
+  domestic hop) — see `SKILL.md`'s Date Planning section.
 - **Write-scoped, but not a booking.** `POST /air/offer_requests` needs a
   write-scoped token only because Duffel's REST model treats *creating the
   search itself* as creating a resource (a saved query, returned as

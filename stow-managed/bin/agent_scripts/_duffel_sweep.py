@@ -1,9 +1,19 @@
 """Shared date-sweep + preference-filter helpers for multi-leg Duffel searches.
 
 Imported by per-trip sweep scripts (e.g. a Travel_ task's flight_date_sweep.py)
-so the mechanics of sweeping a date window, picking the cheapest offer that
+so the mechanics of sweeping a date window and picking the cheapest offer that
 satisfies stated preferences (red-eye, layover cap, overnight layover, latest
-arrival day/time), and summing multi-leg totals aren't reimplemented per trip.
+arrival day/time) aren't reimplemented per trip.
+
+By default a multi-leg trip is priced as ONE multi-slice Duffel offer -- open-jaw,
+multi-city, and round-trip all model natively as a `slices` array in a single
+offer_requests call, and the candidate total is that offer's price. It is never a
+sum of independent one-ways, which systematically overprices a journey booked on
+one ticket (airlines bundle a multi-slice fare far below the sum of its legs). A
+`separate_tickets=True` fallback keeps the older per-leg one-way search + sum, for
+the narrow case of genuinely independent bookings (e.g. a budget domestic hop
+ticketed on its own).
+
 Trip-specific routes, dates, and filter choices stay in the calling script --
 this module only holds the reusable parts. Not executed directly.
 """
@@ -61,20 +71,26 @@ def candidate_dates(window_start: date, window_end: date, step_days: int) -> lis
     return dates
 
 
-def leg_summary(offer_summary: dict) -> dict:
-    sl = offer_summary["slices"][0]  # one-way search -> single slice
+def slice_summary(offer_summary: dict, i: int) -> dict:
+    """Per-leg dict for slice `i` of a (possibly multi-slice) offer.
+
+    Price is left None: for a bundled itinerary the price is offer-level, not
+    per-slice, so attributing it per leg (and summing) would overprice the trip.
+    The one-way `leg_summary` wrapper below re-attaches the offer price, which for
+    a single-slice offer legitimately IS that leg's price."""
+    sl = offer_summary["slices"][i]
     segs = sl["segments"]
     flight_numbers = "+".join(f"{seg['carrier']}{seg['flight_number']}" for seg in segs)
     layovers = []
-    for i in range(len(segs) - 1):
-        arr = datetime.fromisoformat(segs[i]["arrives"])
-        dep = datetime.fromisoformat(segs[i + 1]["departs"])
+    for j in range(len(segs) - 1):
+        arr = datetime.fromisoformat(segs[j]["arrives"])
+        dep = datetime.fromisoformat(segs[j + 1]["departs"])
         layover_min = int((dep - arr).total_seconds() // 60)
-        layovers.append((segs[i]["destination"], layover_min))
+        layovers.append((segs[j]["destination"], layover_min))
     depart_dt = datetime.fromisoformat(segs[0]["departs"])
     arrive_dt = datetime.fromisoformat(segs[-1]["arrives"])
     return {
-        "price": float(offer_summary["price"]),
+        "price": None,
         "currency": offer_summary["currency"],
         "airline_code": offer_summary["airline"],
         "airline_name": offer_summary.get("airline_name"),
@@ -88,6 +104,16 @@ def leg_summary(offer_summary: dict) -> dict:
         "arrive_dt": arrive_dt,
         "segments": segs,
     }
+
+
+def leg_summary(offer_summary: dict) -> dict:
+    """One-way single-slice offer -> leg dict, with the offer price attached (for
+    a one-way search the offer price is that leg's price). best_leg relies on the
+    price being present; the multi-slice itinerary path uses slice_summary
+    directly and keeps price offer-level."""
+    leg = slice_summary(offer_summary, 0)
+    leg["price"] = float(offer_summary["price"])
+    return leg
 
 
 def is_redeye(leg: dict, f: LegFilter) -> bool:
@@ -174,26 +200,130 @@ def best_leg(token: str, origin: str, destination: str, on: date, filters: LegFi
     return {"matched": matched, "cheapest_overall": cheapest_overall}
 
 
+def _slice_fails_filter(leg: dict, f: LegFilter) -> bool:
+    """Whether one slice (as a per-leg dict) violates its leg's filter. Mirrors
+    best_leg's predicate order: nonstop takes precedence over a layover cap."""
+    if f.require_nonstop:
+        if leg["stops"] != 0:
+            return True
+    elif f.max_layover_min is not None and exceeds_max_layover(leg, f.max_layover_min):
+        return True
+    if f.reject_redeye and is_redeye(leg, f):
+        return True
+    if f.reject_overnight_layover and has_overnight_layover(leg, f):
+        return True
+    if f.latest_arrival_weekday is not None and fails_latest_arrival(leg, f):
+        return True
+    return False
+
+
+def best_itinerary(token: str, dated_legs: list[tuple[str, str, date]],
+                   legs_filters: list[LegFilter], *,
+                   adults: int = 1, children: int = 0, infants: int = 0, cabin: str = "economy",
+                   inter_request_delay: float = 1.0) -> dict:
+    """Price a whole multi-leg trip as ONE multi-slice Duffel offer.
+
+    `dated_legs` is `[(origin, destination, date), ...]` in itinerary order;
+    `legs_filters` is the parallel list of per-leg preference filters. Builds a
+    single `slices` body, makes one offer_requests call, then tests each returned
+    offer slice-by-slice against its leg's filter -- an offer matches iff EVERY
+    slice passes. The itinerary total is the offer price, never a sum of legs.
+
+    Returns `{"matched": <itinerary|None>, "cheapest_overall": <itinerary|None>}`
+    where an itinerary is
+    `{total, currency, airline, airline_name, cabin, baggage, offer_id, per_leg:[leg_dict,...]}`.
+    """
+    passengers = (
+        [{"type": "adult"}] * adults
+        + [{"type": "child"}] * children
+        + [{"type": "infant_without_seat"}] * infants
+    )
+    body = {
+        "data": {
+            "slices": [
+                {"origin": origin, "destination": destination, "departure_date": on.isoformat()}
+                for origin, destination, on in dated_legs
+            ],
+            "passengers": passengers,
+            "cabin_class": cabin,
+        }
+    }
+    resp = _duffel.request("POST", "/air/offer_requests", token, body)
+    if inter_request_delay:
+        time.sleep(inter_request_delay)
+
+    offers = resp.get("data", {}).get("offers", [])
+    if not offers:
+        return {"matched": None, "cheapest_overall": None}
+
+    itineraries = []
+    for o in offers:
+        summary = _duffel.build_offer_summary(o)
+        per_leg = [slice_summary(summary, i) for i in range(len(dated_legs))]
+        itineraries.append({
+            "total": float(summary["price"]),
+            "currency": summary["currency"],
+            "airline": summary["airline"],
+            "airline_name": summary.get("airline_name"),
+            "cabin": summary.get("cabin"),
+            "baggage": summary.get("baggage"),
+            "offer_id": summary["id"],
+            "per_leg": per_leg,
+        })
+    cheapest_overall = min(itineraries, key=lambda it: it["total"])
+
+    def itinerary_ok(it: dict) -> bool:
+        return not any(
+            _slice_fails_filter(leg, f) for leg, f in zip(it["per_leg"], legs_filters)
+        )
+
+    candidates = [it for it in itineraries if itinerary_ok(it)]
+    matched = min(candidates, key=lambda it: it["total"]) if candidates else None
+    return {"matched": matched, "cheapest_overall": cheapest_overall}
+
+
 def sweep(token: str, anchor_dates: list[date], legs: list[LegSpec], *,
           adults: int = 1, children: int = 0, infants: int = 0, cabin: str = "economy",
-          inter_request_delay: float = 1.0) -> list[dict]:
-    """Run best_leg for every (anchor date x leg) pair. Each leg's actual date
-    is anchor + leg.offset_days -- e.g. offset_days=0 for the outbound leg,
-    offset_days=10 for a return leg 10 days later."""
+          inter_request_delay: float = 1.0, separate_tickets: bool = False) -> list[dict]:
+    """Price each anchor's trip and return a ranked-ready result per anchor. Each
+    leg's actual date is anchor + leg.offset_days -- e.g. offset_days=0 for the
+    outbound leg, offset_days=10 for a return leg 10 days later.
+
+    Default (separate_tickets=False): one multi-slice best_itinerary call per
+    anchor, so the candidate total is the single bundled offer price (one API call
+    per anchor). This is the right model for a multi-city / open-jaw / round-trip
+    journey booked on one ticket.
+
+    Fallback (separate_tickets=True): the old per-(anchor x leg) best_leg loop,
+    summing independent one-way legs -- only for genuinely independent bookings
+    (e.g. a budget domestic hop ticketed separately)."""
     results = []
     for anchor in anchor_dates:
-        leg_results = {}
-        for leg in legs:
-            on = anchor + timedelta(days=leg.offset_days)
-            leg_results[leg.label] = {
-                "date": on,
-                **best_leg(token, leg.origin, leg.destination, on, leg.filters,
-                           adults=adults, children=children, infants=infants, cabin=cabin,
-                           inter_request_delay=inter_request_delay),
-            }
-        legs_ok = all(r["matched"] is not None for r in leg_results.values())
-        total = sum(r["matched"]["price"] for r in leg_results.values()) if legs_ok else None
-        results.append({"anchor": anchor, "legs": leg_results, "total": total})
+        leg_dates = {leg.label: anchor + timedelta(days=leg.offset_days) for leg in legs}
+        if separate_tickets:
+            leg_results = {}
+            for leg in legs:
+                on = leg_dates[leg.label]
+                leg_results[leg.label] = {
+                    "date": on,
+                    **best_leg(token, leg.origin, leg.destination, on, leg.filters,
+                               adults=adults, children=children, infants=infants, cabin=cabin,
+                               inter_request_delay=inter_request_delay),
+                }
+            legs_ok = all(r["matched"] is not None for r in leg_results.values())
+            total = sum(r["matched"]["price"] for r in leg_results.values()) if legs_ok else None
+            results.append({"anchor": anchor, "separate_tickets": True,
+                            "leg_dates": leg_dates, "legs": leg_results, "total": total})
+        else:
+            dated_legs = [(leg.origin, leg.destination, leg_dates[leg.label]) for leg in legs]
+            legs_filters = [leg.filters for leg in legs]
+            itinerary = best_itinerary(token, dated_legs, legs_filters,
+                                       adults=adults, children=children, infants=infants, cabin=cabin,
+                                       inter_request_delay=inter_request_delay)
+            matched = itinerary["matched"]
+            results.append({"anchor": anchor, "separate_tickets": False,
+                            "leg_dates": leg_dates, "itinerary": itinerary,
+                            "total": matched["total"] if matched else None})
     return results
 
 
@@ -260,21 +390,61 @@ def format_leg_detail(leg: dict | None, indent: str = "    ") -> str:
         if i < len(segs) - 1:
             airport, minutes = leg["layovers"][i]
             lines.append(f"{indent}  -- layover: {airport}, {minutes // 60}h{minutes % 60:02d}m --")
-    lines.append(f"{indent}{leg['airline_name'] or leg['airline_code']} | cabin: {leg['cabin']} | "
-                  f"baggage: {leg['baggage']} | price: {leg['price']:.0f} {leg['currency']}")
+    # For a bundled itinerary the price is offer-level (leg price is None), so the
+    # airline/cabin/baggage/price line is printed once at itinerary level instead.
+    if leg["price"] is not None:
+        lines.append(f"{indent}{leg['airline_name'] or leg['airline_code']} | cabin: {leg['cabin']} | "
+                      f"baggage: {leg['baggage']} | price: {leg['price']:.0f} {leg['currency']}")
     return "\n".join(lines)
+
+
+def _print_itinerary_detail(r: dict, legs: list[LegSpec]) -> None:
+    """Detail block for a default (bundled itinerary) candidate: the single
+    itinerary total + airline/cabin/baggage once, then each leg's segments."""
+    itinerary = r["itinerary"]
+    matched = itinerary["matched"]
+    if matched is not None:
+        print(f"  {matched['airline_name'] or matched['airline']} | cabin: {matched['cabin']} | "
+              f"baggage: {matched['baggage']} | itinerary total: {matched['total']:.0f} {matched['currency']}")
+        for leg, leg_dict in zip(legs, matched["per_leg"]):
+            print(f"  {leg.label} ({leg.origin}-{leg.destination}):")
+            print(format_leg_detail(leg_dict))
+        return
+    fallback = itinerary["cheapest_overall"]
+    if fallback is None:
+        print("  no offers returned")
+        return
+    print(f"  (cheapest itinerary overall, fails filters) "
+          f"{fallback['airline_name'] or fallback['airline']} | cabin: {fallback['cabin']} | "
+          f"baggage: {fallback['baggage']} | itinerary total: {fallback['total']:.0f} {fallback['currency']}")
+    for leg, leg_dict in zip(legs, fallback["per_leg"]):
+        print(f"  {leg.label} ({leg.origin}-{leg.destination}):")
+        print(format_leg_detail(leg_dict))
+
+
+def _print_separate_tickets_detail(r: dict, legs: list[LegSpec]) -> None:
+    """Detail block for a separate-tickets candidate: one priced one-way leg at a
+    time (each leg carries its own price)."""
+    for leg in legs:
+        leg_result = r["legs"][leg.label]
+        print(f"  {leg.label} ({leg.origin}-{leg.destination}):")
+        print(format_leg_detail(leg_result["matched"]))
+        if leg_result["matched"] is None and leg_result["cheapest_overall"] is not None:
+            print("    (cheapest overall, fails filters):")
+            print(format_leg_detail(leg_result["cheapest_overall"], indent="      "))
 
 
 def print_sweep_report(results: list[dict], legs: list[LegSpec], *,
                         currency_label: str = "AUD", passenger_label: str = "") -> None:
     """Rank candidates cheapest-first and print a summary line per candidate
-    followed by a full per-leg breakdown. `passenger_label` is a free-text
-    suffix for the total line, e.g. "2 adults" -- leave blank to omit."""
-    ranked = sorted(results, key=lambda r: (r["total"] is None, r["total"]))
+    followed by a full per-leg breakdown. Handles both sweep shapes: the default
+    bundled-itinerary total and the separate-tickets summed total. `passenger_label`
+    is a free-text suffix for the total line, e.g. "2 adults" -- leave blank to omit."""
+    ranked = sorted(results, key=lambda r: (r["total"] is None, r["total"] or 0))
     total_suffix = f" ({passenger_label})" if passenger_label else ""
 
     def date_parts(r):
-        return " | ".join(f"{leg.label} {r['legs'][leg.label]['date'].isoformat()}" for leg in legs)
+        return " | ".join(f"{leg.label} {r['leg_dates'][leg.label].isoformat()}" for leg in legs)
 
     print("Summary (Option ID cross-references the detailed breakdown below):")
     for i, r in enumerate(ranked):
@@ -286,10 +456,7 @@ def print_sweep_report(results: list[dict], legs: list[LegSpec], *,
         opt = chr(ord("A") + i)
         total_desc = f"{r['total']:.0f}" if r["total"] is not None else "N/A (no matching offer on one or more legs)"
         print(f"\n=== Option {opt}: {date_parts(r)} | Total {currency_label}{total_suffix}: {total_desc} ===")
-        for leg in legs:
-            leg_result = r["legs"][leg.label]
-            print(f"  {leg.label} ({leg.origin}-{leg.destination}):")
-            print(format_leg_detail(leg_result["matched"]))
-            if leg_result["matched"] is None and leg_result["cheapest_overall"] is not None:
-                print("    (cheapest overall, fails filters):")
-                print(format_leg_detail(leg_result["cheapest_overall"], indent="      "))
+        if r.get("separate_tickets"):
+            _print_separate_tickets_detail(r, legs)
+        else:
+            _print_itinerary_detail(r, legs)
