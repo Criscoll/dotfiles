@@ -32,7 +32,7 @@ Before implementing any pattern, check whether an existing extension already sol
 | Custom footer bar (model, tokens, cost) | `context-ui.ts` |
 | Tool call interception / block dangerous commands | `dangerous-commands.ts` |
 | Intercept and warn (but allow) inefficient commands | `inefficient-commands.ts` |
-| Streaming tool that calls a subprocess | `web-search.ts` |
+| Streaming tool that calls a subprocess | `subagent.ts` |
 | CRUD tool + `/todos` command with UI | `todos.ts` |
 | Desktop notifications via OSC sequences | `notify-ready.ts` |
 

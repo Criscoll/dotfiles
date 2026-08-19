@@ -34,7 +34,7 @@ webcrawl https://example.com --raw                    # unfiltered markdown (see
 
 **Agentic navigation pattern:** fetch with `--json --links`, read `links.internal` to pick the next URL, repeat.
 
-**Research pattern:** `WebSearch` to find URLs → `webcrawl` to fetch full content of the best hits.
+**Research pattern:** **web-search** skill to find URLs → `webcrawl` to fetch full content of the best hits.
 
 ## Content Filtering and `--raw`
 
@@ -58,10 +58,10 @@ Use `webcrawl --raw` when you need the full page context (description, specs, re
 Use `webcrawl` for: articles, docs, blog posts, JS-rendered SPAs, pages with bot-detection.
 
 Do NOT use for:
-- **Visual tasks** (screenshots, layout checks, local dev servers) → use **web-scrape** skill instead
+- **Visual tasks** (screenshots, layout checks, local dev servers) → use **browser-inspect** skill instead
 - Raw JSON API calls → use `curl`
 - File downloads (PDFs, ZIPs) → use `curl`
-- Login flows, form submission, mouse interaction → use **web-scrape** skill
+- Login flows, form submission, mouse interaction → use **browser-inspect** skill
 
 Never fall back to `WebFetch`, `curl`, `wget`, or MCP crawling tools for page content.
 

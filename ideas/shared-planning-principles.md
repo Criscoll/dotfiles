@@ -60,7 +60,7 @@ The two harnesses are separate trees with no shared parent except `~`, so any sh
 lives in one tree and is read cross-tree by the other — there is no perfectly neutral home.
 deep-plan already has a `references/` directory with an established `cat`-to-load convention
 and is the canonical/deeper artifact, so it is the natural owner. Cross-tree reads are
-already used in this repo (`web-search.ts` → `~/bin/agent_scripts/`), so this is consistent
+already used in this repo (`subagent.ts` → `~/bin/agent_scripts/`), so this is consistent
 with conventions.
 
 ### Why a short fallback, not a full inline copy
@@ -77,7 +77,7 @@ inline-plan's directive degrades to the leaner reminder rather than the full pri
   `stow-managed/.pi`) — `readFileSync` at runtime is the only way to pull external text into
   the directive string.
 - Runtime reads from `homedir()`-relative paths are already an established pattern
-  (`prompt-history.ts:54`, `subagent.ts:87`, `web-search.ts:13`).
+  (`prompt-history.ts:54`, `subagent.ts:87`).
 - The shared content is **planning-time guidance**, not content the downstream executor needs
   verbatim — so it doesn't need to be physically copied into `PLAN.md`; it guides how the
   verification section is written.

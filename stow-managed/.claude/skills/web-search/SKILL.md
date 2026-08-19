@@ -14,6 +14,11 @@ Search the web using `~/bin/agent_scripts/websearch`, which manages a persistent
 SearXNG Docker container (starts on first use, stays running). Do not use the
 built-in `WebSearch` tool or `WebFetch` when this is available.
 
+Search results are titles and snippets only — not usable content. After every
+search, invoke the **web-crawl** skill to fetch full page content from the
+best hits before answering. Do not stop at the results list, and do not shell
+out to `webcrawl` directly without going through the skill.
+
 **Prerequisite:** Docker at `/usr/bin/docker`. The script manages the container
 lifecycle automatically — no manual Docker steps needed.
 
@@ -74,14 +79,15 @@ JSON array on stdout; diagnostic messages on stderr:
 ]
 ```
 
-**Typical follow-up:** feed the best URLs into `webcrawl` for full page content:
+**Typical follow-up:** feed the best URLs into the **web-crawl** skill for full
+page content:
 
 ```bash
 # 1. Search for relevant pages
 ~/bin/agent_scripts/websearch "asyncio event loop internals" > /tmp/search.json
 
-# 2. Fetch full content from the best result
-webcrawl "https://docs.python.org/3/library/asyncio-eventloop.html"
+# 2. Invoke the web-crawl skill to fetch full content from the best result(s)
+#    → use web-crawl skill on "https://docs.python.org/3/library/asyncio-eventloop.html"
 ```
 
 ## Startup Time and Parallel Searches
@@ -112,7 +118,7 @@ Use `websearch` for:
 
 Do NOT use for:
 - Fetching a specific known URL → use `webcrawl` directly
-- Visual inspection of rendered pages → use **web-scrape** skill
+- Visual inspection of rendered pages → use **browser-inspect** skill
 - Local file search → use `rg` or `fd`
 
 ## Docker Prerequisite
