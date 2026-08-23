@@ -15,6 +15,7 @@ The job here is to present it in the order the reader *needs*.
 - Canonical document skeleton (multi-scenario comparison)
 - Inline-response variant (chat replies)
 - Confidence tagging
+- The modelling-inputs table
 - Named anti-patterns
 - Checklist before you hand it over
 
@@ -72,8 +73,11 @@ answer sinks. Each section below names *why* it sits where it does.
    figure, and a `vs baseline` delta. Order rows by magnitude or by the decision's logic, not by
    the order you computed them. Exactly one such table — not three near-duplicates.
 
-4. **Certain vs assumed** — the load-bearing inputs, each tagged Known / Estimate / Unknown (a
-   Confidence column). Put the guesses where they can't be missed; they carry the risk.
+4. **Modelling inputs — what was and wasn't considered** — the load-bearing inputs, each
+   classified Known / Fixed / Variable / Unknown / Excluded, with `Cases considered` and
+   `Not considered` columns. Puts the guesses where they can't be missed *and* makes the model's
+   boundary auditable: a future reader can see what was held fixed and what was never explored.
+   See *The modelling-inputs table*.
 
 5. **The model** — the single source-of-truth building blocks (each derived figure stated once,
    with a one-line "where it comes from"), and the governing method or rule stated up front
@@ -133,6 +137,55 @@ Inline (in prose or a chat reply), a short parenthetical does the same job: "the
 (estimate — actual disclosed Jan 2027)". The reader should always be able to tell a load-bearing
 guess from a fact.
 
+## The modelling-inputs table
+
+Confidence tagging answers *"how sure are we of this number?"* A model also needs to answer
+*"how did this input enter the model, and what wasn't explored?"* — so a future reader (often
+another agent re-running the model) can see the **boundary of what was considered**, not just the
+trust level of each figure. For any model with more than a handful of load-bearing inputs, make
+this its own table. It **replaces** the plain Known/Estimate/Unknown inputs table — don't run both
+(that's the duplicated-tables anti-pattern).
+
+Classify every load-bearing input into one of five classes:
+
+- **Known** — a confirmed fact (cite the source).
+- **Fixed** — a structural assumption *deliberately held constant*: a chosen ruleset, timing, or
+  cost convention. Not a fact, but not flexed either — the model is conditional on it. These are
+  the ones that hide in prose and look like facts to a re-runner; give each its own row.
+- **Variable** — flexed across explicit cases or a sensitivity band (the scenarios the model
+  actually explored). Add "(estimate)" when the point value is itself a guess.
+- **Unknown** — not yet pinned; kept out of the headline and modelled separately or flagged,
+  never silently folded in.
+- **Excluded** — deliberately outside the cash figures (noted qualitatively — one-off costs,
+  second-order effects), so the model's edge is auditable rather than silently absent.
+
+Give it two columns beyond the value: **Cases considered** (what was actually modelled — "both 2yr
+and 3yr", "single point estimate") and **Not considered** (what a re-run might want but this model
+skipped — "no ± band run", "rate changes over term"). That second column is the whole point: it
+makes the unexplored edges explicit instead of invisible.
+
+A compact illustration (drop columns that don't earn their place):
+
+```markdown
+_Class: Known (fact) · Fixed (held constant) · Variable (flexed across cases) ·
+Unknown (pending) · Excluded (outside the cash figures)._
+
+| Factor              | Class              | Value / range modelled        | Cases considered     | Not considered                    |
+|---------------------|--------------------|-------------------------------|----------------------|-----------------------------------|
+| Base salary         | Known              | A$200,000                     | single value         | pay rises over term               |
+| Tax ruleset         | Fixed              | FY27-28 brackets, 2% levy     | one ruleset          | future rate changes               |
+| Contract length     | Variable           | 2 yr / 3 yr                   | both modelled        | 1-yr or >3-yr                     |
+| Annual bonus        | Variable (est.)    | ~A$400k each                  | single point estimate| no ± band run                     |
+| Deferred bonus      | Unknown            | amount TBD                    | excluded from headline| precise vesting-date tax          |
+| Relocation costs    | Excluded           | ~A$15–25k one-off             | listed qualitatively | not in annual cash deltas         |
+```
+
+Why five classes and not just the three confidence tags: the plain Known/Estimate/Unknown split
+hides the two things that most often bite a future modeller — the **Fixed** structural choices
+(which read like facts but are conditional) and the **Excluded** items (which read as absent but
+were a deliberate call). Surfacing both is what lets someone re-running the model tell "considered
+and held constant" apart from "never considered at all".
+
 ## Named anti-patterns
 
 These are the failure modes that make a numerically-correct document unreadable. Each maps to a
@@ -148,6 +201,12 @@ principle above.
   (Principle 5)
 - **Unmarked guesses** — a guessed bonus formatted identically to a known salary, so the reader
   over-trusts a conclusion that rests on a guess. (Principle 3)
+- **Invisible fixed assumptions** — a chosen ruleset, timing, or convention stated only in the
+  model narrative, so a re-runner can't tell it was a deliberate constant rather than a fact. Give
+  it a **Fixed** row. (The modelling-inputs table)
+- **Silent exclusions** — a cost or effect left out of the cash figures with no trace, so the
+  model's boundary is invisible and a re-run can't tell it was a deliberate call. Give it an
+  **Excluded** row. (The modelling-inputs table)
 - **Buried methodology** — the rule that makes the comparison valid introduced as a footnote or
   a changelog item instead of stated up front. (Principle 5 of the skeleton / model section)
 - **Duplicated tables with drift** — the same scenarios computed two or three times with small
@@ -164,7 +223,8 @@ principle above.
 
 - [ ] The recommendation and the top scenarios are legible on the first screen, with no
       changelog or command block above them.
-- [ ] Every load-bearing number is tagged Known / Estimate / Unknown.
+- [ ] Every load-bearing input is classified Known / Fixed / Variable / Unknown / Excluded, with
+      what was and wasn't modelled for each (the modelling-inputs table).
 - [ ] No superseded numbers or changelog in the live document.
 - [ ] Script invocations are in the audit trail, not interleaved with the prose.
 - [ ] Each scenario/sensitivity appears in exactly one canonical table.
