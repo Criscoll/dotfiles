@@ -237,6 +237,93 @@ class TestEar:
         assert exc_info.value.code == 2
 
 
+class TestIrrHelper:
+    def test_matches_hand_computed_two_period_case(self):
+        irr = finance._irr({0: -1000.0, 1: 1100.0})
+        assert irr == pytest.approx(0.10, abs=1e-6)
+
+    def test_multi_period_case_zeroes_npv_at_irr(self):
+        cashflows = {0: -10000.0, 1: 3000.0, 2: 3000.0, 3: 3000.0, 4: 3000.0}
+        irr = finance._irr(cashflows)
+        assert finance._npv_at(irr, cashflows) == pytest.approx(0.0, abs=1e-6)
+
+
+class TestReal:
+    def test_deflation_mode_known_value(self):
+        result = run_cmd("real", "--amount", "100000", "--inflation", "3", "--years", "20")
+        expected = 100000 / (1.03 ** 20)
+        assert result["real_value"] == pytest.approx(expected, abs=0.01)
+
+    def test_real_rate_mode_fisher_equation(self):
+        result = run_cmd("real", "--rate", "7", "--inflation", "3")
+        expected = ((1.07 / 1.03) - 1) * 100
+        assert result["real_rate_pct"] == pytest.approx(expected, abs=1e-4)
+
+    def test_both_modes_given_is_an_error(self):
+        with pytest.raises(SystemExit) as exc_info:
+            run_cmd("real", "--amount", "100000", "--years", "20", "--rate", "7", "--inflation", "3")
+        assert exc_info.value.code == 2
+
+    def test_neither_mode_given_is_an_error(self):
+        with pytest.raises(SystemExit) as exc_info:
+            run_cmd("real", "--inflation", "3")
+        assert exc_info.value.code == 2
+
+
+class TestCompoundInflation:
+    def test_inflation_flag_adds_real_future_value(self):
+        result = run_cmd(
+            "compound", "--principal", "10000", "--rate", "7", "--years", "20", "--inflation", "3"
+        )
+        expected_real = result["future_value"] / (1.03 ** 20)
+        assert result["real_future_value"] == pytest.approx(expected_real, abs=0.01)
+
+    def test_omitting_inflation_leaves_output_unchanged(self):
+        result = run_cmd("compound", "--principal", "10000", "--rate", "7", "--years", "20")
+        assert "real_future_value" not in result
+        assert "inflation_pct" not in result
+
+
+class TestNpv:
+    def test_known_cashflow_stream(self):
+        result = run_cmd(
+            "npv", "--rate", "8",
+            "--cashflow", "-10000@0", "--cashflow", "3000@1", "--cashflow", "3000@2",
+            "--cashflow", "3000@3", "--cashflow", "3000@4",
+        )
+        expected = sum(cf / (1.08 ** t) for t, cf in {0: -10000, 1: 3000, 2: 3000, 3: 3000, 4: 3000}.items())
+        assert result["npv"] == pytest.approx(expected, abs=0.01)
+
+    def test_requires_at_least_one_cashflow(self):
+        with pytest.raises(SystemExit):
+            run_cmd("npv", "--rate", "8")
+
+
+class TestIrr:
+    def test_known_two_cashflow_case(self):
+        result = run_cmd("irr", "--cashflow", "-1000@0", "--cashflow", "1100@1")
+        assert result["irr_pct"] == pytest.approx(10.0, abs=1e-4)
+
+    def test_known_multi_period_case(self):
+        result = run_cmd(
+            "irr",
+            "--cashflow", "-10000@0", "--cashflow", "3000@1", "--cashflow", "3000@2",
+            "--cashflow", "3000@3", "--cashflow", "3000@4",
+        )
+        assert result["irr_pct"] == pytest.approx(7.71, abs=0.02)
+        assert result["npv_at_irr"] == pytest.approx(0.0, abs=0.01)
+
+    def test_all_positive_cashflows_is_an_error(self):
+        with pytest.raises(SystemExit) as exc_info:
+            run_cmd("irr", "--cashflow", "100@0", "--cashflow", "100@1")
+        assert exc_info.value.code == 2
+
+    def test_fewer_than_two_cashflows_is_an_error(self):
+        with pytest.raises(SystemExit) as exc_info:
+            run_cmd("irr", "--cashflow", "-1000@0")
+        assert exc_info.value.code == 2
+
+
 class TestSavingsGoal:
     def test_happy_path(self):
         result = run_cmd("savings-goal", "--target", "10000", "--rate", "5", "--years", "5", "--n", "12")

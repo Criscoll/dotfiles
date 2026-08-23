@@ -13,7 +13,9 @@ description: >-
   payment", "loan", "how long to pay off", "compound interest", "future value",
   "present value", "how much will it be worth", "depreciation", "book value",
   "CAGR", "growth rate", "ROI", "APR", "EAR", "effective rate", "savings goal",
-  "progressive tax", "tax brackets", "marginal rate".
+  "progressive tax", "tax brackets", "marginal rate", "inflation", "real terms",
+  "today's money", "purchasing power", "net present value", "NPV", "IRR",
+  "internal rate of return", "discount rate".
   Currency/FX is separate — use the currency and landed-cost scripts.
 disable-model-invocation: false
 ---
@@ -122,6 +124,10 @@ interest, principal, offset) for showing the trajectory, not just the aggregates
 `result` = future value; also `total_contributions`, `interest_earned`. `--contribution` is a
 recurring deposit per period; `--timing begin` for deposits at the start of each period.
 
+Add `--inflation PCT` to deflate the headline future value into today's money — every
+projection above is nominal by default and silently overstates the real outcome at longer
+horizons or higher rates. Adds `inflation_pct`, `real_future_value`, and `real_interest`.
+
 ### `fv` / `pv` — future & present value
 
 ```bash
@@ -130,7 +136,8 @@ recurring deposit per period; `--timing begin` for deposits at the start of each
 ```
 
 `fv` is a thin framing over the compounding core; `pv` is its inverse (what a future sum is
-worth today). Both take an optional `--payment` annuity and `--n`.
+worth today). Both take an optional `--payment` annuity and `--n`. `fv` also takes
+`--inflation PCT` (see `compound` above) to add `real_future_value`.
 
 ### `appreciate` — asset appreciation
 
@@ -139,7 +146,30 @@ worth today). Both take an optional `--payment` annuity and `--n`.
 ```
 
 `result` = appreciated value; also `total_gain`, `total_gain_pct`. Defaults to annual
-compounding (`--n 1`).
+compounding (`--n 1`). Add `--inflation PCT` for `real_final_value` and `real_gain`.
+
+### `real` — inflation-adjusted value or rate
+
+Two modes, picked by which inputs you give — `--inflation PCT` is required either way.
+
+Deflation mode: what a future nominal amount is worth in today's money.
+
+```bash
+~/bin/agent_scripts/finance real --amount 100000 --inflation 3 --years 20
+```
+
+`result`/`real_value` = the deflated amount; also `purchasing_power_pct` (how much of the
+original buying power survives) and `purchasing_power_lost`.
+
+Real-rate mode (Fisher equation): the inflation-adjusted version of a nominal rate — omit
+`--amount`/`--years`, pass `--rate` instead.
+
+```bash
+~/bin/agent_scripts/finance real --rate 7 --inflation 3
+```
+
+`result`/`real_rate_pct` = `((1+rate)/(1+inflation) − 1)`. Use this to sanity-check whether a
+quoted investment/loan rate actually beats inflation.
 
 ### `depreciate` — asset depreciation schedule
 
@@ -167,6 +197,38 @@ includes the full per-year `schedule`. Declining-balance floors book value at sa
 
 `result` = ROI %; pass `--gain` instead of `--final-value` if you know the net profit. With
 `--years` it also returns `annualized_roi_pct`.
+
+`roi`/`cagr` assume a single start→end value at even timing. For irregular, dated cashflows
+(an investment property, a lump-sum-vs-payments offer, signing bonuses/vesting), use `npv`/`irr`
+instead.
+
+### `npv` — net present value of a cashflow stream
+
+Repeatable `--cashflow AMT@PERIOD`: period `0` = today, negative = outflow, positive = inflow.
+`--n` sets cashflow periods per year (default `1` = annual); `--rate` is the annual discount
+rate, applied at the per-period rate `rate/n`.
+
+```bash
+~/bin/agent_scripts/finance npv --rate 8 \
+  --cashflow -10000@0 --cashflow 3000@1 --cashflow 3000@2 --cashflow 3000@3 --cashflow 3000@4
+```
+
+`result`/`npv` = sum of discounted cashflows; also `sum_undiscounted`, `num_cashflows`. Negative
+`npv` means the stream doesn't clear the discount rate; positive means it beats it.
+
+### `irr` — internal rate of return of a cashflow stream
+
+Same `--cashflow AMT@PERIOD` / `--n` inputs as `npv` (no `--rate` — IRR solves for it). Needs
+at least one outflow and one inflow among the cashflows.
+
+```bash
+~/bin/agent_scripts/finance irr \
+  --cashflow -10000@0 --cashflow 3000@1 --cashflow 3000@2 --cashflow 3000@3 --cashflow 3000@4
+```
+
+`result`/`irr_pct` = the annualized rate that zeroes NPV; also `npv_at_irr` (≈0, a sanity
+check) and `irr_period_pct` when `--n` isn't `1`. All-positive or all-negative cashflow streams
+error (exit `2`) — IRR is undefined without both a cost and a return.
 
 ### `pct-change` — percentage change
 

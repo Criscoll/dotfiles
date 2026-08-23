@@ -7,8 +7,17 @@
 
 import argparse
 import json
+import re
 import sys
 from decimal import ROUND_HALF_UP, Decimal
+
+# argparse's default negative-number heuristic (`^-\d+$|^-\d*\.\d+$`) doesn't match
+# our AMT@PERIOD cashflow tokens (e.g. "-10000@0"), so it treats them as unknown
+# option strings instead of values. Widening the matcher on the npv/irr subparsers
+# (superset of the default, plus AMT@PERIOD) lets `--cashflow -10000@0` parse
+# without forcing users to the `--cashflow=...` form, while still allowing a plain
+# negative number for --rate/--n on those same subparsers.
+_CASHFLOW_MATCHER = re.compile(r"^-\d+$|^-\d*\.\d+$|^-\d+(\.\d+)?@\d+$")
 
 # Compounding / pay periods per year, keyed by frequency name.
 PERIODS_PER_YEAR = {"monthly": 12, "fortnightly": 26, "weekly": 52}
@@ -41,6 +50,14 @@ def _money(x, dp=2):
 def _pct(x):
     """Round a rate/percentage to 6 dp — enough resolution for basis points."""
     return round(x, 6)
+
+
+def _inflation_fraction(inflation_pct):
+    """Validate --inflation and return it as a fraction (pi = inflation/100)."""
+    pi = inflation_pct / 100
+    if 1 + pi <= 0:
+        _die("--inflation implies non-positive (1 + inflation); must be greater than -100")
+    return pi
 
 
 # --- Core time-value-of-money helpers (shared across subcommands) -------------
@@ -84,6 +101,55 @@ def _pmt(pv, i, n):
     if i == 0:
         return pv / n
     return pv * i / (1 - (1 + i) ** -n)
+
+
+def _npv_at(x, cashflows):
+    """NPV of a {period: amount} cashflow dict at per-period discount rate `x`."""
+    return sum(cf / (1 + x) ** t for t, cf in cashflows.items())
+
+
+def _irr(cashflows):
+    """Per-period IRR: the `x` that zeroes `_npv_at(x, cashflows)`.
+
+    Newton's method can diverge or oscillate on cashflow streams with sign changes
+    that aren't a single clean crossing, so this brackets first: scan a coarse grid
+    over the valid domain (x > -1) for the first sign change of `_npv_at`, then
+    bisect within that bracket to a tight tolerance. Slower than Newton but always
+    converges when a root exists in the searched range.
+    """
+    if len(cashflows) < 2:
+        _die("IRR requires at least 2 cashflows")
+    amounts = list(cashflows.values())
+    if not any(a > 0 for a in amounts) or not any(a < 0 for a in amounts):
+        _die("IRR requires at least one inflow and one outflow")
+
+    lo_bound, hi_bound, steps = -0.9999, 100.0, 4000
+    prev_x = lo_bound
+    prev_npv = _npv_at(prev_x, cashflows)
+    bracket = None
+    for k in range(1, steps + 1):
+        x = lo_bound + (hi_bound - lo_bound) * k / steps
+        npv = _npv_at(x, cashflows)
+        if (prev_npv < 0) != (npv < 0):
+            bracket = (prev_x, x)
+            break
+        prev_x, prev_npv = x, npv
+    if bracket is None:
+        _die("no IRR found in the searched range — check for multiple or no sign changes")
+
+    lo, hi = bracket
+    f_lo = _npv_at(lo, cashflows)
+    mid = lo
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        f_mid = _npv_at(mid, cashflows)
+        if abs(f_mid) < 1e-9 or (hi - lo) < 1e-12:
+            return mid
+        if (f_lo < 0) == (f_mid < 0):
+            lo, f_lo = mid, f_mid
+        else:
+            hi = mid
+    return mid
 
 
 def _run_payoff(loan, rate_at, payment, extra, lumps,
@@ -222,6 +288,28 @@ def _parse_lumps(values):
             _die(f"--lump amount and period must be positive, got {raw!r}")
         lumps[period] = lumps.get(period, 0.0) + amount
     return lumps
+
+
+def _parse_cashflows(values):
+    """Parse repeated --cashflow AMT@PERIOD flags into {period: total_amount}.
+
+    Unlike _parse_lumps, amounts may be negative (outflows) and period 0 (today) is
+    allowed — this models a dated cashflow stream, not loan lump payments.
+    """
+    cashflows: dict[int, float] = {}
+    for raw in values or []:
+        parts = raw.split("@")
+        if len(parts) != 2:
+            _die(f"--cashflow must be AMT@PERIOD (e.g. -10000@0), got {raw!r}")
+        try:
+            amount = float(parts[0])
+            period = int(parts[1])
+        except ValueError:
+            _die(f"--cashflow AMT@PERIOD must be number@integer, got {raw!r}")
+        if period < 0:
+            _die(f"--cashflow PERIOD must be non-negative, got {raw!r}")
+        cashflows[period] = cashflows.get(period, 0.0) + amount
+    return cashflows
 
 
 def _parse_rate_steps(values, ppy):
@@ -406,7 +494,7 @@ def cmd_compound(args):
     fv = _fv(args.principal, args.contribution, i, periods, args.timing)
     total_contributions = args.contribution * periods
     interest = fv - args.principal - total_contributions
-    return {
+    out = {
         "command": "compound",
         "result": _money(fv, args.dp),
         "future_value": _money(fv, args.dp),
@@ -420,6 +508,13 @@ def cmd_compound(args):
         "total_contributions": _money(total_contributions, args.dp),
         "interest_earned": _money(interest, args.dp),
     }
+    if args.inflation is not None:
+        pi = _inflation_fraction(args.inflation)
+        real_fv = fv / (1 + pi) ** args.years
+        out["inflation_pct"] = _pct(args.inflation)
+        out["real_future_value"] = _money(real_fv, args.dp)
+        out["real_interest"] = _money(real_fv - args.principal - total_contributions, args.dp)
+    return out
 
 
 def cmd_pv(args):
@@ -455,7 +550,7 @@ def cmd_fv(args):
     i = (args.rate / 100) / args.n
     periods = round(args.years * args.n)
     fv = _fv(args.present_value, args.payment, i, periods, args.timing)
-    return {
+    out = {
         "command": "fv",
         "result": _money(fv, args.dp),
         "future_value": _money(fv, args.dp),
@@ -467,6 +562,11 @@ def cmd_fv(args):
         "num_periods": periods,
         "timing": args.timing,
     }
+    if args.inflation is not None:
+        pi = _inflation_fraction(args.inflation)
+        out["inflation_pct"] = _pct(args.inflation)
+        out["real_future_value"] = _money(fv / (1 + pi) ** args.years, args.dp)
+    return out
 
 
 def cmd_appreciate(args):
@@ -480,7 +580,7 @@ def cmd_appreciate(args):
     periods = round(args.years * args.n)
     final = args.value * (1 + i) ** periods
     gain = final - args.value
-    return {
+    out = {
         "command": "appreciate",
         "result": _money(final, args.dp),
         "final_value": _money(final, args.dp),
@@ -491,6 +591,47 @@ def cmd_appreciate(args):
         "total_gain": _money(gain, args.dp),
         "total_gain_pct": _pct(gain / args.value * 100),
     }
+    if args.inflation is not None:
+        pi = _inflation_fraction(args.inflation)
+        real_final = final / (1 + pi) ** args.years
+        out["inflation_pct"] = _pct(args.inflation)
+        out["real_final_value"] = _money(real_final, args.dp)
+        out["real_gain"] = _money(real_final - args.value, args.dp)
+    return out
+
+
+def cmd_real(args):
+    if args.amount is not None and args.rate is not None:
+        _die("give either --amount/--years or --rate, not both")
+    pi = _inflation_fraction(args.inflation)
+    if args.amount is not None:
+        if args.amount <= 0:
+            _die("--amount must be positive")
+        if args.years is None or args.years <= 0:
+            _die("--years must be positive")
+        real_value = args.amount / (1 + pi) ** args.years
+        purchasing_power_pct = 100 / (1 + pi) ** args.years
+        return {
+            "command": "real",
+            "result": _money(real_value, args.dp),
+            "real_value": _money(real_value, args.dp),
+            "nominal_value": _money(args.amount, args.dp),
+            "inflation_pct": _pct(args.inflation),
+            "years": args.years,
+            "purchasing_power_pct": _pct(purchasing_power_pct),
+            "purchasing_power_lost": _money(args.amount - real_value, args.dp),
+        }
+    elif args.rate is not None:
+        real_rate = ((1 + args.rate / 100) / (1 + pi) - 1) * 100
+        return {
+            "command": "real",
+            "result": _pct(real_rate),
+            "real_rate_pct": _pct(real_rate),
+            "nominal_rate_pct": _pct(args.rate),
+            "inflation_pct": _pct(args.inflation),
+        }
+    else:
+        _die("provide --amount (with --years) or --rate")
 
 
 def cmd_depreciate(args):
@@ -605,6 +746,42 @@ def cmd_roi(args):
         annualized = ((1 + total_return) ** (1 / args.years) - 1) * 100
         out["years"] = args.years
         out["annualized_roi_pct"] = _pct(annualized)
+    return out
+
+
+def cmd_npv(args):
+    if args.n <= 0:
+        _die("--n (periods per year) must be positive")
+    cashflows = _parse_cashflows(args.cashflow)
+    i = (args.rate / 100) / args.n
+    npv = _npv_at(i, cashflows)
+    return {
+        "command": "npv",
+        "result": _money(npv, args.dp),
+        "npv": _money(npv, args.dp),
+        "discount_rate_pct": _pct(args.rate),
+        "periods_per_year": args.n,
+        "num_cashflows": len(cashflows),
+        "sum_undiscounted": _money(sum(cashflows.values()), args.dp),
+    }
+
+
+def cmd_irr(args):
+    if args.n <= 0:
+        _die("--n (periods per year) must be positive")
+    cashflows = _parse_cashflows(args.cashflow)
+    x = _irr(cashflows)
+    irr_annual = ((1 + x) ** args.n - 1) * 100
+    out = {
+        "command": "irr",
+        "result": _pct(irr_annual),
+        "irr_pct": _pct(irr_annual),
+        "periods_per_year": args.n,
+        "num_cashflows": len(cashflows),
+        "npv_at_irr": _money(_npv_at(x, cashflows), args.dp),
+    }
+    if args.n != 1:
+        out["irr_period_pct"] = _pct(x * 100)
     return out
 
 
@@ -811,6 +988,8 @@ def build_parser():
     p.add_argument("--n", type=int, default=12, help="Compounding periods per year (default 12)")
     p.add_argument("--contribution", type=float, default=0.0, help="Deposit added each period")
     p.add_argument("--timing", choices=["end", "begin"], default="end")
+    p.add_argument("--inflation", type=float, metavar="PCT",
+                   help="Annual inflation rate %% — adds real (today's-money) figures")
     p.set_defaults(func=cmd_compound)
 
     p = sub.add_parser("pv", parents=[common], help="Present value")
@@ -828,6 +1007,8 @@ def build_parser():
     p.add_argument("--years", type=float, required=True)
     p.add_argument("--n", type=int, default=12)
     p.add_argument("--timing", choices=["end", "begin"], default="end")
+    p.add_argument("--inflation", type=float, metavar="PCT",
+                   help="Annual inflation rate %% — adds real (today's-money) figures")
     p.set_defaults(func=cmd_fv)
 
     p = sub.add_parser("appreciate", parents=[common], help="Appreciated value")
@@ -835,7 +1016,16 @@ def build_parser():
     p.add_argument("--rate", type=float, required=True, metavar="PCT")
     p.add_argument("--years", type=float, required=True)
     p.add_argument("--n", type=int, default=1, help="Compounding periods per year (default 1)")
+    p.add_argument("--inflation", type=float, metavar="PCT",
+                   help="Annual inflation rate %% — adds real (today's-money) figures")
     p.set_defaults(func=cmd_appreciate)
+
+    p = sub.add_parser("real", parents=[common], help="Real (inflation-adjusted) value or rate")
+    p.add_argument("--inflation", type=float, required=True, metavar="PCT", help="Annual inflation rate %%")
+    p.add_argument("--amount", type=float, help="Nominal future amount (deflation mode)")
+    p.add_argument("--years", type=float, help="Years in the future the amount occurs (deflation mode)")
+    p.add_argument("--rate", type=float, metavar="PCT", help="Nominal annual rate %% (real-rate mode)")
+    p.set_defaults(func=cmd_real)
 
     p = sub.add_parser("depreciate", parents=[common], help="Asset depreciation schedule")
     p.add_argument("--cost", type=float, required=True)
@@ -858,6 +1048,21 @@ def build_parser():
     p.add_argument("--final-value", type=float, help="Final value (gain = final − cost)")
     p.add_argument("--years", type=float, help="Holding period → annualized ROI")
     p.set_defaults(func=cmd_roi)
+
+    p = sub.add_parser("npv", parents=[common], help="Net present value of a cashflow stream")
+    p.add_argument("--rate", type=float, required=True, metavar="PCT", help="Annual discount rate %%")
+    p.add_argument("--cashflow", action="append", required=True, metavar="AMT@PERIOD",
+                   help="Dated cashflow, period 0 = today, negative = outflow (repeatable, e.g. -10000@0)")
+    p.add_argument("--n", type=int, default=1, help="Cashflow periods per year (default 1 = annual)")
+    p.set_defaults(func=cmd_npv)
+    p._negative_number_matcher = _CASHFLOW_MATCHER
+
+    p = sub.add_parser("irr", parents=[common], help="Internal rate of return of a cashflow stream")
+    p.add_argument("--cashflow", action="append", required=True, metavar="AMT@PERIOD",
+                   help="Dated cashflow, period 0 = today, negative = outflow (repeatable, e.g. -10000@0)")
+    p.add_argument("--n", type=int, default=1, help="Cashflow periods per year (default 1 = annual)")
+    p.set_defaults(func=cmd_irr)
+    p._negative_number_matcher = _CASHFLOW_MATCHER
 
     p = sub.add_parser("pct-change", parents=[common], help="Percentage change")
     p.add_argument("--from", dest="from_val", type=float, required=True)
