@@ -45,7 +45,7 @@ roadmap item).
 
    **No technical design here** — no chosen approach, no file-by-file steps, no edge-case engineering. That is the Plan phase's job. Refine establishes *what and why* for this item, validated against reality; Plan decides *how*.
 
-6. **Annotation cycle on `REQUIREMENTS.md`.** Hand control back with this invitation:
+6. **Annotation cycle on `REQUIREMENTS.md`.** This is a review pass, not the primary way ambiguity gets resolved — that's step 4's job, via `AskUserQuestion`, in the moment you hit it. Hand control back with this invitation:
 
    > REQUIREMENTS.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: corrections, removed requirements, missed constraints, clarifications. Then tell me "address my notes" and I'll update it. **I won't plan or implement anything until you explicitly approve.**
 

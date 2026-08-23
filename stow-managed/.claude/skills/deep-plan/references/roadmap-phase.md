@@ -20,6 +20,8 @@ The point of Roadmap is to break a large goal into a terse, ordered list of high
 
    **`[quick]` tag.** For small-but-necessary items that can't be folded — changes where the approach is self-evident from the roadmap description and no codebase research or design decisions are needed — append `[quick]` to the item line. A `[quick]` item bypasses Refine and Plan entirely and goes directly to a short inline Act brief (no REQUIREMENTS.md or PLAN.md written). Use sparingly; if in doubt, make it a full item.
 
+   **Ask when slicing is genuinely ambiguous.** If the natural boundaries aren't clear from the goal and the code — e.g. two plausible orderings, whether something is its own item or folds into another, where a slice's scope should end — use `AskUserQuestion` before writing the item into `ROADMAP.md`. Don't guess and leave it for the user to catch during the annotation round; that costs a full round-trip for something a single question would have resolved up front.
+
 4. **Write `ROADMAP.md`** — terse, the durable tracker for the whole build. Tell the user the path once written. Structure:
 
 ```
@@ -39,7 +41,7 @@ item's REQUIREMENTS.md when its turn comes.
 What the build as a whole does NOT cover.
 ```
 
-5. **Annotation cycle on `ROADMAP.md`.** Hand control back with this invitation:
+5. **Annotation cycle on `ROADMAP.md`.** This is a review pass for what you asked about above, not a substitute for it — genuine slicing ambiguity should already have gone through `AskUserQuestion` in step 3. Hand control back with this invitation:
 
    > ROADMAP.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: reorder items, drop or merge slices, add a missing one, retitle. Also check item sizing: merge any items that are too fine-grained to justify their own Refine → Plan → Act pass, or append `[quick]` to items that are small but can't be folded (self-evident changes needing no research). Then tell me "address my notes" and I'll update it. **I won't refine, plan, or implement anything until you explicitly approve.**
 
