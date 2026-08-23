@@ -1,19 +1,20 @@
 ---
-name: notes-management
+name: notes
 description: >-
-  Apply the notes conventions for the scribbles 01_Notes vault — folder
-  taxonomy, note placement, file naming, frontmatter (aliases, tags, topics),
-  the 00_Aliases/ folder-alias pattern, the Index.md folder-index convention,
-  and citing sources when a note's content came from research (web search,
-  crawled pages, fetched docs). Auto-invoke BEFORE creating a new note,
-  choosing where a note belongs, adding frontmatter, creating folder aliases,
-  creating or updating an Index.md, writing up findings from a web search or
-  research task into a note, or reviewing 01_Notes structure. Trigger
-  phrases: "create a note", "new note", "add a note", "where does this note
-  go", "note aliases", "folder aliases", "semantic search notes", "note
-  frontmatter", "01_Notes", "scribbles notes", "note template", "which
-  folder", "notes management", "note naming", "Index.md", "folder index",
-  "note index", "cite sources", "save research to a note".
+  Maintain and navigate the scribbles 01_Notes vault — folder taxonomy, note
+  placement, file naming, frontmatter, aliases, Index.md, and sourced
+  research. Use the vault as a knowledge base: when investigating a topic,
+  search it first before duplicating work. Auto-invoke BEFORE creating a new
+  note, choosing where a note belongs, writing or editing frontmatter,
+  creating folder aliases, creating or updating an Index.md, writing up
+  research findings into a note, reviewing 01_Notes structure, or looking for
+  existing documentation on a topic within the vault. Trigger phrases:
+  "create a note", "new note", "add a note", "where does this note go", "note
+  aliases", "folder aliases", "semantic search notes", "note frontmatter",
+  "01_Notes", "scribbles notes", "note template", "which folder", "notes
+  management", "note naming", "Index.md", "folder index", "note index",
+  "cite sources", "save research to a note", "search the vault", "do I have
+  notes about", "is there a note on", "find existing knowledge".
 disable-model-invocation: false
 ---
 
@@ -21,39 +22,54 @@ disable-model-invocation: false
 
 The notes root is at `~/Repos/scribbles/01_Notes/`.
 
-Apply these rules whenever you create, place, or edit notes inside `01_Notes/`.
+This skill serves two roles:
+1. **Discipline** — rules for creating, placing, and formatting notes in the vault.
+2. **Discovery** — a schema you can use to locate existing knowledge when investigating a question. The vault is structured for semantic lookup; consult it before generating new research from scratch.
 
 ---
 
-## Folder Taxonomy
+## Vault Schema — Quick Reference
 
-**Numbered top-level categories** — continue the numbering pattern for any new
-top-level addition:
-
-| Folder | Domain |
-|---|---|
-| `01_Tech/` | Software, hardware, AI, tools, CLI, programming |
-| `02_Health/` | Physical health, fitness, sleep, medical |
-| `03_Adulting/` | Finance, housing, legal, career, logistics |
-| `04_Hobbies/` | Photography, hiking, blogging, creative pursuits |
-| `05_Social/` | Relationships, events, social logistics |
-| `06_Travel/` | Trip planning, packing, travel ideas |
-
-**Unnumbered special folders** — personal domains with dedicated scope:
-
-| Folder | Domain |
-|---|---|
-| `Cooking/` | Recipes, techniques |
-| `Learning/` | Economics, structured courses, study notes |
-| `Meditation/` | Practice notes, yoga nidra |
-| `Mimi/` | Partner-specific: gifts, date ideas, personal tracking |
-| `MISC/` | Genuinely uncategorizable; prefer numbered categories |
-| `Glossary/` | Term definitions across domains |
-| `External Notes/til/` | Read-only imported TIL notes — do not add new entries here |
+```
+01_Notes/
+├── 01_Tech/            → Software, hardware, AI, tools, CLI, programming
+├── 02_Health/          → Physical health, fitness, sleep, medical
+├── 03_Adulting/        → Finance, housing, legal, career, logistics
+├── 04_Hobbies/         → Photography, hiking, blogging, creative pursuits
+├── 05_Social/          → Relationships, events, social logistics
+├── 06_Travel/          → Trip planning, packing, travel ideas
+├── Cooking/            → Recipes, techniques
+├── Learning/           → Economics, structured courses, study notes
+├── Meditation/         → Practice notes, yoga nidra
+├── Mimi/              → Partner-specific: gifts, date ideas, personal tracking
+├── MISC/              → Genuinely uncategorizable
+├── Glossary/           → Term definitions across domains
+└── External Notes/     → Read-only imported TIL notes — do not add new entries here
+```
 
 Subdirectories at any depth are fine — create them freely to reflect topic
-depth (e.g. `01_Tech/AI/Agents/`). Any directory may contain a `00_Aliases/`
-subdirectory (see §Folder Alias Convention below).
+depth (e.g. `01_Tech/AI/Agents/`).
+
+---
+
+## How to Search the Vault (Discovery)
+
+When an agent needs existing knowledge on a topic, use this approach in order:
+
+1. **Use the taxonomy above** to narrow which top-level folder(s) the topic
+   belongs under, then `rg <pattern> <folder>/` to find matching notes.
+2. **Follow the `Index.md` chain** — start at a top-level `Index.md` (e.g.
+   `01_Tech/Index.md`) and follow links to child directory `Index.md` files
+   until you land on the specific note. Every directory with content should
+   have one.
+3. **Check `00_Aliases/` directories** — empty files whose names are search
+   synonyms for the folder they live in. `fd alias_name` or `fd` through a
+   directory finds them.
+4. **Only after searching the vault** — if the topic genuinely isn't covered,
+   create a new note using the conventions below.
+
+Goal: avoid re-researching something already written down. The vault is a
+knowledge-base cache; use it.
 
 ---
 

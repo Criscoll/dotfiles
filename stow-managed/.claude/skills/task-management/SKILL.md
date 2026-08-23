@@ -79,21 +79,25 @@ Structure follows this order (only `# Brief` and `# Outline` are required):
 1. **`# Brief`** — the *why*: motivation, constraints, guiding principles. Plain prose.
 2. **`# Success Criteria`** or **`# Closing Criteria`** (optional) — what "done" looks like.
 3. **`# Outline`** — the recursive todo list (see format below).
-4. **`# Notes`** (optional) — a markdown table indexing files in `01_Notes/`:
+4. **`# Notes`** (required if `01_Notes/` contains files, placeholder otherwise) — a routing table indexing files in `01_Notes/`. This exists primarily for agent use: scanning the summary column lets an agent decide whether a supporting file is worth reading without opening every file in the directory.
+
    ```markdown
    # Notes
 
    | File | Summary |
-   |------|---------|
+   |------|--------|
    | [research.md](01_Notes/research.md) | One-line description |
    ```
+
+   - Every file in `01_Notes/` must have a row in this table.
+   - If `01_Notes/` exists but is empty, include the section header and an empty table as a placeholder (so the routing slot is visible and ready to populate).
 5. **`# Details`** (optional) — structured reference data: dates, IDs, contacts.
 
 Use `# Outline` (not `# Recursive Outline`) going forward.
 
 If any section cites sourced research findings inline (e.g. a `# Brief` or
 `# Details` section drawing on a linked note in `01_Notes/`), follow the
-citation-marker conventions in the `notes-management` skill — notably,
+citation-marker conventions in the `notes` skill — notably,
 separate adjacent markers with a space (`[1] [2]`, not `[1][2]`) so Markdown
 doesn't misparse them as a reference-style link and silently conceal one.
 

@@ -51,7 +51,7 @@ that fills the outline in.
 4. **Hunt deals** — see Deal-Finding below.
 5. **Handle date planning** — see Date Planning below.
 6. Write durable findings (visa rules, city guides, packing considerations) as
-   notes under `01_Notes/06_Travel/` per `notes-management`'s conventions,
+   notes under `01_Notes/06_Travel/` per the `notes` skill's conventions,
    with sources cited. Keep the task's own `outline.md` Details section to
    decision-relevant summaries — the note holds the research, the outline
    holds the conclusion.
