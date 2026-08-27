@@ -41,9 +41,9 @@ item's REQUIREMENTS.md when its turn comes.
 What the build as a whole does NOT cover.
 ```
 
-5. **Annotation cycle on `ROADMAP.md`.** This is a review pass for what you asked about above, not a substitute for it — genuine slicing ambiguity should already have gone through `AskUserQuestion` in step 3. Hand control back with this invitation:
+5. **Annotation cycle on `ROADMAP.md`.** This is a review pass for what you asked about above, not a substitute for it — genuine slicing ambiguity should already have gone through `AskUserQuestion` in step 3. Because you asked about ambiguity as you hit it, the roadmap you're handing back should have nothing open in it; the review is optional, so offer approval as an equal path rather than implying an annotation round is required:
 
-   > ROADMAP.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: reorder items, drop or merge slices, add a missing one, retitle. Also check item sizing: merge any items that are too fine-grained to justify their own Refine → Plan → Act pass, or append `[quick]` to items that are small but can't be folded (self-evident changes needing no research). Then tell me "address my notes" and I'll update it. **I won't refine, plan, or implement anything until you explicitly approve.**
+   > ROADMAP.md is written at `<path>`. It has no open questions — I resolved those as I went. If it already reads right, just approve and I'll hand off to Refine. If you want changes, open it and add inline notes — prefix each with `//` (like a code comment) so I can find them: reorder items, drop or merge slices, add a missing one, retitle. Also check item sizing: merge any items that are too fine-grained to justify their own Refine → Plan → Act pass, or append `[quick]` to items that are small but can't be folded (self-evident changes needing no research). Then tell me "address my notes" and I'll update it. **I won't refine, plan, or implement anything until you explicitly approve.**
 
    When the user says they've annotated: re-read the file from disk (they edited it — don't trust your in-context copy), **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants.
 

@@ -99,11 +99,11 @@ Concrete code-level context the implementer needs at their fingertips — distil
 Do NOT paste entire files — just the skeleton and signatures needed to write the implementation.
 ```
 
-5. **Annotation cycle on `PLAN.md`.** Hand control back:
+5. **Annotation cycle on `PLAN.md`.** Hand control back. If nothing in `## Key Decisions` is `[OPEN]` — because you asked about real forks via `AskUserQuestion` during research (step 2) — the review is optional, so offer approval as an equal path:
 
-   > PLAN.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: corrections, removed sections, different approaches, missed context. Then tell me "address my notes" and I'll update it. **I won't implement anything until you explicitly approve.**
+   > PLAN.md is written at `<path>`. No decisions are left open — I settled the forks with you while planning. If it looks right, just approve and I'll collapse the decision records and hand you the implementation prompt. If you want changes, open it and add inline notes — prefix each with `//` (like a code comment) so I can find them: corrections, removed sections, different approaches, missed context. Then tell me "address my notes" and I'll update it. **I won't implement anything until you explicitly approve.**
 
-   > If the plan has open decisions (marked `[OPEN — needs your decision]` in Key Decisions), I've listed them above — tell me which option you want for each, or annotate your choice inline. I can't hand this off to implementation while any decision is still open.
+   If any decision *is* still `[OPEN — needs your decision]` — reserved for forks genuinely better judged once the user sees the fuller plan in context — do NOT ask the user to annotate a choice inline. Resolve them the same way you resolve any open question: enumerate them and settle each with `AskUserQuestion` right here, so the discussion happens as Q&A rather than a slow inline-comment round-trip. State plainly that the plan can't hand off to implementation while any decision is open.
 
    When the user says they've annotated: re-read from disk, **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants. The guard holds every round: **do not write production code until the user explicitly approves.**
 

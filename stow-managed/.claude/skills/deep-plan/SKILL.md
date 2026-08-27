@@ -4,7 +4,7 @@ description: >-
   Run an RPA-style planning workflow (Roadmap → Refine → Plan → hand off Act) one phase per invocation,
   with a fresh context each phase. Roadmap decomposes a large goal into terse high-level items; Refine
   validates the current item against the codebase and writes REQUIREMENTS.md; Plan turns that into a durable
-  PLAN.md; each artifact gets an inline annotation cycle before approval. The cycle loops per roadmap item
+  PLAN.md; unknowns are resolved by asking directly, and each artifact gets an optional inline annotation pass before approval. The cycle loops per roadmap item
   until the roadmap is complete. Implementation is handed off, never run here. Use when the user says "deep
   plan X", "plan this properly", "research and plan", "full plan for", or "refine the requirements for" — or
   when a task is large/ambiguous enough that a throwaway inline plan won't survive. For quick single-pass
@@ -19,10 +19,10 @@ The phases are split on purpose. Each runs in a fresh session with a lean, singl
 `ROADMAP.md` decomposes a large goal into a terse, ordered list of high-level **items** — vertical slices, each delivering something visible and testable. It is the **durable tracker** for the whole effort. Refine → Plan → Act then runs **once per item**, looping until every roadmap item is checked off. `REQUIREMENTS.md` and `PLAN.md` always describe the **current item only** — they are deleted and recreated each time the loop advances to a new item. `ROADMAP.md` is what survives across the whole build.
 
 ```
-Roadmap → decompose the goal into vertical slices → ROADMAP.md → annotate → approve → /clear
+Roadmap → decompose the goal into vertical slices → ROADMAP.md → review → approve → /clear
   ┌─ loop over unchecked roadmap items ───────────────────────────────────────────┐
-  │ Refine → validate THIS item vs. the codebase   → REQUIREMENTS.md → annotate → approve → /clear │
-  │ Plan   → turn the item's requirements into design → PLAN.md        → annotate → approve → /clear │
+  │ Refine → validate THIS item vs. the codebase   → REQUIREMENTS.md → review → approve → /clear │
+  │ Plan   → turn the item's requirements into design → PLAN.md        → review → approve → /clear │
   │ Act    → (separate session) implement, then tick the item in ROADMAP.md  ← handed off, not run here │
   └────────────────────────────────────────────────────────────────────────────────┘
   user re-invokes after each item; stop when every roadmap item is checked
@@ -78,6 +78,7 @@ Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`). Do
 - **The artifacts are files, always.** This is the hard difference from `/plan`. If you find yourself about to dump a roadmap, requirements, or a plan inline, write the file instead.
 - **User annotations are `//`-prefixed.** At every annotation round, re-read the file from disk and scan for `//` comment markers — that's where the user's notes are. Address each, then clear the marker.
 - **Inline `//` annotations are a review channel, not the resolution mechanism.** They're for the user to mark up an artifact after reading it — they don't substitute for asking. The moment you hit an ambiguity, gap, or real decision point while producing any artifact (Roadmap, Refine, or Plan), use `AskUserQuestion` right then. Don't write it into the file as an open item and wait for the user to notice it and annotate — that turns a one-round question into a wasted round-trip. Reserve `//` comments for what the user initiates unprompted: corrections, second thoughts, things you didn't think to ask.
+- **A settled artifact goes straight to the gate — don't manufacture an annotation round.** The annotation cycle exists for when the user *wants* to mark something up; it is not a toll every artifact must pay. If you resolved every ambiguity via `AskUserQuestion` while producing the artifact and nothing is left unknown or `[OPEN]`, say so and offer both paths in the same breath: a review-and-annotate pass if they want changes, or approve as-is and `/clear` + re-invoke to move on. Waiting silently for inline notes on an artifact that has no open questions is exactly the friction this workflow avoids.
 - **Re-read the input artifact from disk** at the start of each phase and before each annotation round. The session is fresh and/or the user edited the file; your in-context copy is stale.
 - **The "don't implement yet" guard is addressed outward**, to the user, not just to yourself. Say it explicitly at every gate.
 - **The plan handed to Act carries the decision and its reasoning, not the menu.** Option A/B framing is review scaffolding; collapse it at the gate so the implementer reads one chosen path — but keep a short record of what was chosen, why, and what was considered-and-rejected with the reason. The *menu* is context rot once chosen; the *why-not* is signal.

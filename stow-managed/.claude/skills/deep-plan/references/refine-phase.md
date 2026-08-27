@@ -45,9 +45,9 @@ roadmap item).
 
    **No technical design here** — no chosen approach, no file-by-file steps, no edge-case engineering. That is the Plan phase's job. Refine establishes *what and why* for this item, validated against reality; Plan decides *how*.
 
-6. **Annotation cycle on `REQUIREMENTS.md`.** This is a review pass, not the primary way ambiguity gets resolved — that's step 4's job, via `AskUserQuestion`, in the moment you hit it. Hand control back with this invitation:
+6. **Annotation cycle on `REQUIREMENTS.md`.** This is a review pass, not the primary way ambiguity gets resolved — that's step 4's job, via `AskUserQuestion`, in the moment you hit it. If step 4 did its job, the `## Open Questions` section is empty (or holds only items genuinely deferred to Plan research), so the review is optional — offer approval as an equal path rather than implying an annotation round is required:
 
-   > REQUIREMENTS.md is written at `<path>`. Open it and add inline notes anywhere you want changes — prefix each note with `//` (like a code comment) so I can find them: corrections, removed requirements, missed constraints, clarifications. Then tell me "address my notes" and I'll update it. **I won't plan or implement anything until you explicitly approve.**
+   > REQUIREMENTS.md is written at `<path>`. I resolved open questions with you as I went, so there's nothing outstanding — if it looks right, just approve and I'll hand off to Plan. If you want changes, open it and add inline notes — prefix each with `//` (like a code comment) so I can find them: corrections, removed requirements, missed constraints, clarifications. Then tell me "address my notes" and I'll update it. **I won't plan or implement anything until you explicitly approve.**
 
    When the user says they've annotated: re-read the file from disk, **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants.
 
