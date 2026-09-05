@@ -1,0 +1,65 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Fetch every rate for one Duffel Stays search result (an srr_... ID).
+
+Mirrors duffel-offer-get: takes an ID from duffel-stays-search output and
+returns the accommodation with its rooms and per-room rates broken out.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _duffel
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="duffel-stays-rates",
+        description="Fetch all rooms/rates for one Duffel Stays search result (an srr_... ID).",
+    )
+    parser.add_argument("search_result_id", metavar="SEARCH_RESULT_ID")
+    parser.add_argument("--json", action="store_true", help="Structured output instead of human-readable text")
+    parser.add_argument("--test", action="store_true", help="Force the test token (DUFFEL_TOKEN_READ_WRITE)")
+    args = parser.parse_args()
+
+    token, _mode = _duffel.load_token(force_test=args.test)
+
+    try:
+        resp = _duffel.request(
+            "POST",
+            f"/stays/search_results/{args.search_result_id}/actions/fetch_all_rates",
+            token,
+        )
+    except _duffel.DuffelAPIError as e:
+        if e.status in (404, 422):
+            eprint("Search result expired or not found — re-run duffel-stays-search.")
+        else:
+            eprint(f"Duffel API error ({e.status}): {e.message}")
+        sys.exit(1)
+
+    data = resp.get("data", {})
+    if not data:
+        eprint("Search result expired or not found — re-run duffel-stays-search.")
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps({
+            "summary": _duffel.build_stay_summary(data),
+            "rooms": (data.get("accommodation") or {}).get("rooms"),
+        }, indent=2))
+    else:
+        print(_duffel.stay_rates_detail(data))
+
+
+if __name__ == "__main__":
+    main()

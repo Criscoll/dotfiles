@@ -1,8 +1,10 @@
-"""Shared Duffel Air helper: token loading, HTTP, redaction, offer summarization.
+"""Shared Duffel helper: token loading, HTTP, redaction, offer/stay summarization.
 
-Imported by duffel-check / duffel-flight-search / duffel-offer-get — not executed
-directly. Keeping auth/redaction/parsing here (instead of copy-pasted per script)
-means a fix to any of it lands once for every wrapper.
+Imported by duffel-check / duffel-flight-search / duffel-offer-get /
+duffel-stays-search / duffel-stays-rates — not executed directly. Keeping
+auth/redaction/parsing here (instead of copy-pasted per script) means a fix to
+any of it lands once for every wrapper. The HTTP/auth/retry layer is transport
+generic and serves both `/air/...` and `/stays/...` paths unchanged.
 """
 
 import json
@@ -184,7 +186,13 @@ def request(method, path, token, body=None):
                         "one at app.duffel.com -> More -> Developers -> Access Tokens."
                     )
                 else:
-                    eprint(f"403: {redact(_error_message(payload)) or e.reason}")
+                    hint = ""
+                    if path.startswith("/stays"):
+                        hint = (
+                            " — if this token works for flights, the account likely needs "
+                            "Duffel Stays access enabled (request it at duffel.com/contact-us)."
+                        )
+                    eprint(f"403: {redact(_error_message(payload)) or e.reason}{hint}")
                 sys.exit(1)
 
             message = redact(_error_message(payload)) or str(e.reason)
@@ -353,3 +361,140 @@ def offer_detail(offer):
     lines.append(f"Refund before departure: {s['refund_before_departure']}")
     lines.append(f"Change before departure: {s['change_before_departure']}")
     return "\n".join(lines)
+
+
+# --- Duffel Stays (accommodation) -------------------------------------------
+#
+# Same two-tier shape as flights: build_stay_summary/summarize_stay mirror
+# build_offer_summary/summarize_offer (list view), stay_rates_detail mirrors
+# offer_detail (fetch_all_rates breakdown). Every field is pulled with .get()
+# so an unexpected response shape degrades to "?" rather than raising.
+
+
+def _fmt_stars(rating):
+    """Accommodation star rating (int, nullable) -> 'N-star' or None."""
+    if rating in (None, ""):
+        return None
+    try:
+        return f"{int(rating)}-star"
+    except (TypeError, ValueError):
+        return None
+
+
+def _fmt_review(score):
+    """Guest review score (e.g. 8.8, nullable) -> 'review 8.8' or None."""
+    if score in (None, ""):
+        return None
+    return f"review {score}"
+
+
+def _fmt_stay_address(location):
+    """Join the present parts of accommodation.location.address into one line."""
+    address = (location or {}).get("address") or {}
+    parts = [
+        address.get("line_one"),
+        address.get("city_name"),
+        address.get("region"),
+        address.get("postal_code"),
+        address.get("country_code"),
+    ]
+    return ", ".join(p for p in parts if p) or None
+
+
+def _fmt_stay_cancellation(rate):
+    """Summarize a rate's refundability from its cancellation timeline."""
+    timeline = rate.get("cancellation_timeline") or []
+    for entry in timeline:
+        refund = entry.get("refund_amount")
+        try:
+            if refund is not None and float(refund) > 0:
+                return f"refundable until {entry.get('before', '?')}"
+        except (TypeError, ValueError):
+            pass
+    if timeline:
+        return "non-refundable"
+    return "cancellation terms not specified"
+
+
+def build_stay_summary(result):
+    """Structured dict summary of one /stays/search result — shared base for the
+    flat search line and the --json outputs (mirrors build_offer_summary)."""
+    acc = result.get("accommodation") or {}
+    location = acc.get("location") or {}
+    coords = location.get("geographic_coordinates") or {}
+    return {
+        "id": result.get("id"),
+        "name": acc.get("name"),
+        "rating": acc.get("rating"),
+        "review_score": acc.get("review_score"),
+        "review_count": acc.get("review_count"),
+        "address": _fmt_stay_address(location),
+        "coordinates": {
+            "latitude": coords.get("latitude"),
+            "longitude": coords.get("longitude"),
+        } if coords else None,
+        "price": result.get("cheapest_rate_total_amount"),
+        "currency": result.get("cheapest_rate_currency"),
+        "due_at_accommodation": result.get("cheapest_rate_due_at_accommodation_amount"),
+        "check_in_date": result.get("check_in_date"),
+        "check_out_date": result.get("check_out_date"),
+        "expires_at": result.get("expires_at"),
+        "rooms": result.get("rooms"),
+    }
+
+
+def summarize_stay(result):
+    """One flat pipe-delimited line per search result — the default search output.
+
+    srr_id | CUR total | Name | N-star | review 8.8 | address | check-in->check-out
+    """
+    s = build_stay_summary(result)
+    parts = [s["id"] or "?", f"{s['currency']} {s['price']}", s["name"] or "?"]
+    stars = _fmt_stars(s["rating"])
+    if stars:
+        parts.append(stars)
+    review = _fmt_review(s["review_score"])
+    if review:
+        parts.append(review)
+    parts.append(s["address"] or "?")
+    parts.append(f"{s['check_in_date']}->{s['check_out_date']}")
+    return " | ".join(parts)
+
+
+def stay_rates_detail(data):
+    """Multi-line human-readable breakdown of a fetch_all_rates response
+    (mirrors offer_detail): accommodation header, then per room -> per rate."""
+    acc = data.get("accommodation") or {}
+    location = acc.get("location") or {}
+    header = acc.get("name") or "?"
+    stars = _fmt_stars(acc.get("rating"))
+    if stars:
+        header += f"  {stars}"
+    review = _fmt_review(acc.get("review_score"))
+    if review:
+        header += f"  {review}"
+    lines = [header]
+    address = _fmt_stay_address(location)
+    if address:
+        lines.append(address)
+    check_in_info = acc.get("check_in_information") or {}
+    if check_in_info:
+        lines.append(
+            f"Check-in from {check_in_info.get('check_in_after_time', '?')}, "
+            f"check-out before {check_in_info.get('check_out_before_time', '?')}"
+        )
+    lines.append("")
+
+    rooms = acc.get("rooms") or []
+    if not rooms:
+        lines.append("No rooms/rates returned.")
+    for room in rooms:
+        lines.append(f"{room.get('name') or 'Room'}:")
+        for rate in room.get("rates") or []:
+            board = rate.get("board_type") or "room only"
+            lines.append(
+                f"  {rate.get('id', '?')}  {rate.get('total_currency')} {rate.get('total_amount')}  "
+                f"{board}  {_fmt_stay_cancellation(rate)}"
+            )
+        lines.append("")
+    return "\n".join(lines).rstrip()

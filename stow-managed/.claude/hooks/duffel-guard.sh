@@ -32,13 +32,17 @@ deny() {
 
 # Booking/charging endpoints — the hardest deny. No wrapper implements these; a
 # raw call is the only way an agent could reach them, so block it outright.
+# Covers both the flights order flow and the Stays quote+booking flow.
 if printf '%s' "$command" | grep -qE '/air/(orders|order_cancellations|payments)'; then
+    deny "Booking/charging endpoints are blocked: this tooling is search-only."
+fi
+if printf '%s' "$command" | grep -qE '/stays/(quotes|bookings)'; then
     deny "Booking/charging endpoints are blocked: this tooling is search-only."
 fi
 
 # Any direct access to the Duffel API host, bypassing the wrappers entirely.
 if printf '%s' "$command" | grep -qE 'api\.duffel\.com'; then
-    deny "Direct Duffel API calls are not allowed. Use ~/bin/agent_scripts/duffel-flight-search | duffel-offer-get | duffel-check."
+    deny "Direct Duffel API calls are not allowed. Use ~/bin/agent_scripts/duffel-flight-search | duffel-offer-get | duffel-stays-search | duffel-stays-rates | duffel-check."
 fi
 
 # Token exfiltration — the token must never appear on a command line (echo, printf, etc).

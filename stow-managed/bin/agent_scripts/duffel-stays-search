@@ -1,0 +1,164 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Search Duffel Stays (hotels): by location (lat/long + radius) or accommodation IDs.
+
+One flat line per result on stdout, sorted and limited. Results come back
+synchronously from Duffel — no polling loop needed. Duffel Stays has no
+geocoder: a location search needs coordinates, not a city name — the caller
+supplies --lat/--lng (agent looks them up). Mirrors duffel-flight-search.
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _duffel
+
+# Enough candidates to compare without flooding the agent's context.
+DEFAULT_LIMIT = 20
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def build_guests(args):
+    guests = [{"type": "adult"} for _ in range(args.adults)]
+    guests += [{"type": "child", "age": age} for age in (args.child_age or [])]
+    if not guests:
+        eprint("At least one guest is required (--adults/--child-age).")
+        sys.exit(2)
+    return guests
+
+
+def resolve_mode(args):
+    """Return 'location' or 'accommodation', validating the two are not mixed."""
+    using_location = args.lat is not None or args.lng is not None
+    using_accommodation = bool(args.accommodation_id)
+
+    if using_location and using_accommodation:
+        eprint("Use either --lat/--lng (+ optional --radius) or repeatable --accommodation-id, not both.")
+        sys.exit(2)
+
+    if using_accommodation:
+        return "accommodation"
+
+    if args.lat is None or args.lng is None:
+        eprint(
+            "Usage: duffel-stays-search --lat LAT --lng LNG [--radius KM] --checkin YYYY-MM-DD "
+            "--checkout YYYY-MM-DD | --accommodation-id ID [--accommodation-id ID ...] --checkin ... --checkout ..."
+        )
+        sys.exit(2)
+    return "location"
+
+
+def sort_key(result, sort_by):
+    acc = result.get("accommodation") or {}
+    if sort_by == "rating":
+        try:
+            return -int(acc.get("rating") or 0)
+        except (TypeError, ValueError):
+            return 0
+    if sort_by == "review":
+        try:
+            return -float(acc.get("review_score") or 0)
+        except (TypeError, ValueError):
+            return 0
+    try:
+        return float(result.get("cheapest_rate_total_amount", "inf"))
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="duffel-stays-search",
+        description="Search Duffel Stays (hotels) by location coordinates or accommodation IDs.",
+    )
+    parser.add_argument("--lat", type=float, metavar="LAT", help="Search-centre latitude (with --lng)")
+    parser.add_argument("--lng", type=float, metavar="LNG", help="Search-centre longitude (with --lat)")
+    parser.add_argument("--radius", type=float, default=5, metavar="KM", help="Search radius in km (default 5)")
+    parser.add_argument(
+        "--accommodation-id", dest="accommodation_id", action="append", metavar="ID",
+        help="Repeatable known-hotel ID (acc_...). Mutually exclusive with --lat/--lng.",
+    )
+    parser.add_argument("--checkin", required=True, metavar="YYYY-MM-DD")
+    parser.add_argument("--checkout", required=True, metavar="YYYY-MM-DD")
+    parser.add_argument("--adults", type=int, default=2)
+    parser.add_argument(
+        "--child-age", dest="child_age", action="append", type=int, metavar="AGE",
+        help="Repeatable; Duffel child guests require an age.",
+    )
+    parser.add_argument("--rooms", type=int, default=1)
+    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="0 = no limit")
+    parser.add_argument("--sort", choices=["price", "rating", "review"], default="price")
+    parser.add_argument("--json", action="store_true", help="Structured summarized output instead of flat lines")
+    parser.add_argument("--raw", action="store_true", help="Escape hatch: dump raw result JSON instead of a summary")
+    parser.add_argument("--test", action="store_true", help="Force the test token (DUFFEL_TOKEN_READ_WRITE)")
+    args = parser.parse_args()
+
+    if args.limit < 0:
+        eprint("--limit must be >= 0 (0 means no limit).")
+        sys.exit(2)
+
+    mode = resolve_mode(args)
+    guests = build_guests(args)
+
+    inner = {
+        "check_in_date": args.checkin,
+        "check_out_date": args.checkout,
+        "guests": guests,
+        "rooms": args.rooms,
+    }
+    if mode == "accommodation":
+        inner["accommodation"] = {"ids": args.accommodation_id}
+    else:
+        inner["location"] = {
+            "radius": args.radius,
+            "geographic_coordinates": {"latitude": args.lat, "longitude": args.lng},
+        }
+    body = {"data": inner}
+
+    token, token_mode = _duffel.load_token(force_test=args.test)
+    start = time.monotonic()
+    try:
+        resp = _duffel.request("POST", "/stays/search", token, body)
+    except _duffel.DuffelAPIError as e:
+        eprint(f"Duffel API error ({e.status}): {e.message}")
+        if e.status == 404:
+            eprint(
+                "A 404 on /stays/search usually means the account lacks Duffel Stays access — "
+                "request it at duffel.com/contact-us (see flight-search-tools.md)."
+            )
+        sys.exit(1)
+    elapsed_ms = round((time.monotonic() - start) * 1000)
+
+    data = resp.get("data", {})
+    results = data.get("results", [])
+    eprint(f"search {data.get('id', '?')} | mode={mode} | token={token_mode} | {len(results)} results | {elapsed_ms}ms")
+
+    if not results:
+        print("No results found.")
+        return
+
+    results.sort(key=lambda r: sort_key(r, args.sort))
+    if args.limit:
+        results = results[:args.limit]
+
+    if args.raw:
+        print(json.dumps(results, indent=2))
+    elif args.json:
+        print(json.dumps([_duffel.build_stay_summary(r) for r in results], indent=2))
+    else:
+        for result in results:
+            print(_duffel.summarize_stay(result))
+
+
+if __name__ == "__main__":
+    main()

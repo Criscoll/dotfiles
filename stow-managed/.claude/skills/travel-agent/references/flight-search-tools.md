@@ -68,20 +68,58 @@ hand-rolled API calls:
 - `duffel-offer-get OFFER_ID [--json]` — deep detail on one offer (an
   `off_...` ID from a search result) — full segment/baggage/fare-condition
   breakdown.
+- `duffel-stays-search (--lat LAT --lng LNG [--radius KM] | --accommodation-id ID ...) --checkin YYYY-MM-DD --checkout YYYY-MM-DD [--adults N] [--child-age AGE ...] [--rooms N] [--sort price|rating|review] [--json]` —
+  hotel search (Duffel Stays). Location mode takes **coordinates, not a city
+  name** (Duffel Stays has no geocoder) — the agent looks up lat/long and
+  passes them. One flat summary line per result, sorted and capped at
+  `--limit` (default 20).
+- `duffel-stays-rates SEARCH_RESULT_ID [--json]` — deep detail on one hotel (an
+  `srr_...` ID from a stays search) — per-room, per-rate breakdown (board type,
+  refundability) via `fetch_all_rates`.
 
-These three are CLIs for a single search. For a **multi-date or multi-leg
-sweep**, there's a fourth piece — `~/bin/agent_scripts/_duffel_sweep.py` — but
-it's a library module to `import`, not a CLI to run directly; see "Under the
-hood" below.
+The `duffel-flight-search` / `duffel-offer-get` / `duffel-stays-search` /
+`duffel-stays-rates` scripts are CLIs for a single search. For a **multi-date
+or multi-leg flight sweep**, there's a further piece —
+`~/bin/agent_scripts/_duffel_sweep.py` — but it's a library module to
+`import`, not a CLI to run directly; see "Under the hood" below. (There is no
+sweep helper for stays.)
 
-All three read the token from `DUFFEL_LIVE_READ_WRITE` (preferred) or
+All of them read the token from `DUFFEL_LIVE_READ_WRITE` (preferred) or
 `DUFFEL_TOKEN_READ_WRITE`, or `--test` to force the test token. A
 [PreToolUse guard hook](../../../hooks/duffel-guard.sh) denies any Bash
 command *line* that references raw `api.duffel.com`, booking/charging
-endpoints (`/air/orders`, `/air/order_cancellations`, `/air/payments`), or
-the token env var names directly — this tooling is search-only. (The hook
-inspects the command line, not file contents — see the "under the hood"
-note below on its actual reach.)
+endpoints (`/air/orders`, `/air/order_cancellations`, `/air/payments`,
+`/stays/quotes`, `/stays/bookings`), or the token env var names directly —
+this tooling is search-only. (The hook inspects the command line, not file
+contents — see the "under the hood" note below on its actual reach.)
+
+### Stays / hotels
+
+`duffel-stays-search` + `duffel-stays-rates` wrap **Duffel Stays**, the
+accommodation half of the same vetted API, in the same two-tier shape as the
+flight pair (list → detail):
+
+- **Two-step flow.** `duffel-stays-search` returns candidate hotels, each with
+  an `srr_...` search-result ID and a cheapest-rate total. `duffel-stays-rates
+  <srr_id>` then calls `fetch_all_rates` for one hotel to get every room and
+  rate (board type, refundability, `rat_...` rate IDs). Search results expire
+  like flight offers — re-run the search if a `rates` call 404s.
+- **Coordinates, not a city name.** Duffel Stays has no geocoder (their docs
+  point at Mapbox/Google for geocoding). A location search takes
+  `--lat`/`--lng`/`--radius` (km); the agent looks up the coordinates for the
+  area the user names and passes them. `--accommodation-id` (repeatable) is
+  the alternative when specific `acc_...` hotel IDs are already known.
+- **Account gating — first-run caveat.** Stays is **not** self-serve like
+  flight airlines: access is requested from the Duffel team at
+  `duffel.com/contact-us`, not toggled in the dashboard. A token that works
+  for flights returns a bare `403 Forbidden` on `/stays/*` until that access
+  is granted (confirmed 2026-08 — both the test and live tokens 403 on
+  `/stays/search` while the same test token returns 121 flight offers). The
+  wrappers append a "request Stays access" hint to that 403. This is a setup
+  step, not a code bug.
+- **Search-only.** The guard hook blocks `/stays/quotes` and `/stays/bookings`
+  (the quote → booking flow); only `/stays/search` and `.../fetch_all_rates`
+  are reachable. No payment or booking path exists in the wrappers.
 
 ### Setup
 

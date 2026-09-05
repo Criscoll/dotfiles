@@ -240,13 +240,22 @@ carry real risks (autonomous payment enrollment, undisclosed limits) that are
 easy to trip over without noticing.
 
 If the user wants a scripted/API approach, use the `~/bin/agent_scripts/duffel-*`
-wrapper scripts (`duffel-check`, `duffel-flight-search`, `duffel-offer-get`) —
-they wrap **Duffel**, the currently vetted flight-search API, and are
-search-only: a guard hook denies raw API access, booking/charging endpoints,
-and token exposure on the command line. See `references/flight-search-tools.md`
-for the wrapper usage, setup steps, token-scope gotcha, and API shape — Duffel
-passed the evaluation checklist below in 2026-08 testing, unlike a prior
-attempt with LetsFG.
+wrapper scripts — they wrap **Duffel**, the currently vetted flight/hotel
+search API, and are search-only: a guard hook denies raw API access,
+booking/charging endpoints, and token exposure on the command line. See
+`references/flight-search-tools.md` for the wrapper usage, setup steps,
+token-scope gotcha, and API shape — Duffel passed the evaluation checklist
+below in 2026-08 testing, unlike a prior attempt with LetsFG.
+
+- **Flights:** `duffel-check` (token health), `duffel-flight-search` (one-way /
+  round-trip / multi-city candidates), `duffel-offer-get` (deep detail on one
+  `off_...` offer).
+- **Hotels:** `duffel-stays-search` (candidate hotels near a point), then
+  `duffel-stays-rates <srr_id>` to drill into one hotel's rooms and rates.
+  Duffel Stays has no geocoder — a location search needs `--lat`/`--lng`, so
+  the agent looks up coordinates for the area the user names and passes them
+  (or uses `--accommodation-id` for known `acc_...` hotels). Requires "Request
+  access to Duffel Stays" on the account — see `references/flight-search-tools.md`.
 
 For a **multi-date or multi-leg sweep** (the common case for a flexible-date
 or open-jaw trip — see Date Planning below), don't write the sweep loop and
