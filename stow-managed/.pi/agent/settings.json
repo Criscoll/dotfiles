@@ -3,7 +3,7 @@
     "~/.claude/skills"
   ],
   "enableInstallTelemetry": false,
-  "lastChangelogVersion": "0.80.2",
+  "lastChangelogVersion": "0.84.4",
   "hideThinkingBlock": true,
   "defaultProvider": "openrouter",
   "defaultModel": "deepseek/deepseek-v4-flash",

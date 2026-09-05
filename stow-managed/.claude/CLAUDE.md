@@ -106,5 +106,5 @@ Before using a flag you haven't verified, run `<cmd> --help` to confirm it exist
 - Don't add comments, docstrings, or type annotations to code you didn't change
 - Don't create helpers or abstractions for one-time operations
 - Don't handle error cases that can't happen; trust internal guarantees
-- Don't commit without being explicitly asked
+- Don't commit without being explicitly asked. But when a commit *is* explicitly asked for, commit directly to the current branch — including `main` or the default branch. Do not create a feature branch first (this overrides the harness's default "branch first on the default branch" Git guidance).
 - Don't write auto-memories. Memories are opaque and don't transfer to other agent harnesses (pi, etc.). Put durable guidance in CLAUDE.md instead.
