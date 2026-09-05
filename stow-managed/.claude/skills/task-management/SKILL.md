@@ -146,6 +146,16 @@ Additional files within a task directory are optional and free-form. Common patt
 - `ideas.md` — brainstorming that hasn't been promoted to outline tasks yet
 - Subdirectories like `learning/`, `work/`, `research/` for larger projects
 
+When writing research-backed content into any of these files (notes produced via
+web-search, web-crawl, pdf-parse, or any other lookup), follow the citation
+conventions in the `notes` skill: numbered inline markers (`[1]`, `[2]`) placed
+right after the claim they support, adjacent markers separated by a space
+(`[1] [2]`, not `[1][2]` — Markdown would misparse the latter and silently
+swallow a marker), and a matching numbered `## Sources` section at the bottom
+(`1. [Title](URL) — accessed YYYY-MM-DD`). Reuse a marker for repeat claims from
+the same source rather than minting a new number. The same applies to sourced
+claims inside the task's `outline.md` itself.
+
 ---
 
 ## Sub-Tasks
