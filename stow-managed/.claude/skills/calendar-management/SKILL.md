@@ -2,12 +2,16 @@
 name: calendar-management
 description: >-
   Apply calendar task-management conventions — tick/cross completion marks,
-  note prefixes, carry-forward rules, and date-bound missed-event handling.
-  Auto-invoke BEFORE creating, updating, or reviewing any calendar event, or
-  when triaging past-due tasks. Trigger phrases: "calendar", "tick", "cross",
-  "✅", "❌", "carry forward", "event", "calendar-update", "calendar-create",
-  "calendar-list", "mark complete", "update event", "completed task", "due date",
-  "missed", "overdue", "pending task", "reschedule event", "move event".
+  note prefixes, carry-forward rules, date-bound missed-event handling, and the
+  05. Goals calendar model (Goals for the Week / Move the Needle). Auto-invoke
+  BEFORE creating, updating, or reviewing any calendar event, triaging past-due
+  tasks, or working on the goals calendar. Trigger phrases: "calendar", "tick",
+  "cross", "✅", "❌", "carry forward", "event", "calendar-update",
+  "calendar-create", "calendar-list", "mark complete", "update event",
+  "completed task", "due date", "missed", "overdue", "pending task",
+  "reschedule event", "move event", "goals calendar", "goals for the week",
+  "move the needle", "this week's goals", "my goals", "roll over my goals",
+  "goal rollover", "set up today's needle".
 ---
 
 # Calendar Management Conventions
@@ -24,6 +28,12 @@ Also read the checklist reference for operational steps:
 
 ```bash
 cat "${CLAUDE_SKILL_DIR}/references/operations.md"
+```
+
+Load **only when the `05. Goals` calendar is in scope** (the user asks to review goals, roll over the week, set up the day's focus, etc.) — it is otherwise out of scope, see below:
+
+```bash
+cat "${CLAUDE_SKILL_DIR}/references/goals-calendar.md"
 ```
 
 ## Conventions
@@ -131,6 +141,7 @@ Carried forward:      "Book dental appointment"     (move date only, no symbol c
 **Not in triage scope** (skip these entirely):
 - `mimitran1305@gmail.com` — Mimi's personal calendar, shared with this account
 - `CliMi` — joint calendar, not for solo triage
+- `05. Goals` — a goal-tracking calendar with its own model and procedures. **Excluded from the routine triage sweep.** Only work on it when the user explicitly asks (roll over the week, populate today's focus, review goals). When they do, load `references/goals-calendar.md` first.
 
 The `--calendar <id>` flag is accepted by `calendar-list`, `calendar-get`, `calendar-create`, and `calendar-update`.
 
