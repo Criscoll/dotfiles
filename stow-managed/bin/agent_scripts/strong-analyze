@@ -1,0 +1,293 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["polars>=1.0"]
+# ///
+"""Analyse a Strong app workout CSV export: cadence, volume, progression, structure.
+
+Subcommands:
+  overview     date range, workouts/week, gaps, durations, exercise inventory
+  volume       completed working sets/week by muscle group (active-week denominator)
+  progression  per-session top-set e1RM (Epley), PR recency, first-vs-last trend
+  structure    split composition, placeholder-set ratio, top-set rep-range spread
+
+Known export quirks handled here:
+  - ~half of rows can be uncompleted template placeholders (null Reps) — always
+    filtered before aggregation (nulls poison descending sorts in polars).
+  - Bodyweight sets log Weight as null/0 (pull-ups mix BW and weighted sets).
+  - Separator varies between exports (";" or ",") — auto-detected.
+  - Weekly averages use *active* ISO weeks (>=1 workout) to net out layoffs.
+"""
+
+import argparse
+import statistics
+import sys
+
+import polars as pl
+
+MUSCLE_GROUPS = {
+    "Bench Press (Barbell)": "chest",
+    "Bench Press (Dumbbell)": "chest",
+    "Incline Bench Press (Dumbbell)": "chest",
+    "Incline Bench Press (Barbell)": "chest",
+    "Chest Fly (Dumbbell)": "chest",
+    "Push Up": "chest",
+    "Pull Up": "back",
+    "Chin Up": "back",
+    "Lat Pulldown (Cable)": "back",
+    "Bent Over Row (Barbell)": "back",
+    "Seated Row (Cable)": "back",
+    "Incline Row (Dumbbell)": "back",
+    "Face Pull (Cable)": "rear_delt",
+    "Seated Overhead Press (Dumbbell)": "shoulders",
+    "Overhead Press (Barbell)": "shoulders",
+    "Lateral Raise (Dumbbell)": "side_delt",
+    "Lateral Raise (Cable)": "side_delt",
+    "Bicep Curl (Cable)": "biceps",
+    "Bicep Curl (Barbell)": "biceps",
+    "Bicep Curl (Dumbbell)": "biceps",
+    "Hammer Curl (Dumbbell)": "biceps",
+    "Triceps Extension": "triceps",
+    "Triceps Pushdown (Cable)": "triceps",
+    "Skullcrusher (Barbell)": "triceps",
+    "Squat (Barbell)": "quads",
+    "Leg Press": "quads",
+    "Leg Extension (Machine)": "quads",
+    "Goblet Squat (Kettlebell)": "quads",
+    "Lunge (Dumbbell)": "quads",
+    "Lying Leg Curl (Machine)": "hamstrings",
+    "Seated Leg Curl (Machine)": "hamstrings",
+    "Romanian Deadlift (Dumbbell)": "hamstrings",
+    "Romanian Deadlift (Barbell)": "hamstrings",
+    "Deadlift (Barbell)": "hamstrings",
+    "Hip Thrust (Barbell)": "glutes",
+    "Seated Calf Raise (Plate Loaded)": "calves",
+    "Seated Calf Raise (Machine)": "calves",
+    "Standing Calf Raise (Machine)": "calves",
+    "Ab Wheel": "abs",
+    "Plank": "abs",
+    "Hanging Leg Raise": "abs",
+}
+LOWER_GROUPS = {"quads", "hamstrings", "glutes", "calves"}
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def load(path):
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            header = f.readline()
+    except OSError as e:
+        eprint(f"error: cannot read {path}: {e}")
+        sys.exit(1)
+    sep = ";" if header.count(";") > header.count(",") else ","
+    df = pl.read_csv(path, separator=sep, infer_schema_length=0)
+
+    def col(prefix):
+        matches = [c for c in df.columns if c.startswith(prefix)]
+        if not matches:
+            eprint(f"error: no column starting with {prefix!r} — columns: {df.columns}")
+            sys.exit(1)
+        return matches[0]
+
+    weight_col, dur_col = col("Weight"), col("Duration")
+    if "(lb" in weight_col:
+        eprint("warning: weights are in lb, not kg — labels below say kg but values are lb")
+    df = df.rename({weight_col: "weight", dur_col: "duration_sec"})
+    df = df.with_columns(
+        pl.col("Date").str.to_datetime("%Y-%m-%d %H:%M:%S"),
+        pl.col("weight").cast(pl.Float64, strict=False),
+        pl.col("Reps").cast(pl.Int64, strict=False),
+        pl.col("duration_sec").cast(pl.Float64, strict=False),
+    )
+    return df.with_columns(
+        pl.col("Date").dt.date().alias("day"),
+        pl.col("Date").dt.strftime("%G-W%V").alias("week"),
+        (pl.col("weight") * (1 + pl.col("Reps") / 30)).alias("e1rm"),
+    )
+
+
+def completed(df):
+    return df.filter(pl.col("Reps").is_not_null())
+
+
+def with_working_flag(done):
+    """Flag completed sets >=80% of that session's top weight (bodyweight always counts)."""
+    top = done.group_by(["Workout #", "Exercise Name"]).agg(
+        pl.col("weight").max().alias("topw")
+    )
+    return done.join(top, on=["Workout #", "Exercise Name"]).with_columns(
+        (
+            (pl.col("weight") >= 0.8 * pl.col("topw"))
+            | (pl.col("topw") == 0)
+            | pl.col("topw").is_null()
+        ).alias("working")
+    )
+
+
+def active_weeks(df):
+    return df["week"].n_unique()
+
+
+def cmd_overview(df, args):
+    done = completed(df)
+    days = df.select("day").unique().sort("day")["day"].to_list()
+    print(f"rows: {df.height} ({done.height} completed sets, {df.height - done.height} placeholders)")
+    print(f"date range: {days[0]} -> {days[-1]}")
+    n_wk = active_weeks(df)
+    print(f"workouts: {df['Workout #'].n_unique()} over {n_wk} active weeks "
+          f"({df['Workout #'].n_unique() / n_wk:.1f}/week)")
+
+    if len(days) > 1:
+        gaps = [(days[i + 1] - days[i]).days for i in range(len(days) - 1)]
+        big = [f"{days[i]} ({g}d)" for i, g in enumerate(gaps) if g >= 6]
+        print(f"gap between sessions: median {statistics.median(gaps):.0f}d, mean {statistics.mean(gaps):.1f}d")
+        print(f"layoffs >=6d: {', '.join(big) if big else 'none'}")
+
+    w = df.group_by("Workout #").agg(pl.col("duration_sec").first())["duration_sec"]
+    print(f"duration: median {w.median() / 60:.0f} min (p25 {w.quantile(0.25) / 60:.0f}, p75 {w.quantile(0.75) / 60:.0f})")
+
+    print("\nworkouts per ISO week:")
+    for wk, n in df.group_by("week").agg(pl.col("Workout #").n_unique().alias("n")).sort("week").iter_rows():
+        print(f"  {wk}: {'#' * n} ({n})")
+
+    print("\nexercise inventory (completed sets):")
+    inv = done.group_by("Exercise Name").agg(
+        pl.len().alias("sets"),
+        pl.col("Workout #").n_unique().alias("sessions"),
+        pl.col("weight").max().alias("max_wt"),
+        pl.col("Reps").median().alias("med_reps"),
+    ).sort("sets", descending=True)
+    for name, sets, sess, mx, med in inv.iter_rows():
+        mx_s = "BW" if mx is None else f"{mx:g}kg"
+        print(f"  {name:<40} {sets:>4} sets / {sess:>2} sessions | max {mx_s:>8} | med reps {med:g}")
+
+
+def cmd_volume(df, args):
+    done = with_working_flag(completed(df))
+    done = done.with_columns(
+        pl.col("Exercise Name").replace_strict(MUSCLE_GROUPS, default="UNMAPPED").alias("mg")
+    )
+    unmapped = done.filter(pl.col("mg") == "UNMAPPED")["Exercise Name"].unique().to_list()
+    if unmapped:
+        eprint(f"warning: unmapped exercises (edit MUSCLE_GROUPS in this script): {unmapped}")
+
+    n_wk = active_weeks(df)
+    work = done.filter(pl.col("working"))
+    print(f"completed working sets/week by muscle group ({n_wk} active weeks):")
+    tab = work.group_by("mg").agg(pl.len().alias("sets")).with_columns(
+        (pl.col("sets") / n_wk).round(1).alias("per_wk")
+    ).sort("per_wk", descending=True)
+    for mg, sets, per in tab.iter_rows():
+        print(f"  {mg:<12} {per:>5} /wk  ({sets} total)")
+    covered = {g for g in MUSCLE_GROUPS.values()}
+    missing = sorted(covered - set(tab["mg"].to_list()))
+    if missing:
+        print(f"  zero volume: {', '.join(missing)}")
+    print(f"\nwhole-body: {work.height / n_wk:.1f} working sets/week")
+    per_sess = work.group_by("Workout #").agg(pl.len().alias("s"))["s"]
+    print(f"per session: median {per_sess.median():g} working sets (p25 {per_sess.quantile(0.25):g}, p75 {per_sess.quantile(0.75):g})")
+
+    lower = done.group_by("Workout #").agg(pl.col("mg").is_in(LOWER_GROUPS).mean().alias("f"))
+    n_lower = lower.filter(pl.col("f") > 0.5).height
+    print(f"upper vs lower days: {lower.height - n_lower} upper / {n_lower} lower")
+
+
+def cmd_progression(df, args):
+    done = completed(df).filter(pl.col("e1rm").is_not_null() & (pl.col("weight") > 0))
+    if args.exercise:
+        wanted = []
+        for pat in args.exercise:
+            hits = [e for e in df["Exercise Name"].unique() if pat.lower() in e.lower()]
+            if not hits:
+                eprint(f"warning: no exercise matches {pat!r}")
+            wanted.extend(hits)
+    else:
+        counts = done.group_by("Exercise Name").agg(pl.col("day").n_unique().alias("n"))
+        wanted = counts.filter(pl.col("n") >= 6).sort("n", descending=True)["Exercise Name"].to_list()
+
+    last_day = done["day"].max()
+    for ex in wanted:
+        sub = done.filter(pl.col("Exercise Name") == ex)
+        sess = (
+            sub.sort("e1rm", descending=True)
+            .group_by("day")
+            .agg(
+                pl.col("e1rm").first().round(1).alias("best"),
+                pl.col("weight").first().alias("w"),
+                pl.col("Reps").first().alias("r"),
+            )
+            .sort("day")
+        )
+        fmt = lambda t: f"{t['day']} {t['w']:g}x{t['r']} (e1rm {t['best']:g})"
+        first, last = sess.head(3), sess.tail(3)
+        pr = sess.sort("best", descending=True).row(0, named=True)
+        stall = (last_day - pr["day"]).days
+        trend = last["best"].mean() - first["best"].mean()
+        print(f"--- {ex} ({sess.height} sessions) ---")
+        print("  first:", " | ".join(fmt(r) for r in first.iter_rows(named=True)))
+        print("  last :", " | ".join(fmt(r) for r in last.iter_rows(named=True)))
+        flag = "  <-- STALLED?" if stall >= 42 else ""
+        print(f"  best e1rm: {pr['best']:g} ({pr['w']:g}x{pr['r']} on {pr['day']}), {stall}d before data end{flag}")
+        print(f"  trend (avg last3 - first3): {trend:+.1f}")
+
+
+def cmd_structure(df, args):
+    done = completed(df)
+    print("=== exercise composition by workout name (sessions containing exercise) ===")
+    comp = df.group_by(["Workout Name", "Exercise Name"]).agg(
+        pl.col("Workout #").n_unique().alias("n")
+    )
+    names = (
+        df.group_by("Workout Name").agg(pl.col("Workout #").n_unique().alias("n"))
+        .sort("n", descending=True)
+    )
+    for name, total in names.iter_rows():
+        print(f"\n{name} ({total} sessions):")
+        for _, ex, n in comp.filter(pl.col("Workout Name") == name).sort("n", descending=True).iter_rows():
+            print(f"  {ex}: {n}")
+
+    print("\n=== placeholder (planned-but-not-done) sets ===")
+    ratio = 1 - done.height / df.height
+    print(f"overall: {df.height - done.height}/{df.height} rows empty ({ratio:.0%})")
+    ph = (
+        df.group_by("Exercise Name")
+        .agg(pl.len().alias("total"), pl.col("Reps").is_null().sum().alias("empty"))
+        .with_columns((pl.col("empty") / pl.col("total")).alias("f"))
+        .filter(pl.col("f") > 0.3)
+        .sort("f", descending=True)
+    )
+    for ex, total, empty, f in ph.iter_rows():
+        print(f"  {ex}: {empty}/{total} empty ({f:.0%})")
+
+    print("\n=== top-set rep spread (sets >=90% of session top weight, exercises >=6 sessions) ===")
+    weighted = done.filter(pl.col("weight") > 0)
+    counts = weighted.group_by("Exercise Name").agg(pl.col("day").n_unique().alias("n"))
+    for ex in counts.filter(pl.col("n") >= 6).sort("n", descending=True)["Exercise Name"].to_list():
+        sub = weighted.filter(pl.col("Exercise Name") == ex)
+        top = sub.group_by("day").agg(pl.col("weight").max().alias("w"))
+        j = sub.join(top, on="day").filter(pl.col("weight") >= 0.9 * pl.col("w"))
+        reps = j["Reps"]
+        wts = sorted(set(j["weight"].to_list()))
+        print(f"  {ex}: reps min/med/max = {reps.min()}/{reps.median():g}/{reps.max()} | top weights: {[f'{w:g}' for w in wts]}")
+
+
+def main():
+    p = argparse.ArgumentParser(description="Analyse a Strong app CSV export.")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    for name, fn in [("overview", cmd_overview), ("volume", cmd_volume),
+                     ("progression", cmd_progression), ("structure", cmd_structure)]:
+        sp = sub.add_parser(name)
+        sp.add_argument("csv", help="path to Strong export CSV")
+        sp.set_defaults(fn=fn)
+        if name == "progression":
+            sp.add_argument("exercise", nargs="*",
+                            help="exercise name substrings (default: all with >=6 sessions)")
+    args = p.parse_args()
+    args.fn(load(args.csv), args)
+
+
+if __name__ == "__main__":
+    main()
