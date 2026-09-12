@@ -3,6 +3,10 @@ name: travel-agent
 description: >-
   Plan trips end-to-end — build itineraries, discover things to do, hunt flight and
   hotel deals, and work through complex multi-leg or flexible-date ticket planning.
+  Surfaces visas and other lead-time applications up front so they aren't discovered
+  after dates are locked, and turns research into a day-by-day itinerary (geographic
+  clustering, realistic pacing, opening-day and arrival/departure-time checks) rather
+  than a flat attraction list.
   Before running any price search, asks about layover tolerance, nonstop requirements,
   airline quality bar, meal service, and day-of-week/leave-optimization rather than
   optimizing for cheapest total alone; presents results grouped by trip leg (not a flat
@@ -14,13 +18,20 @@ description: >-
   money (the user's day rate) that belongs in the cost comparison alongside ticket
   price, not just a soft scheduling preference. Auto-invoke BEFORE planning a trip,
   researching flight or hotel prices, building or refining a travel itinerary,
-  comparing candidate travel dates, or working inside a Travel_ task in 02_Workbench.
+  building a day-by-day plan, comparing candidate travel dates, checking visa or
+  entry requirements for a trip, building a packing list or reviewing one for
+  gaps, or working inside a Travel_ task in 02_Workbench.
   Trigger phrases: "plan a trip", "travel itinerary", "find flights", "flight deals",
   "hotel deals", "best time to fly", "open-jaw", "multi-city", "travel dates",
   "things to do in", "day trip", "layover", "nonstop", "direct flight",
   "airline quality", "meal service", "budget airline", "red-eye", "overnight flight",
   "day of week", "leave days", "leave day cost", "annual leave value", "day rate",
-  "where should we stay", "Travel_" task, "duffel", "duffel-flight-search".
+  "where should we stay", "day-by-day itinerary", "what to do each day",
+  "do I need a visa", "visa", "entry requirements", "travel authorization",
+  "ESTA", "ETA", "ETIAS", "passport validity", "permit", "book ahead",
+  "opening hours", "things to book in advance", "packing list", "what to pack",
+  "what should I pack", "packing", "did I forget anything",
+  "Travel_" task, "duffel", "duffel-flight-search".
 disable-model-invocation: false
 ---
 
@@ -38,23 +49,101 @@ that fills the outline in.
    under `02_Workbench/`, with `outline.md` as the single source of truth
    (brief, outline, details). Read it before making any suggestion — dates,
    priorities, and constraints already decided belong there, not in your head.
+   **Also check whether it records the status of entry requirements — visas,
+   travel authorizations, permits.** If the outline is silent on visas, treat
+   that as unresolved rather than handled, and raise it in the advance-application
+   gate (step 3) — a silent outline is exactly how a forgotten visa slips through.
 2. **Resolve the shape of the trip** before researching prices: destinations
    and order, day count per stop, trip style (pace, priorities). These are
    `[ ] Decide:` items in the outline until settled — don't jump ahead to
    flight prices while the itinerary skeleton is still open, since the answer
-   changes the search (origin/destination, trip length) underneath you.
-3. **Discover things to do** with the `web-search` / `web-crawl` skills (follow
-   their own conventions — don't fetch pages directly with WebFetch/curl).
-   Cross-check suggestions against what the outline already says about pace
-   and priorities (e.g. "active, nature over shopping") rather than proposing
-   a generic top-10 list that ignores stated preferences.
-4. **Hunt deals** — see Deal-Finding below.
-5. **Handle date planning** — see Date Planning below.
-6. Write durable findings (visa rules, city guides, packing considerations) as
+   changes the search (origin/destination, trip length) underneath you. When
+   intake is needed, **batch the trip-shape questions in one `AskUserQuestion`
+   call** — pace, priorities, must-dos/must-avoids, budget tier, who's
+   travelling, mobility/dietary constraints — rather than asking one at a time,
+   the same pattern the flight-preferences intake uses below.
+3. **Clear the advance-application gate early** — see Advance Applications &
+   Bookings below. Visas, travel authorizations, permits, and hard-to-get
+   bookings carry lead times measured in weeks; surfacing them after dates and
+   flights are locked in can invalidate the whole plan.
+4. **Research things to do and build the day-by-day itinerary** — see Itinerary
+   Building below and `references/itinerary-research.md`. Use the `web-search` /
+   `web-crawl` skills (follow their own conventions — don't fetch pages directly
+   with WebFetch/curl), and cross-check every suggestion against what the outline
+   says about pace and priorities (e.g. "active, nature over shopping") rather
+   than proposing a generic top-10 that ignores stated preferences.
+5. **Hunt deals** — see Deal-Finding below.
+6. **Handle date planning** — see Date Planning below.
+7. **Build the packing list** once season, activities, and the flights' baggage
+   allowance are known — a tailored checkbox checklist in its own dedicated file,
+   reviewed for obvious omissions. See `references/packing-list.md`.
+8. Write durable findings (visa rules, city guides, packing considerations) as
    notes under `01_Notes/06_Travel/` per the `notes` skill's conventions,
    with sources cited. Keep the task's own `outline.md` Details section to
    decision-relevant summaries — the note holds the research, the outline
    holds the conclusion.
+
+## Advance Applications & Bookings — clear these first
+
+Some things can't be left until the plan is settled because they carry lead
+times measured in weeks: a visa that takes six weeks, a passport two months from
+expiry, a trek permit that sells out. Surface these **before** dates and flights
+harden around them — the failure this prevents is locking in a plan only to find
+an application invalidates it.
+
+- **Derive requirements from destination(s) + the traveler's
+  passport/nationality, and verify against an authoritative source** (the
+  destination's immigration site, or the IATA Travel Centre) via `web-search` —
+  not from memory. Entry rules are nationality-specific and change often. Check
+  transit countries too, not just origin and destination — a layover can need a
+  transit visa.
+- **The common lead-time items:** full visas / e-visas (note processing time and
+  whether exact entry dates must be fixed to apply — if so, the visa couples to
+  Date Planning), travel authorizations short of a visa (ESTA, ETA/ETIAS-style
+  schemes), **passport ≥6 months' validity beyond return**, required
+  vaccinations, an IDP if driving, mandatory travel insurance, and permits /
+  timed-entry attractions / restaurants that book out weeks ahead.
+- **Order by lead time** — the longest one sets the earliest feasible departure;
+  feed that back into Date Planning rather than pricing dates that can't happen.
+- **Raise unresolved items as blocking `[ ] Do:` entries in the outline**, each
+  with its lead time and a deadline relative to the target dates (e.g. "apply by
+  2026-10-01 for a Nov departure"). If the outline is silent on visas, ask the
+  traveler directly — don't assume it's handled.
+
+The full checklist and reasoning live in `references/itinerary-research.md`
+(load it before working this gate).
+
+## Itinerary Building — research and the day-by-day plan
+
+Research findings become a day-by-day plan, not a flat list of attractions. The
+core rules (full detail and the reasoning in
+`references/itinerary-research.md` — load it when building an itinerary):
+
+- **Research discipline** — prefer recent sources and confirm hours/price/open
+  status on the official site before committing an activity (a closed-for-
+  renovation sight on the plan is a silent failure); filter every suggestion
+  against the outline's stated priorities instead of a generic top-10; check the
+  window for festivals/holidays (to catch, and to avoid crowds and closures);
+  tag anything that must be booked weeks ahead and lift it into the gate above.
+- **Ground transport between stops** — inter-city trains/ferries/drives eat the
+  day count (a half-day in transit isn't a sightseeing day); feed that back into
+  "day count per stop," and weigh base-and-day-trip against relocating hotels.
+- **Day-by-day construction** — cluster each day by area to cut backtracking;
+  pace realistically (1–2 anchors/day, travel time between them is a first-class
+  cost, not free); **reconcile day 1 and the last day against the actual flight
+  times** (a red-eye arrival makes day 1 rest-only; the last day ends at
+  check-in, not midnight); once dates are fixed, cross-check each activity
+  against the weekday it lands on (fixed closure days) and the season, and swap
+  anything on a closed day — the itinerary analogue of the hidden-overnight-
+  sector check on the flight side.
+- **On-the-ground budget** — estimate daily spend (food, local transport, entry
+  fees, activities) so the total is honest, not just airfare + hotel.
+
+**Output format — day-by-day.** Present dated day blocks (date, weekday, base,
+area focus, then anchors + transit notes, with booked-ahead and closed-day
+risks flagged inline), then a compact one-row-per-day overview table for
+scanning — the same "detail blocks then compact table" shape the flight results
+use. The exact template is in `references/itinerary-research.md`.
 
 ## Deal-Finding — flights and hotels
 
@@ -335,6 +424,16 @@ single fixed-date search:
 Read these using the Bash tool (`cat "$CLAUDE_SKILL_DIR/references/<file>"`).
 Do not guess their contents — read them.
 
+- **references/itinerary-research.md** — load when: clearing the
+  advance-application gate (visas, authorizations, permits), researching things
+  to do, building the day-by-day itinerary, working out ground transport between
+  stops, or estimating the on-the-ground budget. Holds the full visa/application
+  checklist, research-source discipline, day-by-day construction rules, and the
+  output templates.
+- **references/packing-list.md** — load when: building a packing list, reviewing
+  a traveler's draft list for gaps, or advising what to pack. Covers the dedicated
+  checkbox-file format, tailoring to season/activities/baggage limits, and the
+  gap-review of commonly-forgotten essentials.
 - **references/flight-search-tools.md** — load when: evaluating or using any
   flight/hotel search SDK, CLI, or API (Duffel or otherwise), especially
   before writing automation against one. Covers Duffel setup/API shape and
