@@ -39,7 +39,7 @@ You turn a well-scoped task into an executable plan file plus a handoff prompt. 
 
 5. **Review gate.** Point the user at the file; if they want changes, edit the file directly and re-confirm. Do **not** emit the handoff prompt until they approve.
 
-6. **Emit the handoff prompt** as a fenced code block (never a blockquote — a `>` gutter bar gets dragged into the copy; a code block pastes clean). Fill placeholders with real values and **absolute paths** (the executor's cwd may differ). Tell the user to `/clear` and run it in a fresh session.
+6. **Write the handoff prompt to `/tmp/quick-plan-handoff-<slug>.md`**, filling placeholders with real values and **absolute paths** (the executor's cwd may differ). Then hand the user the short **pointer prompt** — the thing they actually copy-paste — as a fenced code block (never a blockquote — a `>` gutter bar gets dragged into the copy; a code block pastes clean). Tell the user to `/clear` and run it in a fresh session.
 
 ## Plan file template
 
@@ -94,7 +94,7 @@ Guardrails for the executor while implementing — keep to what's non-obvious, o
 What this plan deliberately does NOT touch.
 ```
 
-## Handoff prompt template
+## Handoff file content (write to `/tmp/quick-plan-handoff-<slug>.md`)
 
 Fill `<the gate from the plan>` with the actual verification command(s) from the plan file.
 
@@ -113,13 +113,19 @@ Principles:
 Do not start until you've read the whole plan.
 ```
 
+## Pointer prompt template (what you actually hand the user)
+
+```
+Read /tmp/quick-plan-handoff-<slug>.md in full, then follow its instructions exactly. Do not start until you've read the whole file.
+```
+
 ## Rules
 
 - **Never implement.** `quick-plan` stops at the handoff gate; a fresh context does the work — that's the whole design.
 - **Explore inline, don't spawn subagents** — this is the quick path; fan-out is overkill for a well-scoped task.
 - **One descriptively-named file in `.plans/quick-plans/`** under the current directory; gitignored, never committed.
 - **Escape hatches:** multi-step/multi-slice → `/deep-plan`; think-only, no file → `/plan`.
-- **Handoff prompt is a fenced code block, never a blockquote**, with absolute paths and placeholders filled.
+- **The handoff prompt lives in a `/tmp` file; the user only gets a short pointer.** Write the filled-in handoff instructions to `/tmp/quick-plan-handoff-<slug>.md` (absolute paths, placeholders filled), then hand the user a one-line pointer prompt — fenced code block, never a blockquote — telling them to read that file.
 - **Keep the plan honest and lean** — a shorter accurate plan beats a longer speculative one; don't pad Steps.
 - **Paths in the plan are unambiguous** — full repo-root-relative, never a bare filename when the name recurs. A fresh executor can't ask "which `en.ts`?"; a wrong guess edits the wrong file.
 - **"Relevant files & reuse" is self-sufficient** — import paths, signatures, and gotchas distilled in, so the executor never opens a reference file or re-searches for them.

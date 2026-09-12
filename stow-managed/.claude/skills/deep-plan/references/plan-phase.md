@@ -109,12 +109,20 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
 
 6. **Gate → hand off Act.** When the user approves, do NOT roll into coding. **First, confirm every decision is resolved.** If any decision in `## Key Decisions` is still `[OPEN]`, do not collapse or hand off — surface the open decisions via `AskUserQuestion` and get the user to resolve them, exactly as with an unresolved Open Question. Once all are decided, **collapse the menu, keep the reasoning:** edit `PLAN.md` so each decision drops its Option A/B framing and becomes a settled record — *what* was chosen, briefly *why*, and *what was considered and rejected, with the reason*. The implementer reads one chosen path but keeps the "why not the alternative" behind it. Tell the user you've collapsed it.
 
-   Then state plainly that implementation is a separate session and the approved `PLAN.md` (with its Todo list) is the source of truth for this item. Hand them a ready-to-paste **implementation prompt**. Emit it as a **fenced code block** (triple backticks), never a `>` blockquote — a blockquote renders with a left gutter bar that gets dragged into the copy, whereas a code block copies clean and has a one-click copy button. Tailor it to the plan, following this shape (placeholders filled in with real values):
+   Then state plainly that implementation is a separate session and the approved `PLAN.md` (with its Todo list) is the source of truth for this item. Write a ready-to-paste **implementation prompt** to `/tmp/deep-plan-act-<task-slug>-item<n>.md`, tailored to the plan, following this shape (placeholders filled in with real values):
 
    ```
    Implement <path>/PLAN.md (roadmap item <n> — <title>). Work through the Todo list in order, marking each task complete in PLAN.md as you go. Read the Reuse section for import paths, function signatures, and reference files — do not search for these yourself, they're already distilled. Uphold the Boundaries section (Always/Ask/Never). Do not stop until all tasks are done. Run the Testing & Verification gate (<the gate from the plan>) and fix failures before considering the item complete. When the gate passes, tick this item's box (- [ ] → - [x]) in <path>/ROADMAP.md. No unrelated changes or "while I'm here" fixes.
    ```
 
-   Fill `<the gate from the plan>` with the actual command(s) from the Testing & Verification section. Always use **absolute paths** to `PLAN.md` and `ROADMAP.md` in the implementation prompt — the Act session starts fresh and its working directory may differ. Tell them to `/clear` and run it in a fresh session — optionally on a cheaper model, since the thinking is already captured in the plan. If the plan still has unresolved Open Questions, note that the prompt should not be run until they're answered.
+   Fill `<the gate from the plan>` with the actual command(s) from the Testing & Verification section. Always use **absolute paths** to `PLAN.md` and `ROADMAP.md` inside this file — the Act session starts fresh and its working directory may differ.
+
+   Then hand the user the short **pointer prompt** — the thing they actually copy-paste. Emit it as a **fenced code block** (triple backticks), never a `>` blockquote — a blockquote renders with a left gutter bar that gets dragged into the copy, whereas a code block copies clean and has a one-click copy button:
+
+   ```
+   Read /tmp/deep-plan-act-<task-slug>-item<n>.md in full, then follow its instructions exactly. Do not start until you've read the whole file.
+   ```
+
+   Tell them to `/clear` and run it in a fresh session — optionally on a cheaper model, since the thinking is already captured in the plan. If the plan still has unresolved Open Questions, note that the prompt should not be run until they're answered.
 
    **Then point at the loop.** Tell the user that once the item is implemented and its box is ticked, they should `/clear` and re-invoke `/deep-plan` to enter Refine for the next roadmap item — and that deep-plan will report when every item is checked and the roadmap is complete.
