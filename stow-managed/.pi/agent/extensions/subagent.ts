@@ -410,6 +410,7 @@ async function runSingleAgent(
   signal: AbortSignal | undefined,
   onUpdate: OnUpdateCallback | undefined,
   makeDetails: (results: SingleResult[]) => SubagentDetails,
+  override: { model?: string; provider?: string } = {},
 ): Promise<SingleResult> {
   const agent = agents.find((a) => a.name === agentName);
 
@@ -427,12 +428,15 @@ async function runSingleAgent(
     };
   }
 
+  const effectiveProvider = override.provider ?? agent.provider;
+  const effectiveModel = override.model ?? agent.model;
+
   const args: string[] = ["--mode", "json", "-p", "--no-session"];
   // Pass --provider explicitly: pi parses a "provider/id" model string by
   // splitting on the first slash, so an OpenRouter id like
   // "deepseek/deepseek-v4-flash" is otherwise mis-read as provider "deepseek".
-  if (agent.provider) args.push("--provider", agent.provider);
-  if (agent.model) args.push("--model", agent.model);
+  if (effectiveProvider) args.push("--provider", effectiveProvider);
+  if (effectiveModel) args.push("--model", effectiveModel);
   if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 
   let tmpPromptDir: string | null = null;
@@ -446,7 +450,7 @@ async function runSingleAgent(
     messages: [],
     stderr: "",
     usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-    model: agent.model,
+    model: effectiveModel,
     step,
   };
 
@@ -570,16 +574,31 @@ async function runSingleAgent(
 
 // --- Tool parameters ---------------------------------------------------------
 
+const ModelOverrideField = Type.Optional(
+  Type.String({ description: "Override the agent's default model for this task" }),
+);
+const ProviderOverrideField = Type.Optional(
+  Type.String({
+    description:
+      "Override the agent's default provider. Pass this whenever the model id contains a slash " +
+      '(e.g. "deepseek/deepseek-v4-pro") — otherwise it is mis-parsed as provider "deepseek".',
+  }),
+);
+
 const TaskItem = Type.Object({
   agent: Type.String({ description: "Name of the agent to invoke" }),
   task: Type.String({ description: "Task to delegate to the agent" }),
   cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+  model: ModelOverrideField,
+  provider: ProviderOverrideField,
 });
 
 const ChainItem = Type.Object({
   agent: Type.String({ description: "Name of the agent to invoke" }),
   task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
   cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+  model: ModelOverrideField,
+  provider: ProviderOverrideField,
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
@@ -597,6 +616,8 @@ const SubagentParams = Type.Object({
     Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
   ),
   cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
+  model: ModelOverrideField,
+  provider: ProviderOverrideField,
 });
 
 // --- Subagent mode (Alt+S toggle) -------------------------------------------
@@ -670,11 +691,13 @@ export default function (pi: ExtensionAPI) {
       "Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
       'Default agent scope is "user" (from ~/.pi/agent/agents).',
       'To enable project-local agents in .pi/agents, set agentScope: "both" (or "project").',
+      "Pass model/provider on a task, chain step, or single-mode call to override that agent's default model for just that dispatch.",
     ].join(" "),
     promptSnippet: "Delegate recon/review to isolated subagents (scout, reviewer) to preserve parent context",
     promptGuidelines: [
       "Use subagent with the scout agent to gather codebase context without filling your own context window — scout returns a compressed summary instead of raw file reads.",
       "Use subagent with the reviewer agent for code-review passes (quality and security).",
+      "Use subagent with the implementer agent for write-capable execution of a self-contained brief (e.g. an orchestrated implementation step); use model/provider to pin it to a specific tier.",
       "Use parallel mode for independent recon tasks, and chain mode (with {previous}) to feed scout findings into a reviewer.",
     ],
     parameters: SubagentParams,
@@ -769,6 +792,7 @@ export default function (pi: ExtensionAPI) {
             signal,
             chainUpdate,
             makeDetails("chain"),
+            { model: step.model, provider: step.provider },
           );
           results.push(result);
 
@@ -841,6 +865,7 @@ export default function (pi: ExtensionAPI) {
               }
             },
             makeDetails("parallel"),
+            { model: t.model, provider: t.provider },
           );
           allResults[index] = result;
           emitParallelUpdate();
@@ -877,6 +902,7 @@ export default function (pi: ExtensionAPI) {
           signal,
           onUpdate,
           makeDetails("single"),
+          { model: params.model, provider: params.provider },
         );
         if (isFailedResult(result)) {
           const errorMsg = getResultOutput(result);

@@ -22,10 +22,19 @@ The point of Roadmap is to break a large goal into a terse, ordered list of high
 
    **Ask when slicing is genuinely ambiguous.** If the natural boundaries aren't clear from the goal and the code — e.g. two plausible orderings, whether something is its own item or folds into another, where a slice's scope should end — use `AskUserQuestion` before writing the item into `ROADMAP.md`. Don't guess and leave it for the user to catch during the annotation round; that costs a full round-trip for something a single question would have resolved up front.
 
-4. **Write `ROADMAP.md`** — terse, the durable tracker for the whole build. Tell the user the path once written. Structure:
+4. **Ask which mode this build runs in**, unless `$ARGUMENTS` already names one (`batch` or `per-item`). Use `AskUserQuestion` with the trade-off stated plainly:
+
+   - **batch** — plan every item's requirements and design up front, across the whole roadmap; then a fresh orchestrator executes hands-off, dispatching each step to a sub-agent, deciding and logging forks itself, and committing per item. Best when the items are well-understood enough to plan ahead and you want to walk away.
+   - **per-item** — each item is refined and planned only when its turn comes, after the previous item is built; you drive Act yourself and decide any forks that come up. Best when later items depend on what earlier ones reveal, or you want to stay hands-on.
+
+   Record the answer — it becomes the `Mode:` header below and determines which reference files load next.
+
+5. **Write `ROADMAP.md`** — terse, the durable tracker for the whole build. Tell the user the path once written. Structure:
 
 ```
 # Roadmap: <overall goal>
+
+> Mode: <batch|per-item>
 
 ## Goal
 One or two sentences — the end state when every item is done.
@@ -41,14 +50,16 @@ item's REQUIREMENTS.md when its turn comes.
 What the build as a whole does NOT cover.
 ```
 
-5. **Annotation cycle on `ROADMAP.md`.** This is a review pass for what you asked about above, not a substitute for it — genuine slicing ambiguity should already have gone through `AskUserQuestion` in step 3. Because you asked about ambiguity as you hit it, the roadmap you're handing back should have nothing open in it; the review is optional, so offer approval as an equal path rather than implying an annotation round is required:
+6. **Annotation cycle on `ROADMAP.md`.** This is a review pass for what you asked about above, not a substitute for it — genuine slicing ambiguity should already have gone through `AskUserQuestion` in step 3. Because you asked about ambiguity as you hit it, the roadmap you're handing back should have nothing open in it; the review is optional, so offer approval as an equal path rather than implying an annotation round is required:
 
    > ROADMAP.md is written at `<path>`. It has no open questions — I resolved those as I went. If it already reads right, just approve and I'll hand off to Refine. If you want changes, open it and add inline notes — prefix each with `//` (like a code comment) so I can find them: reorder items, drop or merge slices, add a missing one, retitle. Also check item sizing: merge any items that are too fine-grained to justify their own Refine → Plan → Act pass, or append `[quick]` to items that are small but can't be folded (self-evident changes needing no research). Then tell me "address my notes" and I'll update it. **I won't refine, plan, or implement anything until you explicitly approve.**
 
    When the user says they've annotated: re-read the file from disk (they edited it — don't trust your in-context copy), **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants.
 
-6. **Gate → handoff to Refine.** When the user approves, do NOT roll into Refine. Tell them plainly:
+7. **Gate → handoff to Refine (or Refine-all).** When the user approves, do NOT roll into the next phase. Tell them plainly, naming the phase that matches the chosen `Mode:`:
 
    > Roadmap approved. Run `/clear` to start a fresh session, then invoke `/deep-plan` again — it will detect ROADMAP.md and enter the Refine phase for the first item.
+
+   (Batch mode: "...it will detect ROADMAP.md and enter the Refine-all phase, covering every item.")
 
    If the artifacts live outside the repo (user specified a custom path), remind them to re-invoke from the same working directory or pass the path again so the next phase resolves the same artifact directory.
