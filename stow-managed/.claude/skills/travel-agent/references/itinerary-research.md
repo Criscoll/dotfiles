@@ -64,6 +64,26 @@ requirement, its lead time, and the deadline relative to the target dates (e.g.
 "apply by 2026-10-01 for a Nov departure"). Ask the traveler directly rather
 than assuming; a one-line confirmation ("visa already sorted") closes it.
 
+## Taste Profile — the Brief block
+
+Every source and shortlist in this file needs a filter to check candidates
+against — otherwise "fit stated priorities" has nothing concrete to fit
+against. Capture a standard taste-profile block in the trip's `outline.md`
+Brief, inside the existing batched trip-shape intake from `SKILL.md` Workflow
+step 2 (no extra round of questions):
+
+```
+**Taste profile**
+- Loves: …            - Skip: …
+- Energy/pace: …      - Food: …
+- Must-dos: …
+```
+
+Record it once per trip and reuse it on every later pass — don't re-ask if
+it's already in the Brief. This block is what "fit stated priorities, don't
+paste a generic top-10" (below) and the anchor shortlists (Decision-light
+planning) actually check candidates against.
+
 ## Research-Source Discipline
 
 The flight half is careful about verifying claims against observed behavior;
@@ -119,15 +139,49 @@ buses, ferries, and car legs between stops shape the day plan just as much.
   at night — a 01:00 arrival may have no train and only a taxi. Check this
   against the actual flight arrival time before assuming a cheap transfer.
 
+## Decision-light planning
+
+The traveler's decision budget is the scarce resource, not the agent's
+research effort — every question asked costs the traveler decision energy, so
+spend that budget on the choices that actually matter (fixed-time
+commitments) and default the rest.
+
+- **The traveler chooses anchors only.** An anchor is something with a fixed
+  time or limited availability (reservation, timed entry, tour, day trip
+  needing transport) — see the anchor definition below. For each open anchor
+  slot, present **at most 3 candidates**, one marked **(Recommended)** with a
+  one-line reason tied to the taste block, and batch these through
+  `AskUserQuestion` (up to 4 questions per call, as many rounds as needed,
+  grouped by stop).
+- **Must-dos from the taste block are pre-placed, not asked.** If the Brief's
+  taste profile already names a must-do, put it on the itinerary directly —
+  don't turn a settled preference back into a question.
+- **Fillers are defaulted, not asked up front.** Float-pool options, meal
+  spots, and transit mode get auto-picked with a one-line reason each and
+  shown in the draft itinerary; the traveler vetoes what doesn't fit, rather
+  than being asked to choose each one in advance. This is deliberately
+  asymmetric with anchors — the traveler keeps control over the commitments
+  that are expensive to change later (a booked timed-entry slot), while
+  low-stakes reversible choices (which of three nearby cafés) don't need a
+  question at all.
+- **Record settled choices in a "Decisions recorded" list** in the outline (or
+  the research note) so they aren't re-litigated on a later pass — the same
+  pattern flight preferences already use.
+
 ## Building the Day-by-Day Itinerary
 
 - **Geographic clustering.** Group each day's activities by area/neighborhood to
   cut backtracking, and sequence stops to minimize criss-crossing the city —
   order by geography, not by personal ranking.
-- **Realistic pacing.** One or two anchor activities per day plus lighter
-  filler, not a packed list of six. **Treat travel time between activities as a
-  first-class cost** (the way layover time is treated on the flight side), not as
-  free — a day of three sights spread across a city is mostly a day of transit.
+- **Realistic pacing — anchors plus a float pool.** An **anchor** is something
+  with a fixed time or limited availability: a reservation, timed entry, guided
+  tour, or a day trip that needs booked transport. Cap it at **≤2 anchors per
+  day** — beyond that, travel time between them (a first-class cost, the way
+  layover time is treated on the flight side) eats the day. Everything else —
+  3–5 nearby, unscheduled options per area — goes into a per-area **float
+  pool**: explicitly optional, not a to-do list, and a source of picks when
+  plans slip (closure, weather, low energy) rather than a second fixed
+  schedule.
 - **Arrival- and departure-day realism — reconcile against the actual flight
   times.** Build day 1 against the real arrival time: a red-eye or late arrival
   makes day 1 rest/logistics only, and a long-haul arrival brings jet lag that
@@ -141,9 +195,10 @@ buses, ferries, and car legs between stops shape the day plan just as much.
   closures). Move or swap anything landing on a closed day. This is the
   itinerary analogue of the hidden-overnight-sector check on the flight side: a
   plan that looks complete but puts a museum on its closed day is a real defect.
-- **Buffer and rest.** On trips beyond about five days, leave slack. Back-to-back
-  packed days degrade the trip and leave no room for weather, spillover, or a
-  spontaneous find.
+- **Buffer and rest.** On trips beyond about five days, leave slack: one
+  zero-anchor rest day, placed around day 4 or right after the hardest day,
+  plus general slack against back-to-back packed days that degrade the trip and
+  leave no room for weather, spillover, or a spontaneous find.
 - **Weather-driven alternatives.** For any outdoor anchor, note an indoor
   fallback for a bad-weather day — especially in a wet or shoulder season where
   a washout is likely.
@@ -162,6 +217,8 @@ Day 1 — Sat 15 Nov — Taipei (arrival day)
 Day 2 — Sun 16 Nov — Taipei (old-city cluster)
 - Anchor: National Palace Museum — open Sun; timed entry, BOOK AHEAD (~half day).
 - Then: Shilin walk + night market (evening). Transit: museum→Shilin ~25 min metro.
+- Float (optional, nearby): Shilin Ciyou Temple, Yangmingshan tea house, one more
+  night-market stall row — pick on the day, not a fixed commitment.
 - Note: check [holiday] closures.
 ```
 

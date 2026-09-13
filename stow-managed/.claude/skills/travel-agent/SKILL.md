@@ -6,7 +6,9 @@ description: >-
   Surfaces visas and other lead-time applications up front so they aren't discovered
   after dates are locked, and turns research into a day-by-day itinerary (geographic
   clustering, realistic pacing, opening-day and arrival/departure-time checks) rather
-  than a flat attraction list.
+  than a flat attraction list. Keeps itinerary planning decision-light (the traveler
+  picks only anchors from short recommended shortlists; fillers are defaulted) and
+  mines offbeat sources such as Atlas Obscura, Wikivoyage, and Reddit.
   Before running any price search, asks about layover tolerance, nonstop requirements,
   airline quality bar, meal service, and day-of-week/leave-optimization rather than
   optimizing for cheapest total alone; presents results grouped by trip leg (not a flat
@@ -31,7 +33,9 @@ description: >-
   "ESTA", "ETA", "ETIAS", "passport validity", "permit", "book ahead",
   "opening hours", "things to book in advance", "packing list", "what to pack",
   "what should I pack", "packing", "did I forget anything",
-  "Travel_" task, "duffel", "duffel-flight-search".
+  "Travel_" task, "duffel", "duffel-flight-search", "hidden gems", "atlas obscura",
+  "unusual things to do", "off the beaten path", "I can't decide", "decision fatigue",
+  "too many options".
 disable-model-invocation: false
 ---
 
@@ -60,17 +64,23 @@ that fills the outline in.
    changes the search (origin/destination, trip length) underneath you. When
    intake is needed, **batch the trip-shape questions in one `AskUserQuestion`
    call** — pace, priorities, must-dos/must-avoids, budget tier, who's
-   travelling, mobility/dietary constraints — rather than asking one at a time,
-   the same pattern the flight-preferences intake uses below.
+   travelling, mobility/dietary constraints, and a **taste profile** (loves,
+   skip, energy/pace, food, must-dos) — rather than asking one at a time, the
+   same pattern the flight-preferences intake uses below. Record the taste
+   profile in the Brief; see `references/itinerary-research.md` for the block
+   format. It's the filter every later shortlist and source is checked against,
+   so it belongs in this same intake, not a separate round.
 3. **Clear the advance-application gate early** — see Advance Applications &
    Bookings below. Visas, travel authorizations, permits, and hard-to-get
    bookings carry lead times measured in weeks; surfacing them after dates and
    flights are locked in can invalidate the whole plan.
 4. **Research things to do and build the day-by-day itinerary** — see Itinerary
-   Building below and `references/itinerary-research.md`. Use the `web-search` /
-   `web-crawl` skills (follow their own conventions — don't fetch pages directly
-   with WebFetch/curl), and cross-check every suggestion against what the outline
-   says about pace and priorities (e.g. "active, nature over shopping") rather
+   Building below and `references/itinerary-research.md`. For *where to look*,
+   see `references/discovery-sources.md` (Wikivoyage, Atlas Obscura, Reddit,
+   neighborhood-specific search). Use the `web-search` / `web-crawl` skills
+   (follow their own conventions — don't fetch pages directly with
+   WebFetch/curl), and cross-check every suggestion against the outline's taste
+   profile and stated priorities (e.g. "active, nature over shopping") rather
    than proposing a generic top-10 that ignores stated preferences.
 5. **Hunt deals** — see Deal-Finding below.
 6. **Handle date planning** — see Date Planning below.
@@ -125,17 +135,23 @@ core rules (full detail and the reasoning in
   against the outline's stated priorities instead of a generic top-10; check the
   window for festivals/holidays (to catch, and to avoid crowds and closures);
   tag anything that must be booked weeks ahead and lift it into the gate above.
+- **Decision-light** — the traveler picks anchors only, from ≤3 candidates per
+  slot with one marked Recommended; fillers (float pool, meals, transit) are
+  defaulted with a one-line reason and shown in the draft for veto, not asked
+  up front. See `references/itinerary-research.md` for the full mechanics.
 - **Ground transport between stops** — inter-city trains/ferries/drives eat the
   day count (a half-day in transit isn't a sightseeing day); feed that back into
   "day count per stop," and weigh base-and-day-trip against relocating hotels.
 - **Day-by-day construction** — cluster each day by area to cut backtracking;
-  pace realistically (1–2 anchors/day, travel time between them is a first-class
-  cost, not free); **reconcile day 1 and the last day against the actual flight
-  times** (a red-eye arrival makes day 1 rest-only; the last day ends at
-  check-in, not midnight); once dates are fixed, cross-check each activity
-  against the weekday it lands on (fixed closure days) and the season, and swap
-  anything on a closed day — the itinerary analogue of the hidden-overnight-
-  sector check on the flight side.
+  an anchor has a fixed time or limited availability (reservation, timed entry,
+  tour, day trip needing transport) — cap it at ≤2/day, travel time between
+  them is a first-class cost, not free — with everything else in a per-area
+  float pool (3–5 nearby, optional); **reconcile day 1 and the last day against
+  the actual flight times** (a red-eye arrival makes day 1 rest-only; the last
+  day ends at check-in, not midnight); once dates are fixed, cross-check each
+  activity against the weekday it lands on (fixed closure days) and the season,
+  and swap anything on a closed day — the itinerary analogue of the
+  hidden-overnight-sector check on the flight side.
 - **On-the-ground budget** — estimate daily spend (food, local transport, entry
   fees, activities) so the total is honest, not just airfare + hotel.
 
@@ -430,6 +446,10 @@ Do not guess their contents — read them.
   stops, or estimating the on-the-ground budget. Holds the full visa/application
   checklist, research-source discipline, day-by-day construction rules, and the
   output templates.
+- **references/discovery-sources.md** — load when: researching things to do,
+  finding offbeat/hidden-gem options, or using Atlas Obscura, Reddit, or
+  Wikivoyage for a destination. Holds the search order and the Atlas Obscura
+  crawl pattern (URL shapes, coordinate extraction).
 - **references/packing-list.md** — load when: building a packing list, reviewing
   a traveler's draft list for gaps, or advising what to pack. Covers the dedicated
   checkbox-file format, tailoring to season/activities/baggage limits, and the
