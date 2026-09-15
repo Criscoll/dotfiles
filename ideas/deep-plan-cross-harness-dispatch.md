@@ -25,11 +25,8 @@ nothing lets it reach across.
   `usage.output`, `usage.cacheRead`/`cacheWrite` per `message_end` — the exact fields
   `subagent.ts`'s `formatUsageStats` aggregates. A cross-harness dispatcher would sum these the
   same way regardless of which harness spawned the process.
-- **rtk/hook considerations**: this repo's `rtk hook claude` PreToolUse layer rewrites search
-  commands transparently (see root `CLAUDE.md` § Search Tool Environment) but does not touch
-  arbitrary `bash` invocations like a `pi --mode json -p ...` call — so a Claude Code
-  orchestrator shelling out to pi should work unmodified, though it hasn't been tested end to
-  end.
+- **rtk/hook considerations**: no longer applicable — rtk has been uninstalled from both
+  harnesses (2026-09-15).
 - **Permissions**: Claude Code's Bash tool would prompt for approval on a `pi --mode json -p`
   invocation unless pre-approved in `settings.json`/`settings.local.json` — an orchestrator
   running "hands-off" per the batch-mode design would stall on that prompt unless the command

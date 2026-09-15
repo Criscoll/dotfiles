@@ -26,7 +26,6 @@ exec "$HOME/opt/nvim-linux-x86_64.appimage" "$@"
 | `gofmt` | `~/opt/go/bin/gofmt` |
 | `alacritty` | `~/opt/alacritty` |
 | `pi` | `~/opt/pi/pi` |
-| `rtk` | `~/opt/rtk` |
 | `xsv` | `~/opt/xsv` |
 | `vd` | `~/opt/visidata/bin/vd` |
 | `uv` | `~/opt/uv/uv` |

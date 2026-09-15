@@ -262,5 +262,4 @@ Detail has been pushed out of this root file to keep it lean; it loads on demand
 - **`stow-managed/bin/CLAUDE.md`** — binary wrappers, agent-only scripts, script dependency management (PEP 723 / Node), and lint enforcement. Loads when editing files under `bin/`.
 - **`stow-managed/.pi/agent/extensions/CLAUDE.md`** — pi extension TUI conventions and hook instrumentation. Loads when editing pi extensions.
 - **`docs/hook-analytics-reference.md`** — the unified hook logging/analytics system (JSONL schema, instrumentation steps, `hook-analytics` CLI).
-- **`docs/rtk-reference.md`** — full RTK command catalog. RTK rewriting is applied automatically by the hook layer in both harnesses (Claude Code `settings.json` PreToolUse `rtk hook claude`; pi `rtk.ts`), so you rarely need to type `rtk` yourself. **Caveat:** re-running `rtk init` / `rtk init --global` re-expands the full catalog into a CLAUDE.md; if that happens, move it back to `docs/rtk-reference.md` and re-trim.
 - **`docs/tailscale-mullvad-routing-2026-06-25.md`** — settled writeup of the Tailscale+Mullvad CGNAT bypass (the two-mark mechanism); implementation lives in `system/`.

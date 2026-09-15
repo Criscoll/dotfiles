@@ -11,7 +11,7 @@ automatically — if a command fails, surface it to the user.
 **apt** — OS-level utilities (git, tmux, zsh, stow, docker, git-crypt, fd, rclone, delta).
 Distro signs packages and tracks CVEs; version lag is acceptable for slow-moving system tools.
 
-**GitHub release → ~/opt/** — fast-moving dev tools (nvim, fzf, rg, alacritty, rtk, xsv, pi,
+**GitHub release → ~/opt/** — fast-moving dev tools (nvim, fzf, rg, alacritty, xsv, pi,
 delta). Distro is typically 1–3 years behind; GitHub release is the project's canonical
 distribution. Always verify SHA256 against the project's release checksums file.
 
@@ -40,7 +40,6 @@ fallback automatically.
 | `go` / `gofmt` | `~/opt/go/bin/{go,gofmt}` | Download tarball from go.dev/dl; verify sha256; `tar -C ~/opt -xzf go*.tar.gz` | Same | Wrappers: `stow-managed/bin/go`, `stow-managed/bin/gofmt` |
 | `alacritty` | `~/opt/alacritty` | Download AppImage from github.com/alacritty/alacritty/releases; verify sha256; `chmod +x`; place at `~/opt/alacritty` | Same AppImage path | Wrapper: `stow-managed/bin/alacritty` |
 | `pi` | `~/opt/pi/pi` | Download from pi release page (see `~/opt/pi/docs/` for URL); verify sha256; extract to `~/opt/pi/` | Same | Wrapper: `stow-managed/bin/pi` |
-| `rtk` | `~/opt/rtk` | Download binary from github.com/rtk-ai/rtk/releases; verify sha256; `chmod +x`; place at `~/opt/rtk` | Same | Wrapper: `stow-managed/bin/rtk` |
 | `xsv` | `~/opt/xsv` | Download binary from github.com/BurntSushi/xsv/releases; verify sha256; `chmod +x`; place at `~/opt/xsv` | Same | Wrapper: `stow-managed/bin/xsv` |
 | `vd` (visidata) | `~/opt/visidata/bin/vd` | `python3 -m venv ~/opt/visidata && ~/opt/visidata/bin/pip install visidata` | Same | Wrapper: `stow-managed/bin/vd` |
 | `fzf` | `~/opt/fzf` | Download binary from github.com/junegunn/fzf/releases; verify sha256; `chmod +x`; place at `~/opt/fzf` | `brew install fzf; ln -sf $(brew --prefix)/bin/fzf ~/opt/fzf` | No dedicated wrapper; `~/opt/` dir in PATH via `.zshrc` |

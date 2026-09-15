@@ -95,7 +95,6 @@ _ver_cmd() {
     alacritty) echo "alacritty --version" ;;
     hx)        echo "hx --version" ;;
     pi)        echo "pi --version" ;;
-    rtk)       echo "rtk --version" ;;
     xsv)       echo "xsv --version" ;;
     vd)        echo "vd --version" ;;
     claude)    echo "claude --version" ;;
@@ -124,7 +123,7 @@ print(-1 if a < b else (1 if a > b else 0))
 ' "$1" "$2" 2>/dev/null
 }
 
-VERSION_TOOLS="nvim tmux zsh git rclone delta uv fzf rg alacritty hx pi rtk xsv vd claude go"
+VERSION_TOOLS="nvim tmux zsh git rclone delta uv fzf rg alacritty hx pi xsv vd claude go"
 
 # Repo root derived from the script's own real path (bin/ → stow-managed/ → root),
 # so the symlinked ~/bin/dotfiles-audit case resolves correctly from any CWD.
@@ -159,7 +158,6 @@ check_wrapper nvim      ~/opt/nvim
 check_wrapper hx        ~/opt/helix/hx
 check_wrapper alacritty ~/opt/alacritty
 check_wrapper pi        ~/opt/pi/pi
-check_wrapper rtk       ~/opt/rtk
 check_wrapper fzf       ~/opt/fzf
 check_wrapper rg        ~/opt/rg
 check_wrapper xsv       ~/opt/xsv

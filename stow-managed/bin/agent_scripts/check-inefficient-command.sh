@@ -10,10 +10,6 @@
 
 command_str="$1"
 
-# rtk-prefixed commands are already token-optimised — skip them to avoid
-# false positives (e.g. "rtk grep -r" matching the grep-r rule).
-[[ "$command_str" == rtk\ * ]] && exit 0
-
 # git commit: the -m argument is free-form message text, not a command.
 # Patterns like "grep -r" in a commit message body must not be blocked.
 printf '%s' "$command_str" | command grep -qE '(^|[[:space:]])git[[:space:]]+commit\b' && exit 0

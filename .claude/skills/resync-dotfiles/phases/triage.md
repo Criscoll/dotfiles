@@ -154,7 +154,7 @@ Extract the names of missing binaries, wrappers, PATH tools, and Docker images f
 grep -iE 'FAIL|WARN' /tmp/resync-audit-full.txt | grep -iE 'missing|not in PATH|not installed|absent|backing binar'
 ```
 
-From the matching lines, identify individual tool names (e.g. `nvim`, `rtk`, `rg`, `rclone`, `git-crypt`, `vd`, etc.). A single line may list several tools in parentheses — extract each one.
+From the matching lines, identify individual tool names (e.g. `nvim`, `rg`, `rclone`, `git-crypt`, `vd`, etc.). A single line may list several tools in parentheses — extract each one.
 
 Check the ledger for existing decisions:
 
@@ -238,7 +238,6 @@ Use the Write tool to create `$RESYNC_DIR/triage.md`. Write a compact, distilled
 
 ## Tool-decisions
 ### install-now (add to plan)
-- rtk — requested this session
 (or: none)
 
 ### pending (deferred; on record)

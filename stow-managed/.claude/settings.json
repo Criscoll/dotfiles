@@ -40,10 +40,6 @@
           },
           {
             "type": "command",
-            "command": "rtk hook claude"
-          },
-          {
-            "type": "command",
             "command": "bash $HOME/.claude/hooks/gws-guard.sh"
           },
           {

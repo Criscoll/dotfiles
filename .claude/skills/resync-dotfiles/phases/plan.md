@@ -97,7 +97,6 @@ Use the Write tool to create `$RESYNC_DIR/plan.md`:
 (or: none)
 
 ## Tools to Install
-- [ ] rtk — `download from github.com/rtk-ai/rtk/releases; verify sha256` (from references/tool-installs.md)
 (or: none)
 
 ## Collapsible Dirs
