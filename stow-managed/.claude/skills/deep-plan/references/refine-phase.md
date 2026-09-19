@@ -1,16 +1,32 @@
 ## Refine phase
 
-The point of Refine is to convert the **current roadmap item** into validated, codebase-compatible requirements that a fresh agent can pick up without your context.
+The point of Refine is to convert **every roadmap item** into validated,
+codebase-compatible requirements in one pass, with the whole roadmap in view —
+so cross-item dependencies get caught now, not discovered mid-execution.
 
-1. **Re-read `ROADMAP.md` from disk** and identify the current item (first unchecked). State which item you're refining. Everything below is scoped to **that one item** — not the whole roadmap.
+1. **Re-read `ROADMAP.md` from disk** and restate the overall goal in one
+   sentence. If the restatement feels wrong, stop and ask — do not refine
+   around a guessed interpretation. Then read the code **across all items**,
+   looking specifically for where they meet: shared files, shared data shapes,
+   ordering constraints, anything one item's output feeds into another's input.
+   Read-only recon sub-agents (e.g. `subagent` with the `scout` agent, or the
+   equivalent in-harness recon tool) may gather raw context to keep your own
+   context lean — but you, the planner, must read any code that touches a
+   boundary between items yourself; don't take a sub-agent's summary as the
+   final word on a contract's shape.
 
-2. **Restate** the item in one sentence. If the restatement feels wrong or the item is ambiguous, stop and ask — do not refine around a guessed interpretation.
+2. **For each non-`[quick]` item, in roadmap order:** restate it in one
+   sentence, then validate it against the codebase **as it will exist after
+   earlier items are built** — not just the codebase as it exists today. Ask
+   about ambiguity the moment you hit it, via `AskUserQuestion` — but batch
+   questions across items into as few calls as the tool allows (up to 4
+   questions per call) rather than asking one item at a time. `[quick]` items
+   are skipped entirely — they never get a `REQUIREMENTS.md`.
 
-3. **Validate against the codebase.** Read the relevant code in depth — not just the file named, but how it connects to the surrounding system. Grep for related symbols, check `git log` for prior work, read adjacent modules and their callers. You're answering: *does this item make sense, and is it compatible with what already exists* (including whatever earlier roadmap items already built)?
-
-4. **Ask when unclear.** If the item is ambiguous, under-specified, or incompatible with the code as written, use AskUserQuestion to resolve it. Asking is this phase's entire job — do not paper over gaps by guessing.
-
-5. **Write `REQUIREMENTS.md`** (overwrite any stale one from a previous item) — self-contained enough that a fresh agent (or you, post-`/clear`) can pick it up cold. Tell the user the path once written. Structure:
+3. **Write `items/NN-<item-slug>/REQUIREMENTS.md` for each non-`[quick]`
+   item.** Create the `items/NN-<item-slug>/` directory as needed. No
+   technical design in any of these files — that is the Plan phase's job.
+   Structure:
 
 ```
 # Requirements: <item title>
@@ -43,16 +59,44 @@ What this item explicitly does NOT cover (including anything deferred to a later
 roadmap item).
 ```
 
-   **No technical design here** — no chosen approach, no file-by-file steps, no edge-case engineering. That is the Plan phase's job. Refine establishes *what and why* for this item, validated against reality; Plan decides *how*.
+4. **Write `CONTRACTS.md`** at a **behavioural** level — what crosses an item
+   boundary, not yet how it's implemented (the Plan phase makes it concrete).
+   One entry per contract:
 
-6. **Annotation cycle on `REQUIREMENTS.md`.** This is a review pass, not the primary way ambiguity gets resolved — that's step 4's job, via `AskUserQuestion`, in the moment you hit it. If step 4 did its job, the `## Open Questions` section is empty (or holds only items genuinely deferred to Plan research), so the review is optional — offer approval as an equal path rather than implying an annotation round is required:
+```
+# Contracts
 
-   > REQUIREMENTS.md is written at `<path>`. I resolved open questions with you as I went, so there's nothing outstanding — if it looks right, just approve and I'll hand off to Plan. If you want changes, open it and add inline notes — prefix each with `//` (like a code comment) so I can find them: corrections, removed requirements, missed constraints, clarifications. Then tell me "address my notes" and I'll update it. **I won't plan or implement anything until you explicitly approve.**
+## C1 — <short name>
+- **Produced by:** item <n> — <title>
+- **Consumed by:** item <m> — <title> (repeat if more than one)
+- **Shape:** behavioural description of what's produced (e.g. "a CLI flag
+  that accepts X and does Y"; concrete types/signatures come in the Plan phase)
+- **Verify:** (left blank — the Plan phase fills this in with a concrete check
+  the orchestrator can run)
+```
 
-   When the user says they've annotated: re-read the file from disk, **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants.
+5. **Run the annotation pass** across `ROADMAP.md`, every `REQUIREMENTS.md`,
+   and `CONTRACTS.md` — the `//`-prefixed convention: re-read each file from
+   disk, scan for `//` markers, address them, clear the markers. If nothing is
+   open (because ambiguity was resolved via `AskUserQuestion` as you went),
+   say so and offer approve-as-is as an equal path to annotating rather than
+   implying an annotation round is required.
 
-7. **Gate → handoff to Plan.** When the user approves, do NOT roll into planning. Tell them plainly:
+6. **Gate → handoff to Plan.** When the user approves every REQUIREMENTS.md
+   and CONTRACTS.md, do NOT roll into planning. Tell them plainly:
 
-   > Requirements approved. Run `/clear` to start a fresh session, then invoke `/deep-plan` again — it will detect REQUIREMENTS.md and enter the Plan phase for this item.
+   > Refine approved. Run `/clear` to start a fresh session, then invoke `/deep-plan` again — it will detect that every item has a REQUIREMENTS.md and enter the Plan phase.
 
-   If the artifacts live outside the repo (user specified a custom path), remind them to pass the path again on the next invocation. The fresh session is deliberate: the Plan phase should start from the clean artifact, not your accumulated Refine context.
+   If the artifacts live outside the repo, remind them to pass the path again
+   so the next phase resolves the same artifact directory.
+
+---
+
+### Re-planning a single item (failure recovery)
+
+The steps above describe the first, whole-roadmap Refine pass. When the
+orchestrator (see `plan-phase.md`'s EXECUTE.md template) halts on a failed
+item, recovery re-runs Refine **scoped to that one item** — see
+`references/replan-phase.md` for the mechanics. It reuses this file's
+REQUIREMENTS.md template and the same "ask, don't guess" discipline, just
+narrowed to one item plus its downstream dependents.

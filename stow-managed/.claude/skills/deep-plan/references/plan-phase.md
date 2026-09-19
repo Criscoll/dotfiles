@@ -1,19 +1,35 @@
 ## Plan phase
 
-The point of Plan is to turn the current item's approved requirements into a technical design durable enough to implement from.
+The point of Plan is to turn every item's approved requirements into a
+technical design durable enough for a fresh **orchestrator** session to
+execute hands-off — dispatching each step to a sub-agent, reviewing the
+result, and committing per item without further human involvement until it
+halts or finishes.
 
-1. **Re-read `REQUIREMENTS.md` from disk.** It is this phase's input and the session is fresh — load it, don't reconstruct it from memory. Confirm its `Roadmap item` header matches the current unchecked item in `ROADMAP.md`. If it has unresolved Open Questions, surface them and resolve with the user before planning on top of them.
+Read `references/model-tiers.md` before starting — every step you write needs
+an effort tier.
 
-2. **Research for decisions.** Do any further targeted reading needed to make sound technical choices — the requirements told you *what*; you may need to look closer to decide *how*. **When research surfaces a real fork you're not confident enough to recommend outright, ask via `AskUserQuestion` right then** rather than only parking it as `[OPEN]` in Key Decisions and waiting for the gate. Reserve `[OPEN]` for decisions genuinely better made after the user sees the fuller plan in context, or for recording the outcome of a question you already asked. As you research, **extract concrete code-level context** — don't just understand the approach conceptually, capture the exact import paths, function signatures, class/interface names, API contracts, and file paths to proven implementations. You WILL write these into the plan's Reuse section in the next step. Also identify any skills or extensions the implementing agent must explicitly invoke (e.g. `docker`, `typescript-knowledge`, `svelte-knowledge`, `python-knowledge`) — include a skill only if the implementer needs to call it themselves; omit skills the harness auto-invokes transparently.
+1. **Re-read `ROADMAP.md`, `CONTRACTS.md`, and every `items/NN-<slug>/REQUIREMENTS.md`
+   from disk.** Resolve any Open Questions left in a REQUIREMENTS.md before
+   planning on top of it — surface them with `AskUserQuestion`, batching across
+   items. Then research technical decisions per item: extract concrete
+   code-level context (import paths, signatures, file paths) as you go, and
+   ask about a genuine fork the moment you hit it rather than only parking it
+   `[OPEN]`.
 
-3. **Distill references.** Before writing the plan, consolidate what you found in step 2 into a Reuse section. The goal: an implementer reading the plan should never need to open a reference file or doc — every concrete import path, function signature, interface name, API contract, and gotcha is already written down. If you found yourself reading an example file (handoff.ts, qna.ts, etc.) or a doc page (extensions.md, tui.md, etc.), you must have captured what you learned from it here.
+2. **Make each contract in `CONTRACTS.md` concrete.** For every `C<n>`, replace
+   the behavioural `Shape` with an exact path, symbol, and signature or schema,
+   and fill in `Verify` — a concrete check the orchestrator can run later
+   (a command, a grep, a type check) to confirm the contract actually holds
+   before/after an item runs.
 
-4. **Write `PLAN.md`** (overwrite any stale one from a previous item). Tell the user the path once written. Structure (the requirements material lives in REQUIREMENTS.md and is not duplicated here):
+3. **Write each `items/NN-<slug>/PLAN.md`** with this structure:
 
 ```
 # Plan: <item title>
 
 > Roadmap item: <n> — <title>   (must match REQUIREMENTS.md and ROADMAP.md)
+> Contracts: produces C<n>, C<m>; consumes C<k>   (omit either half if empty)
 
 ## Goal
 One or two sentences — what this plan sets out to accomplish. The first thing
@@ -36,54 +52,67 @@ A review surface for the annotation cycle. For each decision point:
 - **Recommendation** (if confident), else leave the status OPEN for the user to choose.
 
 If ANY decision is `[OPEN]`, the annotation handback enumerates them and asks the
-user to resolve them — the plan does NOT hand off to Act with open decisions.
+user to resolve them — the plan does NOT hand off to Execute with open decisions.
 On approval this section COLLAPSES (see Gate step): the Option A/B menu is dropped,
 but each decision keeps a short record — what was chosen, briefly why, and what was
 considered-and-rejected with the reason. That reasoning trail is context the
 implementer needs, not noise.
 
 ## Agent Tooling
-Skills or extensions the implementing agent must explicitly invoke:
+Skills or extensions the implementing sub-agent must explicitly invoke:
 - `<skill-name>` — why the executor needs it
 (Omit this section only if no skills or extensions are relevant.)
 
-## Proposed Steps
-High-level sequence, not implementation detail. Each step independently
-reviewable. Mark steps blocked on an open question with [BLOCKED: <question>].
+## Steps
+Dispatch units — each one a self-contained brief for one sub-agent dispatch
+producing one reviewable diff. Size each step so a sub-agent could execute it
+from the brief alone, without needing to ask the orchestrator anything beyond
+a fork.
+
+### Step k — <title> · effort: <Lightweight|Moderate Thinking|Deep Thinking> — <why this tier>
+- [ ] <task>
+- [ ] <task>
+Files: <exact paths this step may touch>
+Done when: <a concrete, runnable check>
+
+## Anticipated Forks (optional)
+Divergences you can already foresee (e.g. "if the existing helper doesn't
+accept a callback, wrap it instead of modifying its signature"), each with a
+resolution decided in advance so the orchestrator doesn't have to reason about
+it live.
+
+## Commits
+Default: this item lands as a **single commit** once its verification gate
+passes. Only split into multiple commits when there's a concrete reason (e.g.
+two genuinely separable concerns, or a diff large enough that one reviewable
+commit would bury the other change) — name each commit, what it contains, and
+which steps/files belong to it, in the order they should land. Most items
+should just say "single commit."
 
 ## Testing & Verification
-How the implementer will know each step works. Name the test framework and
-where tests live, the specific cases worth covering (not just "add tests"),
-and the verification gate the whole item must pass before it's done
-(e.g. typecheck && lint && test && build). If the change isn't testable in
-the usual way, say how it will be verified instead.
+How the orchestrator will know each step, and the item as a whole, works. Name
+the test framework and where tests live, the specific cases worth covering
+(not just "add tests"), and the verification gate the whole item must pass
+before it's committed (e.g. typecheck && lint && test && build). If the change
+isn't testable in the usual way, say how it will be verified instead.
 
 Two verification anti-patterns to call out in the plan when relevant:
 
 - **Verify scope:** When the plan wraps or instruments existing behavior (logging,
   caching, metrics), scope verification to the new behavior only. Do not re-verify
-  the underlying logic — it wasn't changed and wasn't a regression risk. Write this
-  explicitly in the plan's Testing & Verification section so the implementer doesn't
-  drift into re-testing pre-existing behavior.
+  the underlying logic — it wasn't changed and wasn't a regression risk.
 
-- **Executor self-interference:** If the Act session runs inside an environment with
-  its own input guards (hooks, extensions), verification commands that embed a guarded
-  pattern — even as a quoted string or JSON fixture — may be silently intercepted.
-  The guard's block message appears as output, but no subprocess ran. When this risk
-  exists (plan configures the system the implementer runs in), note it and prefer
-  reading side-effects (log files, state files) over synthesizing matching inputs.
-
-## Todo
-A granular, checkbox task list derived from Proposed Steps — the tracker the
-implementer will work through for THIS item. Break into sub-phases if the item
-has natural stages.
-- [ ] task
-- [ ] task
+- **Executor self-interference:** If a dispatched sub-agent runs inside an
+  environment with its own input guards (hooks, extensions), verification
+  commands that embed a guarded pattern — even as a quoted string or JSON
+  fixture — may be silently intercepted. When this risk exists, note it and
+  prefer reading side-effects (log files, state files) over synthesizing
+  matching inputs.
 
 ## Boundaries
 Behavioral guardrails for the implementer, in three tiers:
 - **✅ Always** — invariants the implementation must uphold
-- **⚠️ Ask first** — changes that require checking with the user before proceeding
+- **⚠️ Ask first** — changes that require checking with the user before proceeding (the orchestrator treats these as a HALT, not a decision it can make itself)
 - **🚫 Never** — things the implementation must not do
 
 ## Out of Scope
@@ -99,30 +128,231 @@ Concrete code-level context the implementer needs at their fingertips — distil
 Do NOT paste entire files — just the skeleton and signatures needed to write the implementation.
 ```
 
-5. **Annotation cycle on `PLAN.md`.** Hand control back. If nothing in `## Key Decisions` is `[OPEN]` — because you asked about real forks via `AskUserQuestion` during research (step 2) — the review is optional, so offer approval as an equal path:
+   **`[quick]` items** get a compact `PLAN.md` instead of the full template:
+   just Goal, Steps (same dispatch-unit format above), Commits, Testing &
+   Verification, and Boundaries — no Technical Context, Edge Cases, Key
+   Decisions, or Reuse sections. They still get dispatched by the
+   orchestrator exactly like any other item.
 
-   > PLAN.md is written at `<path>`. No decisions are left open — I settled the forks with you while planning. If it looks right, just approve and I'll collapse the decision records and hand you the implementation prompt. If you want changes, open it and add inline notes — prefix each with `//` (like a code comment) so I can find them: corrections, removed sections, different approaches, missed context. Then tell me "address my notes" and I'll update it. **I won't implement anything until you explicitly approve.**
+4. **Cross-plan consistency pass**, done in this same session with every
+   item's PLAN.md in context at once (this is the reason Plan plans the whole
+   roadmap in one sitting rather than per item). Check:
 
-   If any decision *is* still `[OPEN — needs your decision]` — reserved for forks genuinely better judged once the user sees the fuller plan in context — do NOT ask the user to annotate a choice inline. Resolve them the same way you resolve any open question: enumerate them and settle each with `AskUserQuestion` right here, so the discussion happens as Q&A rather than a slow inline-comment round-trip. State plainly that the plan can't hand off to implementation while any decision is open.
+   - every contract an item **consumes** is produced by an **earlier** item,
+     and the consuming plan's assumed shape matches the producing plan's
+     concrete shape from step 2;
+   - when two items edit the same file, the plans agree on which runs first
+     and that the second's steps still apply after the first's edits;
+   - every step across every plan has both an effort tier and a `Done when:`;
+   - every item has a runnable Testing & Verification gate and a Commits section;
+   - no item's Boundaries conflict with another's (e.g. one item's ✅ Always
+     contradicts another's 🚫 Never).
 
-   When the user says they've annotated: re-read from disk, **scan for `//`-prefixed notes**, address every one in place, clear the `//` markers once resolved, report what changed, and return to the gate. Repeat as many rounds as the user wants. The guard holds every round: **do not write production code until the user explicitly approves.**
+   Fix anything you find in place, in the affected PLAN.md files, and report
+   what you fixed and why.
 
-6. **Gate → hand off Act.** When the user approves, do NOT roll into coding. **First, confirm every decision is resolved.** If any decision in `## Key Decisions` is still `[OPEN]`, do not collapse or hand off — surface the open decisions via `AskUserQuestion` and get the user to resolve them, exactly as with an unresolved Open Question. Once all are decided, **collapse the menu, keep the reasoning:** edit `PLAN.md` so each decision drops its Option A/B framing and becomes a settled record — *what* was chosen, briefly *why*, and *what was considered and rejected, with the reason*. The implementer reads one chosen path but keeps the "why not the alternative" behind it. Tell the user you've collapsed it.
+5. **Run the annotation pass** across all PLAN.md files and CONTRACTS.md — same
+   `//` convention as elsewhere. Any `[OPEN — needs your decision]` Key
+   Decision is not left for annotation — settle it via `AskUserQuestion` right
+   here.
 
-   Then state plainly that implementation is a separate session and the approved `PLAN.md` (with its Todo list) is the source of truth for this item. Write a ready-to-paste **implementation prompt** to `/tmp/deep-plan-act-<task-slug>-item<n>.md`, tailored to the plan, following this shape (placeholders filled in with real values):
+6. **Gate → write EXECUTE.md and hand off.** When the user approves every plan:
+
+   - **Collapse Key Decisions** in every PLAN.md: drop the Option A/B menu,
+     keep what was chosen, briefly why, and what was considered-and-rejected
+     with the reason.
+   - **Write `EXECUTE.md`** (template below) in the artifact directory, with
+     absolute paths throughout and the effort-tier definitions copied in
+     verbatim from `references/model-tiers.md`.
+   - Tell the user plainly that EXECUTE.md is the orchestrator's whole
+     protocol — it dispatches, reviews, gates, commits, and logs without
+     further prompting, only stopping to write a failure report and halt, or
+     when finished.
+   - Hand over the pointer prompt as a **fenced code block** (never a `>`
+     blockquote — it copies clean):
+
+     ```
+     Read <abs-path>/EXECUTE.md in full, then follow its instructions exactly. Do not start until you've read the whole file.
+     ```
+
+   - **Recommend running the orchestrator at the Deep Thinking tier**, in a
+     fresh session (`/clear` first) — it needs to judge forks and review diffs
+     against plans it didn't write itself, which is exactly the Deep Thinking
+     use case from `model-tiers.md`.
+
+---
+
+## EXECUTE.md template (orchestrator protocol)
+
+Fill this in with real absolute paths and the effort-tier definitions when
+writing `EXECUTE.md`. The orchestrator that reads this file runs it standalone
+— it does not re-read this reference file, so nothing here may be left
+implicit.
+
+````markdown
+# Execute: <overall goal>
+
+You are the **orchestrator** for this roadmap. Your job is to **dispatch,
+review, gate, commit, and log** — not to re-plan what the plans already
+settled, and not to implement steps yourself. Every step in every PLAN.md
+must be executed by a dispatched sub-agent, not inline by you — you review
+and decide, sub-agents implement. Small review fixups of about 5 lines or
+fewer (e.g. a missing import) may be applied inline by you and logged;
+anything larger goes through a fresh dispatch.
+
+Artifact directory: <abs-path>
+- ROADMAP.md: <abs-path>/ROADMAP.md
+- CONTRACTS.md: <abs-path>/CONTRACTS.md
+- Items: <abs-path>/items/NN-<slug>/{REQUIREMENTS.md,PLAN.md,FAILURE.md}
+- Log: <abs-path>/EXECUTION-LOG.md (append-only; create if missing)
+
+## Effort tiers
+
+<tier definitions and dispatch guidance copied verbatim from references/model-tiers.md>
+
+## 0. Start or resume
+
+1. Read ROADMAP.md, CONTRACTS.md, and EXECUTION-LOG.md (if it exists).
+2. **Check every `items/NN-<slug>/FAILURE.md`.** If any exists, the roadmap is
+   halted on that item pending a human-approved re-plan — report it to the
+   user (its Goal, what failed, one-line root cause) and stop. Do not attempt
+   to resolve it yourself, and do not skip past that item to a later one.
+3. Position = the first unchecked item in ROADMAP.md, then within it the
+   first unchecked step in that item's PLAN.md.
+4. Run `git status --porcelain`.
+   - **Fresh start** (no EXECUTION-LOG.md yet): it must be clean. If not,
+     write a FAILURE.md for item 1 (see the Failures section) explaining the
+     dirty tree and stop — unrelated uncommitted changes would leak into the
+     first item's commit.
+   - **Resume after a normal pause** (no pending FAILURE.md): any uncommitted
+     changes must match exactly the `Files:` of the step you're resuming
+     mid-way through. If they don't, treat it as a failure (see below) —
+     you cannot tell which changes belong to this run.
+   - **Resume after a re-plan** (EXECUTION-LOG.md's last entry for this item
+     is RE-PLAN): trust the re-plan's stated decision about the working tree
+     in the updated PLAN.md's Technical Context — it already reconciled
+     whatever the failed attempt left behind. Start this item's steps fresh
+     from the top unless the re-plan says otherwise.
+
+## Per item
+
+1. **Check contracts consumed.** Run the `Verify` check for every contract
+   this item consumes (from CONTRACTS.md), and spot-check the plan's Reuse
+   entries against the current codebase. A mismatch counts as a fork — handle
+   it via the Forks process below before dispatching any step.
+2. **Dispatch each step** at the effort tier its PLAN.md names, using the
+   `subagent` tool (pi) or the `Agent` tool (Claude Code), picking a concrete
+   model per `model-tiers.md`'s dispatch guidance. Give the sub-agent a
+   self-contained brief: the step's tasks verbatim, any Reuse entries the step
+   needs, the item's Boundaries, the exact shape of any contract this step
+   produces, `Files:`, `Done when:`, any skills the step should invoke, and an
+   explicit instruction to report divergence rather than decide it.
+3. **Review the result.** Wait for the sub-agent's report, then check its
+   report and `git diff` against the step's tasks and the item's Boundaries,
+   and run `Done when:` yourself.
+   - **Accept** → tick the step's tasks in PLAN.md, log a DONE entry.
+   - **Reject** → re-dispatch once with specific corrections. If the failure
+     was about capability rather than unclear instructions, re-dispatch one
+     tier up. Log the escalation either way.
+4. **Run the item's Testing & Verification gate.** On failure, allow up to 2
+   fix dispatches at the item's tier (or one tier up on the second attempt if
+   the first fix attempt also failed to diagnose it). If the gate still fails
+   after that bound, **this is a failure, not a fork** — go to the Failures
+   section below rather than attempting a third fix. That bound exists
+   specifically to stop thrashing on a problem that's actually in the plan,
+   not the implementation.
+5. **Check contracts produced.** Run the `Verify` check for every contract
+   this item produces.
+6. **Commit.** Follow the item's PLAN.md `## Commits` section — a single
+   commit by default, or the declared multi-commit split, landed in the order
+   given. For each commit, stage only the files belonging to that commit, by
+   explicit path — never `-A` or a wildcard. Check the diff for secrets or
+   runtime files before staging. Write a commit message that states what
+   changed and why, on the current branch. Never create a new branch, push, or
+   force-push.
+7. **Tick the item** in ROADMAP.md and log an ITEM-DONE entry with the commit
+   hash(es).
+
+## Forks — decide, log, patch
+
+1. Check the item's `## Anticipated Forks` first — if this divergence was
+   foreseen, use its pre-decided resolution and skip straight to logging it.
+2. Otherwise, choose the option most consistent with the item's REQUIREMENTS
+   Goals and Boundaries and with CONTRACTS.md, preferring the smallest
+   deviation from the plan that still resolves the divergence.
+3. Log the fork in EXECUTION-LOG.md: what diverged, the options considered,
+   the decision, and the reasoning.
+4. If the fork changes a contract's shape, update CONTRACTS.md and patch
+   every downstream PLAN.md that consumes it **before continuing past this
+   item** — log each patch as its own EXECUTION-LOG.md entry.
+5. **This is a failure, not a decision you make, when:** an ⚠️ Ask-first or
+   🚫 Never boundary would be crossed, or the fork invalidates an item's
+   stated Goal rather than just its implementation detail. Go to Failures.
+
+## Failures — document, halt, wait
+
+A failure is anything you cannot resolve within this protocol: a gate that
+still fails after the fix-dispatch bound, a fork that would cross an
+Ask-first/Never boundary or invalidate the item's Goal, or state you can't
+reconcile (e.g. a dirty tree at a fresh start). You do not guess your way past
+a failure and you do not keep retrying — you gather the facts, write them
+down, and stop. Getting the roadmap moving again is the user's call, made
+after they've read what you wrote.
+
+1. **Gather the facts** before writing anything: the actual gate/error output
+   (not a paraphrase), which steps were attempted and their outcomes, what
+   fix or fork options were tried or considered and why each didn't resolve
+   it, and the current `git status`/`git diff` state.
+2. **Write `items/NN-<slug>/FAILURE.md`:**
 
    ```
-   Implement <path>/PLAN.md (roadmap item <n> — <title>). Work through the Todo list in order, marking each task complete in PLAN.md as you go. Read the Reuse section for import paths, function signatures, and reference files — do not search for these yourself, they're already distilled. Uphold the Boundaries section (Always/Ask/Never). Do not stop until all tasks are done. Run the Testing & Verification gate (<the gate from the plan>) and fix failures before considering the item complete. When the gate passes, tick this item's box (- [ ] → - [x]) in <path>/ROADMAP.md. No unrelated changes or "while I'm here" fixes. If reality diverges from the plan (a file or function isn't as described, a step can't work as written, or a decision wasn't settled), STOP and report the fork with options — don't improvise a workaround.
+   # Failure: <item title>
+
+   > Roadmap item: <n> — <title>
+   > Halted: <ISO 8601 timestamp>
+
+   ## What was attempted
+   Steps dispatched, at what tier, and their outcomes.
+
+   ## What failed
+   The actual gate/error output or the boundary/Goal that would have been
+   crossed. Not a paraphrase — paste the real output.
+
+   ## Root-cause theory
+   Your best current theory: a wrong assumption in the plan, a transient issue
+   worth re-checking, missing context, or a genuine plan gap. Say which, and
+   why you believe it.
+
+   ## Working-tree state
+   Output of `git status --porcelain` and a summary of any uncommitted diff,
+   so the re-plan knows what it's building on top of.
+
+   ## Recommendation for re-plan
+   What you'd point the re-plan at first — not a decision, a pointer.
    ```
 
-   Fill `<the gate from the plan>` with the actual command(s) from the Testing & Verification section. Always use **absolute paths** to `PLAN.md` and `ROADMAP.md` inside this file — the Act session starts fresh and its working directory may differ.
+3. **Append a HALT-FAILURE entry** to EXECUTION-LOG.md referencing the file.
+4. **Tell the user plainly**, in your final message: which item halted, the
+   one-line reason, and that re-starting requires them to review FAILURE.md
+   and explicitly ask to re-plan that item (`references/replan-phase.md`) —
+   you do not resume or re-plan on your own initiative.
+5. Stop. Do not touch later items, do not keep attempting fixes, and do not
+   revert the working tree unless leaving it as-is would itself violate a
+   Boundary — if you do revert, say so in FAILURE.md.
 
-   Then hand the user the short **pointer prompt** — the thing they actually copy-paste. Emit it as a **fenced code block** (triple backticks), never a `>` blockquote — a blockquote renders with a left gutter bar that gets dragged into the copy, whereas a code block copies clean and has a one-click copy button:
+## Finish
 
-   ```
-   Read /tmp/deep-plan-act-<task-slug>-item<n>.md in full, then follow its instructions exactly. Do not start until you've read the whole file.
-   ```
+When every item is checked: run the roadmap's final overall gate if one is
+named, write a summary EXECUTION-LOG.md entry (items completed, commits made,
+forks decided, contracts patched, escalations), and report to the user.
+Archiving the artifact directory is left to the next `/deep-plan` invocation.
+**Never** push, force-push, rewrite history, or switch branches — those are
+outside this protocol regardless of how the run went.
 
-   Tell them to `/clear` and run it in a fresh session — optionally on a cheaper model, since the thinking is already captured in the plan. If the plan still has unresolved Open Questions, note that the prompt should not be run until they're answered.
+## EXECUTION-LOG.md entry format
 
-   **Then point at the loop.** Tell the user that once the item is implemented and its box is ticked, they should `/clear` and re-invoke `/deep-plan` to enter Refine for the next roadmap item — and that deep-plan will report when every item is checked and the roadmap is complete.
+```
+## <ISO 8601 timestamp> — item <n> step <k> — DONE|FORK|PATCH|ESCALATE|HALT-FAILURE|RE-PLAN|ITEM-DONE
+<2-5 lines: what happened, and for FORK/PATCH/ESCALATE/HALT-FAILURE/RE-PLAN, why>
+```
+````
