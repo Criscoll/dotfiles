@@ -289,6 +289,33 @@ function fzf_rg_select() {
 zle -N fzf_rg_select
 bindkey '^T' fzf_rg_select
 
+# === Worktrees ===
+
+# Parent directories that hold manually maintained worktrees (besides paseo).
+# Currently none — add paths to this array and wt/wtf will pick them up.
+WT_EXTRA_DIRS=()
+
+function _wt_list() {
+    local d
+    for d in ~/.paseo/worktrees/*/*(N/) $^WT_EXTRA_DIRS/*(N/); do
+        [[ -d $d/.git || -f $d/.git ]] || continue
+        printf '%s\t%s\t%s\n' "${d:t}" "$(git -C $d branch --show-current 2>/dev/null)" "$d"
+    done
+}
+
+# List all worktrees: name, branch, path
+function wt() {
+    _wt_list | awk -F'\t' '{printf "%-24s %-24s %s\n", $1, $2, $3}'
+}
+
+# Fuzzy-pick a worktree and cd into it
+function wtf() {
+    local selected
+    selected=$(_wt_list | fzf --delimiter='\t' --with-nth=1,2 --header='Pick a worktree (name/branch)')
+    [[ -n $selected ]] || return 0
+    cd "${selected##*$'\t'}"
+}
+
 # === NVM ===
 
 export NVM_DIR="$HOME/.nvm"
