@@ -77,6 +77,28 @@ Default calendar is the authenticated account's primary calendar.
   --location "New place"
 ```
 
+## Deleting events
+
+```bash
+# Delete an event (primary calendar)
+~/bin/agent_scripts/calendar-delete <event-id>
+
+# On a specific calendar
+~/bin/agent_scripts/calendar-delete <event-id> --calendar <calendar-id>
+```
+
+The wrapper pre-fetches the event and prints what it is deleting, then deletes it.
+Google's API marks the event `cancelled` rather than hard-removing it immediately.
+
+**Recurring series masters are refused.** Deleting a master removes the entire series.
+The wrapper detects this and exits with an error unless `--force` is passed:
+
+```bash
+~/bin/agent_scripts/calendar-delete <master-event-id> --force   # deletes the whole series
+```
+
+Prefer deleting a specific instance (event ID with a `_YYYYMMDD` suffix) over touching a master.
+
 ## Moving events between calendars
 
 ```bash
@@ -131,6 +153,21 @@ Only include fields that need to change; omitted fields are left as-is. Events i
 ```
 
 **Rule:** Use `calendar-batch-update` whenever you have 5 or more updates to make. Use `calendar-update` for 1–4 individual updates where ad-hoc is cleaner.
+
+## Deadline vs happening events
+
+All-day events are often used as **self-imposed deadlines** — work that must be *done by* that date, not things that *happen* on it. These read as appointments at a glance and cause confusion later. When creating or updating an event, first classify it:
+
+- **Happening** — a real-world appointment/action on that day (inspection, call, flight). Write normally.
+- **Deadline** — own work due by that date. Mark it so it's self-evident:
+  - **Summary:** prefix with `⏰ DEADLINE — `, then what must be done (not what happens that day). E.g. `⏰ DEADLINE — NOIM completed + signed by both partners (authorised witness)`.
+  - **Description:** open with a one-line disclaimer — `⏰ This is a deadline: <what> must be done by <date>. It is not an appointment itself.`
+
+### Description formatting for deadlines
+
+Write descriptions that answer three questions in order — *what is this thing, why is it necessary, what does the deadline feed into*. Assume the reader doesn't know the domain jargon; define terms in plain language (e.g. "the NOIM is the mandatory legal form that starts any marriage in Australia"), then use short labelled sections (WHAT / STATUS / WHY IT'S NECESSARY / WHY THE <date> DEADLINE / WHAT TO BRING as applicable). No walls of prose — the event will be read months later without the surrounding context.
+
+This convention exists because deadline events were previously written as dense jargon notes that read like they were Registry transactions on that day; disambiguating deadline vs happening and explaining the underlying system is what made them useful.
 
 ## Notes
 

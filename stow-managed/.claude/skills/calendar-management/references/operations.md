@@ -159,6 +159,8 @@ All-day note: `START`/`END` are `YYYY-MM-DD`. For a single-day event, `END` must
 
 ## What is NOT available
 
-- **Delete events** — blocked by guard hook. Tell the user if they ask.
+- **Delete events** — use `~/bin/agent_scripts/calendar-delete <event-id>` (with
+  `--calendar <id>` for non-primary calendars). It pre-fetches the event so you can see
+  what is being deleted, and refuses recurring series masters unless `--force` is passed.
 - **Modify recurring event masters** — never do this. Only update specific instances.
 - **Send notifications to attendees** — no `send_updates` flag in the wrapper.

@@ -71,8 +71,11 @@ even if you attempt them. Do not suggest or attempt these:
 `delete-thread`, `delete-label`, `update-label`, `set-vacation`, `set-signature`,
 `create-filter`, `delete-filter`
 
-**Calendar:** `delete`, `clear-calendar`, `delete-calendar`, `create-calendar`,
+**Calendar:** `clear-calendar`, `delete-calendar`, `create-calendar`,
 `add-acl`, `remove-acl`, `update-acl`, `subscribe`, `unsubscribe`, `clear-reminders`
+
+Exception: `calendar-delete` is now wrapped and allowed for single events. Recurring
+series masters are refused by the wrapper unless `--force` is passed.
 
 **Drive:** `upload`, `delete`, `share`, `unshare`, `move`, `copy`, `rename`, `update`,
 `create-folder`, `trash`, `untrash`, `empty-trash`, `add-comment`, `update-comment`,

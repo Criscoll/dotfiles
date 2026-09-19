@@ -101,9 +101,11 @@ When a task is done:
 
 The following calendar operations are structurally blocked by the guard hook. Do not attempt them and do not suggest them unless the user explicitly asks and understands the limitation:
 
-- `delete` — cannot delete events (including test/stale events)
 - `clear-calendar`, `delete-calendar` — cannot destroy calendars
-- Modifying the recurring event master — never do this regardless of hook restrictions
+
+Deleting events **is** available via `~/bin/agent_scripts/calendar-delete <event-id>` — it pre-fetches the event so you can see what is being deleted, and refuses recurring series masters unless `--force` is passed. Prefer ❌/✅ marks for triage; delete only stale/test events or when the user explicitly asks.
+
+Never modify or delete the recurring event master regardless of hook restrictions.
 
 If the user asks you to do something blocked, tell them it's structurally unavailable and suggest they do it manually.
 

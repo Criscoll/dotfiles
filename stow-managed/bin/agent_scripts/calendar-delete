@@ -1,0 +1,103 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import json
+import subprocess
+import sys
+
+GWS = ["uvx", "gws-cli@1.3.1", "calendar"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def main():
+    args = sys.argv[1:]
+    event_id = None
+    calendar_id = None
+    force = False
+
+    i = 0
+    while i < len(args):
+        if args[i] in ("-h", "--help"):
+            result = subprocess.run(GWS + ["delete", "--help"], capture_output=True, text=True)
+            print(result.stdout, end="")
+            print(result.stderr, file=sys.stderr, end="")
+            sys.exit(result.returncode)
+        elif args[i] == "--force":
+            force = True
+            i += 1
+        elif args[i] == "--calendar" and i + 1 < len(args):
+            calendar_id = args[i + 1]
+            i += 2
+        elif event_id is None:
+            event_id = args[i]
+            i += 1
+        else:
+            eprint(f"Unexpected argument: {args[i]}")
+            sys.exit(2)
+
+    if not event_id:
+        eprint("Usage: calendar-delete [--calendar <id>] [--force] <event-id>")
+        sys.exit(2)
+
+    get_args = [event_id]
+    if calendar_id:
+        get_args += ["--calendar", calendar_id]
+
+    # Pre-fetch the event so we can show what is being deleted and guard
+    # against removing a recurring series master (best-effort: if the get
+    # call fails or the recurrence field is absent, proceed to the delete).
+    guard_note = ""
+    result = subprocess.run(GWS + ["get"] + get_args, capture_output=True, text=True)
+    if result.returncode == 0:
+        try:
+            outer = json.loads(result.stdout)
+            summary = outer.get("summary", "(no title)")
+            start_str = outer.get("start", "")
+            if outer.get("recurrence"):
+                if not force:
+                    eprint(
+                        "Refusing to delete: this event is a recurring series master. "
+                        "Deleting it would remove the entire series. Pass --force to delete anyway "
+                        "(or delete a specific instance instead — instance IDs have a _YYYYMMDD suffix)."
+                    )
+                    sys.exit(1)
+                guard_note = " [--force: recurring master]"
+            print(f"Deleting: {summary}  (start: {start_str})")
+        except json.JSONDecodeError:
+            pass
+
+    result = subprocess.run(GWS + ["delete"] + get_args, capture_output=True, text=True)
+    if result.returncode != 0:
+        msg = result.stderr.strip()
+        if result.stdout:
+            try:
+                err = json.loads(result.stdout)
+                msg = err.get("message", msg) or msg
+            except json.JSONDecodeError:
+                pass
+        eprint(msg)
+        sys.exit(result.returncode)
+
+    try:
+        outer = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        eprint("Unexpected non-JSON output:")
+        print(result.stdout, end="")
+        sys.exit(1)
+
+    if outer.get("status") == "error":
+        eprint(outer.get("message", "Unknown error"))
+        sys.exit(1)
+
+    event_id_out = outer.get("event_id", event_id)
+    print(f"Deleted event{guard_note}  (id: {event_id_out})")
+
+
+if __name__ == "__main__":
+    main()
