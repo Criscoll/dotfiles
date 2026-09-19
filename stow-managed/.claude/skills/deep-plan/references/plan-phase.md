@@ -2,9 +2,9 @@
 
 The point of Plan is to turn every item's approved requirements into a
 technical design durable enough for a fresh **orchestrator** session to
-execute hands-off — dispatching each step to a sub-agent, reviewing the
-result, and committing per item without further human involvement until it
-halts or finishes.
+execute hands-off — dispatching steps to sub-agents in tier-and-surface
+groups, reviewing the result, and committing per item without further human
+involvement until it halts or finishes.
 
 Read `references/model-tiers.md` before starting — every step you write needs
 an effort tier.
@@ -64,10 +64,12 @@ Skills or extensions the implementing sub-agent must explicitly invoke:
 (Omit this section only if no skills or extensions are relevant.)
 
 ## Steps
-Dispatch units — each one a self-contained brief for one sub-agent dispatch
-producing one reviewable diff. Size each step so a sub-agent could execute it
-from the brief alone, without needing to ask the orchestrator anything beyond
-a fork.
+Self-contained briefs a sub-agent can execute and review on its own. Size each
+step so a sub-agent could execute it from the brief alone, without needing to
+ask the orchestrator anything beyond a fork. (The orchestrator dispatches
+steps in groups — consecutive steps sharing a tier and code surface — per the
+Dispatch groups section of EXECUTE.md, so keep each step individually
+reviewable too.)
 
 ### Step k — <title> · effort: <Lightweight|Moderate Thinking|Deep Thinking> — <why this tier>
 - [ ] <task>
@@ -161,9 +163,18 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
    - **Collapse Key Decisions** in every PLAN.md: drop the Option A/B menu,
      keep what was chosen, briefly why, and what was considered-and-rejected
      with the reason.
+   - **Form dispatch groups and write them into EXECUTE.md** as a table: item,
+     group id, step range, tier, code surface. A group is a run of consecutive
+     steps sharing a tier and a surface. Grouping rounds a step's tier up,
+     never down. A group never spans a commit boundary. Dispatch any
+     contract-producing step alone, or paired only with the one step it is
+     tightly coupled to. Group boundaries are a judgment call, not a
+     mechanical partition — where the cut is genuinely ambiguous, prefer the
+     boundary that gives the more reviewable diff.
    - **Write `EXECUTE.md`** (template below) in the artifact directory, with
-     absolute paths throughout and the effort-tier definitions copied in
-     verbatim from `references/model-tiers.md`.
+     absolute paths throughout, the effort-tier definitions copied in
+     verbatim from `references/model-tiers.md`, and the dispatch groups table
+     filled in.
    - Tell the user plainly that EXECUTE.md is the orchestrator's whole
      protocol — it dispatches, reviews, gates, commits, and logs without
      further prompting, only stopping to write a failure report and halt, or
@@ -196,7 +207,8 @@ You are the **orchestrator** for this roadmap. Your job is to **dispatch,
 review, gate, commit, and log** — not to re-plan what the plans already
 settled, and not to implement steps yourself. Every step in every PLAN.md
 must be executed by a dispatched sub-agent, not inline by you — you review
-and decide, sub-agents implement. Small review fixups of about 5 lines or
+and decide, sub-agents implement. Steps are dispatched in groups (see
+Dispatch groups below), never inline. Small review fixups of about 5 lines or
 fewer (e.g. a missing import) may be applied inline by you and logged;
 anything larger goes through a fresh dispatch.
 
@@ -209,6 +221,20 @@ Artifact directory: <abs-path>
 ## Effort tiers
 
 <tier definitions and dispatch guidance copied verbatim from references/model-tiers.md>
+
+## Dispatch groups
+
+Steps declare tiers individually, but **the dispatch unit is a group**: a run of consecutive
+steps sharing a tier and a code surface, briefed to one sub-agent and reviewed as one diff.
+Grouping only ever rounds a step up, never down. A group never spans a commit boundary.
+
+| Item | Group | Steps | Tier | Surface |
+| --- | --- | --- | --- | --- |
+| <n> | <n>A | <k>–<m> | <tier> | <what this group touches> |
+
+If a group turns out too large mid-run — the sub-agent reports it can't hold the whole brief,
+or the diff is unreviewable — split it at a step boundary and log a FORK. Never merge two
+groups, and never split a group across a commit.
 
 ## 0. Start or resume
 
@@ -240,27 +266,41 @@ Artifact directory: <abs-path>
    this item consumes (from CONTRACTS.md), and spot-check the plan's Reuse
    entries against the current codebase. A mismatch counts as a fork — handle
    it via the Forks process below before dispatching any step.
-2. **Dispatch each step** at the effort tier its PLAN.md names, using the
-   `subagent` tool (pi) or the `Agent` tool (Claude Code), picking a concrete
-   model per `model-tiers.md`'s dispatch guidance. Give the sub-agent a
-   self-contained brief: the step's tasks verbatim, any Reuse entries the step
-   needs, the item's Boundaries, the exact shape of any contract this step
-   produces, `Files:`, `Done when:`, any skills the step should invoke, and an
-   explicit instruction to report divergence rather than decide it.
+2. **Dispatch each group** from the Dispatch groups table — not each step
+   individually — using the `subagent` tool (pi) or the `Agent` tool (Claude
+   Code), at the group's tier, picking a concrete model per
+   `model-tiers.md`'s dispatch guidance. Give the sub-agent a self-contained
+   brief covering **every step in the group**: each step's tasks verbatim, any
+   Reuse entries those steps need, the item's Boundaries, the exact shape of
+   any contract the group produces, the union of the steps' `Files:`, every
+   step's `Done when:`, any skills to invoke, and an explicit instruction to
+   report divergence rather than decide it.
 3. **Review the result.** Wait for the sub-agent's report, then check its
-   report and `git diff` against the step's tasks and the item's Boundaries,
-   and run `Done when:` yourself.
-   - **Accept** → tick the step's tasks in PLAN.md, log a DONE entry.
-   - **Reject** → re-dispatch once with specific corrections. If the failure
-     was about capability rather than unclear instructions, re-dispatch one
-     tier up. Log the escalation either way.
-4. **Run the item's Testing & Verification gate.** On failure, allow up to 2
-   fix dispatches at the item's tier (or one tier up on the second attempt if
-   the first fix attempt also failed to diagnose it). If the gate still fails
-   after that bound, **this is a failure, not a fork** — go to the Failures
-   section below rather than attempting a third fix. That bound exists
-   specifically to stop thrashing on a problem that's actually in the plan,
-   not the implementation.
+   report and `git diff` against **every** step's tasks in the group and the
+   item's Boundaries, and run each step's `Done when:` yourself.
+   - **Accept** → tick all of the group's step tasks in PLAN.md, log a DONE
+     entry naming the group.
+   - **Reject** → re-dispatch once with specific corrections. **Scope the
+     re-dispatch to the failing step alone**, not the whole group — the rest
+     already passed its `Done when:`. If the failure was about capability
+     rather than unclear instructions, re-dispatch one tier up. Log the
+     escalation either way.
+4. **Run the item's Testing & Verification gate.** On failure, allow up to
+   **2 fix dispatches**.
+
+   Tiers are declared per step and dispatched per group — there is no "item
+   tier". Pick the fix-dispatch tier like this:
+
+   - **First fix dispatch:** the tier of the group whose `Files:` the failure
+     points at, scoped to that group's steps. If the failure spans groups or
+     the cause is ambiguous, use the highest tier among that item's groups.
+   - **Second fix dispatch:** one tier up from the first, capped at Deep
+     Thinking.
+
+   If the gate still fails after that bound, **this is a failure, not a fork**
+   — go to the Failures section below rather than attempting a third fix. That
+   bound exists specifically to stop thrashing on a problem that's actually in
+   the plan, not the implementation.
 5. **Check contracts produced.** Run the `Verify` check for every contract
    this item produces.
 6. **Commit.** Follow the item's PLAN.md `## Commits` section — a single
@@ -352,7 +392,7 @@ outside this protocol regardless of how the run went.
 ## EXECUTION-LOG.md entry format
 
 ```
-## <ISO 8601 timestamp> — item <n> step <k> — DONE|FORK|PATCH|ESCALATE|HALT-FAILURE|RE-PLAN|ITEM-DONE
+## <ISO 8601 timestamp> — item <n> group <gid>|step <k> — DONE|FORK|PATCH|ESCALATE|HALT-FAILURE|RE-PLAN|ITEM-DONE
 <2-5 lines: what happened, and for FORK/PATCH/ESCALATE/HALT-FAILURE/RE-PLAN, why>
 ```
 ````
