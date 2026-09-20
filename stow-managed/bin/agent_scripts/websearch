@@ -1,181 +1,189 @@
 #!/bin/sh
-# websearch — on-demand SearXNG web search via Docker.
+# websearch — tiered web search for agents.
 #
-# Usage: websearch [OPTIONS] QUERY
+# Primary:  Brave Search API. Default endpoint is LLM Context
+#           (https://api.search.brave.com/res/v1/llm/context) — search +
+#           pre-extracted page content in one call. `--search-only` switches to
+#           raw web search (titles + snippets, cheapest per request).
+# Fallback: SearXNG via websearch-searxng (Docker-backed), used automatically
+#           when no API key is available or the Brave call fails (auth, quota,
+#           rate limit, network).
+#
+# Usage: websearch [-n N] [-t TIME] [--search-only] [--provider brave|searxng] QUERY
 #
 # Options:
-#   -n N         max results to return (default: 10)
-#   -e ENGINES   comma-separated engine list (e.g. google,duckduckgo)
-#   -t TIME      time_range: day|month|year
+#   -n N         max results (default: 10; Brave caps at 50)
+#   -t TIME      freshness: day|week|month|year (pd|pw|pm|py also accepted)
+#   --search-only  raw web search — titles + snippets only, then use the
+#                  web-crawl skill for content (cheapest Brave tier)
+#   --provider   force 'brave' (no fallback, error on failure) or 'searxng'
 #
 # Output: JSON array [{title, url, snippet, engine}] on stdout.
-#         Progress/status messages go to stderr.
+#         With the default (LLM Context) endpoint, `snippet` carries extracted
+#         page content — substantial enough that webcrawl is rarely needed.
+#         Diagnostics (provider used, fallbacks, errors) go to stderr.
 #
-# Prerequisites: docker at /usr/bin/docker
-#                ~/.config/searxng/settings.yml (stow-managed)
-#
-# Override: if WEBSEARCH_URL is set, use that SearXNG endpoint directly and skip
-#           the docker prereq/config checks and container lifecycle entirely
-#           (e.g. the Paseo container's always-warm searxng compose sidecar).
+# API key: read from $BRAVE_API_KEY if set, else sourced from
+#          ~/.config/agent-scripts/env (untracked per-machine file, chmod 600).
+#          Cost: ~$5/1k requests; $5 in free credits applied monthly.
 
 set -e
 
-DOCKER=/usr/bin/docker
-CONTAINER=searxng-websearch
-IMAGE=searxng/searxng
-CONFIG="$HOME/.config/searxng/settings.yml"
-PORT=18080
+# Resolve the sibling fallback script relative to this file's location (not
+# $HOME) so delegation works regardless of the caller's environment.
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SEARXNG_SCRIPT="$SELF_DIR/websearch-searxng"
+
 MAX_RESULTS=10
-ENGINES=""
-TIME_RANGE=""
+FRESHNESS_IN=""
+PROVIDER="auto"   # auto | brave | searxng
+SEARCH_ONLY=0
 
 # ── Argument parsing ────────────────────────────────────────────────────────
-while getopts "n:e:t:" opt; do
-  case "$opt" in
-    n) MAX_RESULTS="$OPTARG" ;;
-    e) ENGINES="$OPTARG" ;;
-    t) TIME_RANGE="$OPTARG" ;;
-    *) echo "Usage: websearch [-n N] [-e engines] [-t day|month|year] QUERY" >&2; exit 1 ;;
+QUERY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -n) MAX_RESULTS="$2"; shift 2 ;;
+    -t) FRESHNESS_IN="$2"; shift 2 ;;
+    --search-only) SEARCH_ONLY=1; shift ;;
+    --provider)
+      case "${2:-}" in
+        brave|searxng) PROVIDER="$2" ;;
+        *) echo "Error: --provider takes 'brave' or 'searxng'" >&2; exit 1 ;;
+      esac
+      shift 2 ;;
+    -h|--help)
+      sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      if [ -z "$QUERY" ]; then QUERY="$1"; else QUERY="$QUERY $1"; fi
+      shift
+      ;;
   esac
 done
-shift $((OPTIND - 1))
 
-if [ $# -eq 0 ]; then
+if [ -z "$QUERY" ]; then
   echo "Error: query required." >&2
-  echo "Usage: websearch [-n N] [-e engines] [-t day|month|year] QUERY" >&2
+  echo "Usage: websearch [-n N] [-t day|month|year] [--search-only] [--provider brave|searxng] QUERY" >&2
   exit 1
 fi
 
-QUERY="$*"
-
-if [ -n "$WEBSEARCH_URL" ]; then
-  # External endpoint supplied — no local docker lifecycle to manage.
-  BASE_URL="$WEBSEARCH_URL"
-else
-
-# ── Prerequisite checks ─────────────────────────────────────────────────────
-if [ ! -x "$DOCKER" ]; then
-  echo "Error: docker not found at $DOCKER — install Docker to use websearch" >&2
-  exit 1
+# Cap results at Brave's maximum.
+if [ "$MAX_RESULTS" -gt 50 ]; then
+  MAX_RESULTS=50
 fi
 
-if [ ! -f "$CONFIG" ]; then
-  echo "Error: SearXNG config not found at $CONFIG" >&2
-  echo "  Run stow from the dotfiles repo to create the symlink." >&2
-  exit 1
-fi
-
-# ── Container lifecycle (persistent — reused across concurrent calls) ────────
-# Use host networking so granian is reachable on the host's loopback directly.
-# Bridge network routing is not available on all machines, so --network=host is
-# the reliable option. GRANIAN_HOST=127.0.0.1 limits exposure to loopback only.
-
-_container_is_running() {
-  "$DOCKER" inspect --format='{{.State.Running}}' "$CONTAINER" 2>/dev/null \
-    | grep -q "^true$"
-}
-
-_container_status() {
-  "$DOCKER" inspect --format='{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo "absent"
-}
-
-if ! _container_is_running; then
-  # Decide what to do based on current container state. Concurrent parallel calls
-  # can all reach this block simultaneously — only rm -f on terminal states so we
-  # don't kill a container that a concurrent call just started.
-  _STATUS=$(_container_status)
-  case "$_STATUS" in
-    running)
-      # Concurrent call beat us to it; fall through to health check.
-      ;;
-    created|restarting)
-      # Container is mid-startup from a concurrent call; let it finish.
-      ;;
-    exited|dead)
-      # Terminal state from a prior run — safe to remove and restart.
-      "$DOCKER" rm -f "$CONTAINER" >/dev/null 2>&1 || true
-      echo "Starting SearXNG..." >&2
-      "$DOCKER" run -d \
-        --name "$CONTAINER" \
-        --network=host \
-        -e GRANIAN_HOST=127.0.0.1 \
-        -e GRANIAN_PORT="$PORT" \
-        -e SEARXNG_SECRET=websearch-local-agent \
-        -v "$CONFIG:/etc/searxng/settings.yml:ro" \
-        "$IMAGE" >/dev/null 2>&1 || true
-      ;;
-    *)
-      # absent or unknown — start fresh. Concurrent callers that also reach here
-      # will get "name already in use" from docker run (suppressed); the one that
-      # wins is enough to get the container started.
-      echo "Starting SearXNG..." >&2
-      "$DOCKER" run -d \
-        --name "$CONTAINER" \
-        --network=host \
-        -e GRANIAN_HOST=127.0.0.1 \
-        -e GRANIAN_PORT="$PORT" \
-        -e SEARXNG_SECRET=websearch-local-agent \
-        -v "$CONFIG:/etc/searxng/settings.yml:ro" \
-        "$IMAGE" >/dev/null 2>&1 || true
-      ;;
-  esac
-
-  # Verify something is starting or running (us or a concurrent call winner).
-  # Accept "created" and "restarting" — the health check below handles readiness.
-  _VERIFY=$(_container_status)
-  case "$_VERIFY" in
-    running|created|restarting) ;;
-    *)
-      echo "Error: Failed to start SearXNG container" >&2
-      exit 1
-      ;;
-  esac
-fi
-
-  BASE_URL="http://127.0.0.1:${PORT}"
-fi
-
-# ── Health check ─────────────────────────────────────────────────────────────
-# Always run — exits immediately if already healthy, waits if freshly started.
-echo "Waiting for SearXNG to be ready..." >&2
-ATTEMPTS=0
-MAX_ATTEMPTS=30
-while [ "$ATTEMPTS" -lt "$MAX_ATTEMPTS" ]; do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/healthz" 2>/dev/null || true)
-  if [ "$STATUS" = "200" ]; then
-    break
+# ── SearXNG fallback delegation ──────────────────────────────────────────────
+# Shared by: --provider searxng, auto mode without a key, and auto mode after a
+# failed Brave call. websearch-searxng accepts -n, -t (day|month|year only), QUERY.
+fallback() {
+  REASON="$1"
+  if [ "$PROVIDER" = "brave" ]; then
+    echo "Error: Brave search failed ($REASON) and --provider brave forbids fallback" >&2
+    exit 1
   fi
-  ATTEMPTS=$((ATTEMPTS + 1))
-  sleep 1
-done
+  echo "Falling back to SearXNG ($REASON)..." >&2
+  SEARXNG_ARGS="-n $MAX_RESULTS"
+  case "$FRESHNESS_IN" in
+    day|month|year)   SEARXNG_ARGS="$SEARXNG_ARGS -t $FRESHNESS_IN" ;;
+    pd)               SEARXNG_ARGS="$SEARXNG_ARGS -t day" ;;
+    pm)               SEARXNG_ARGS="$SEARXNG_ARGS -t month" ;;
+    py)               SEARXNG_ARGS="$SEARXNG_ARGS -t year" ;;
+    pw|week)          echo "Note: SearXNG has no week filter; ignoring -t" >&2 ;;
+  esac
+  # Deliberate word-splitting: SEARXNG_ARGS holds simple flag tokens only.
+  # shellcheck disable=SC2086
+  exec "$SEARXNG_SCRIPT" $SEARXNG_ARGS "$QUERY"
+}
 
-if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
-  echo "Error: SearXNG did not become ready within ${MAX_ATTEMPTS}s" >&2
-  exit 1
+# ── Key loading ──────────────────────────────────────────────────────────────
+# Prefer the ambient env var; otherwise source the per-machine untracked env
+# file. Sourcing (not grepping) means shell quoting rules apply — values there
+# may be quoted safely.
+if [ -z "$BRAVE_API_KEY" ] && [ -f "$HOME/.config/agent-scripts/env" ]; then
+  # shellcheck disable=SC1090
+  . "$HOME/.config/agent-scripts/env"
 fi
 
-# ── URL-encode the query (python3 for portability across Linux and macOS) ────
-ENCODED_QUERY=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$QUERY")
-
-# ── Build search URL ─────────────────────────────────────────────────────────
-SEARCH_URL="${BASE_URL}/search?q=${ENCODED_QUERY}&format=json"
-if [ -n "$ENGINES" ]; then
-  ENCODED_ENGINES=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$ENGINES")
-  SEARCH_URL="${SEARCH_URL}&engines=${ENCODED_ENGINES}"
-fi
-if [ -n "$TIME_RANGE" ]; then
-  SEARCH_URL="${SEARCH_URL}&time_range=${TIME_RANGE}"
+if [ "$PROVIDER" = "searxng" ]; then
+  fallback "provider forced to searxng"
 fi
 
-# ── Search ───────────────────────────────────────────────────────────────────
-echo "Searching: $QUERY" >&2
+if [ -z "$BRAVE_API_KEY" ]; then
+  fallback "no BRAVE_API_KEY (env or ~/.config/agent-scripts/env)"
+fi
 
-# Fetch results and emit a JSON array [{title, url, snippet, engine}] on stdout.
-# Using python3 -c so stdin remains connected to curl's output (not a heredoc).
-curl -s "$SEARCH_URL" | python3 -c "
+# ── Freshness mapping (SearXNG words → Brave freshness codes) ────────────────
+FRESHNESS=""
+case "$FRESHNESS_IN" in
+  day)   FRESHNESS="pd" ;;
+  week)  FRESHNESS="pw" ;;
+  month) FRESHNESS="pm" ;;
+  year)  FRESHNESS="py" ;;
+  pd|pw|pm|py) FRESHNESS="$FRESHNESS_IN" ;;
+esac
+
+# ── Brave request ────────────────────────────────────────────────────────────
+if [ "$SEARCH_ONLY" = "1" ]; then
+  BRAVE_URL="https://api.search.brave.com/res/v1/web/search"
+  echo "Searching (Brave, raw): $QUERY" >&2
+else
+  # LLM Context default: token budget left at the 8192 default — per-request
+  # pricing means more tokens cost nothing and more content helps the agent.
+  BRAVE_URL="https://api.search.brave.com/res/v1/llm/context"
+  echo "Searching (Brave LLM Context): $QUERY" >&2
+fi
+
+TMP=$(mktemp)
+trap 'rm -f "$TMP"' EXIT
+HTTP_CODE=$(curl -s --compressed -o "$TMP" -w "%{http_code}" \
+  -H "X-Subscription-Token: $BRAVE_API_KEY" \
+  -H "Accept: application/json" \
+  -G "$BRAVE_URL" \
+  --data-urlencode "q=$QUERY" \
+  --data-urlencode "count=$MAX_RESULTS" \
+  ${FRESHNESS:+--data-urlencode "freshness=$FRESHNESS"}) || {
+  fallback "curl/network failure"
+}
+
+if [ "$HTTP_CODE" != "200" ]; then
+  ERR_DETAIL=$(python3 -c "
 import json, sys
-n = $MAX_RESULTS
-raw = json.load(sys.stdin)
-out = [{'title': r.get('title',''), 'url': r.get('url',''), 'snippet': r.get('content',''), 'engine': r.get('engine','')} for r in raw.get('results', [])[:n]]
-print(json.dumps(out, ensure_ascii=False, indent=2))
-"
+try:
+    d = json.load(open(sys.argv[1]))
+    print(d.get('error', {}).get('code', ''), '-', d.get('error', {}).get('detail', '')[:120])
+except Exception:
+    print('non-JSON response')" "$TMP" 2>/dev/null || echo "unparseable response")
+  fallback "HTTP $HTTP_CODE ($ERR_DETAIL)"
+fi
+
+# ── Normalize to the shared output shape ─────────────────────────────────────
+python3 -c "
+import json, sys
+n = int(sys.argv[2])
+d = json.load(open(sys.argv[1]))
+if 'grounding' in d:
+    # LLM Context: extracted content chunks per source
+    items = [
+        {
+            'title': it.get('title', ''),
+            'url': it.get('url', ''),
+            'snippet': ' '.join(it.get('snippets', [])),
+            'engine': 'brave-llm-context',
+        }
+        for it in d.get('grounding', {}).get('generic', [])
+    ]
+else:
+    # Raw web search: descriptions only
+    items = [
+        {
+            'title': r.get('title', ''),
+            'url': r.get('url', ''),
+            'snippet': r.get('description', ''),
+            'engine': 'brave',
+        }
+        for r in d.get('web', {}).get('results', [])
+    ]
+print(json.dumps(items[:n], ensure_ascii=False, indent=2))
+" "$TMP" "$MAX_RESULTS"

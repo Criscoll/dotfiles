@@ -1,5 +1,11 @@
 # Engine Blocking: DuckDuckGo/Brave/Startpage/Google (2026-07)
 
+> **Update (2026-09):** the migration described at the bottom of this file has
+> been implemented. `websearch` now calls the Brave Search API first (key in
+> `~/.config/agent-scripts/env`) and only falls back to SearXNG when the key is
+> missing or the API fails. The engine notes below still govern the fallback
+> path (`websearch-searxng` / `settings.yml`).
+
 ## Symptom
 
 `websearch` (or a raw call to the SearXNG API) returns an empty results array
