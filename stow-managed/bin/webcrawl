@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["crawl4ai==0.9.0"]
+# dependencies = ["crawl4ai==0.9.3"]
 # ///
 import asyncio
 import argparse
@@ -45,7 +45,8 @@ def _ensure_playwright_browsers():
         sys.exit(1)
 
 
-async def crawl(url, include_links=False, output_json=False, query=None, raw=False):
+async def crawl(url, include_links=False, output_json=False, query=None, raw=False,
+                page_timeout=30, wait_for=None):
     _ensure_playwright_browsers()
     from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
     from crawl4ai.content_filter_strategy import PruningContentFilter, BM25ContentFilter
@@ -59,7 +60,9 @@ async def crawl(url, include_links=False, output_json=False, query=None, raw=Fal
         content_filter = PruningContentFilter(threshold=0.48, threshold_type="fixed")
 
     config = CrawlerRunConfig(
-        markdown_generator=DefaultMarkdownGenerator(content_filter=content_filter)
+        markdown_generator=DefaultMarkdownGenerator(content_filter=content_filter),
+        page_timeout=page_timeout * 1000,
+        wait_for=wait_for,
     )
 
     async with AsyncWebCrawler(verbose=False) as crawler:
@@ -142,6 +145,8 @@ examples:
   webcrawl https://example.com --json --links           JSON with content + links
   webcrawl https://example.com --filter "authentication" topic-focused content
   webcrawl https://example.com --raw                    unfiltered markdown (good for product pages)
+  webcrawl https://example.com --timeout 60             allow slow pages up to 60s
+  webcrawl https://example.com --wait-for "main"        wait for <main> to appear before extracting
 """,
     )
     parser.add_argument("url", help="URL to fetch and extract content from")
@@ -149,9 +154,20 @@ examples:
     parser.add_argument("--json", action="store_true", dest="output_json", help="Emit a JSON object instead of plain markdown")
     parser.add_argument("--filter", metavar="QUERY", dest="query", help="Keep only content blocks relevant to QUERY (BM25 scoring)")
     parser.add_argument("--raw", action="store_true", help="Skip content filtering; return full page markdown")
+    parser.add_argument("--timeout", type=float, default=30, metavar="SECONDS",
+                        help="Navigation timeout in seconds (default: 30). Raise for very slow pages.")
+    parser.add_argument("--wait-for", metavar="SELECTOR", dest="wait_for", default=None,
+                        help=("Wait condition before content extraction. A CSS selector is wrapped "
+                              "as 'css:SELECTOR'; pass 'js:...' explicitly for a JS predicate. "
+                              "Use for JS-heavy pages that render late."))
     args = parser.parse_args()
 
-    asyncio.run(crawl(args.url, include_links=args.links, output_json=args.output_json, query=args.query, raw=args.raw))
+    if args.wait_for and not args.wait_for.startswith("js:"):
+        args.wait_for = f"css:{args.wait_for}"
+
+    asyncio.run(crawl(args.url, include_links=args.links, output_json=args.output_json,
+                      query=args.query, raw=args.raw, page_timeout=args.timeout,
+                      wait_for=args.wait_for))
 
 
 if __name__ == "__main__":
