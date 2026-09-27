@@ -152,9 +152,12 @@ conventions in the `notes` skill: numbered inline markers (`[1]`, `[2]`) placed
 right after the claim they support, adjacent markers separated by a space
 (`[1] [2]`, not `[1][2]` — Markdown would misparse the latter and silently
 swallow a marker), and a matching numbered `## Sources` section at the bottom
-(`1. [Title](URL) — accessed YYYY-MM-DD`). Reuse a marker for repeat claims from
-the same source rather than minting a new number. The same applies to sourced
-claims inside the task's `outline.md` itself.
+(`1. [Title](URL) — accessed YYYY-MM-DD`). Every Sources entry must be a real
+markdown link with the actual full URL pasted in — never a bare/placeholder
+URL or title-only citation — so the original source is one click away from the
+note. Reuse a marker for repeat claims from the same source rather than minting a
+new number. The same applies to sourced claims inside the task's `outline.md`
+itself.
 
 ---
 

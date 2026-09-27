@@ -230,6 +230,14 @@ which sentence relies on which source; inline markers can.
 - Add a `## Sources` section at the end of the note with a matching numbered
   list: `1. [Title](URL) — accessed YYYY-MM-DD`. The number in the list must
   match the inline marker, not just be sequential by coincidence.
+- **Every Sources entry must be a real markdown link** — `[Title](https://full-url...)`
+  with the actual URL pasted in, in readable `[]()` format. Never leave a bare
+  or placeholder URL (`example.com/...`, `URL`, `see source`), and never drop
+  the link and cite by title alone. The whole point of the Sources section is
+  that the original source is one click away — a reader (human or agent) must
+  be able to find and verify the source without re-searching for it. The link
+  text is the source's title (or a short description if untitled); the URL
+  carries the provenance.
 - Reuse a marker if the same source backs a later claim too — don't mint a new
   number for a source already listed.
 - For a source with no meaningful title (a bare API response, a forum post),
