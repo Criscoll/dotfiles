@@ -9,6 +9,11 @@ so cross-item dependencies get caught now, not discovered mid-execution.
    around a guessed interpretation. Then read the code **across all items**,
    looking specifically for where they meet: shared files, shared data shapes,
    ordering constraints, anything one item's output feeds into another's input.
+   Also look for **parallel implementations of the same surface** — two
+   renderers for one list, compact and desktop layouts, web and native paths.
+   These are where a change lands once and looks complete; record each set in
+   `What We Know` for every item that touches it, so Plan can give the step an
+   `All sites:` command.
    Read-only recon sub-agents (e.g. `subagent` with the `scout` agent, or the
    equivalent in-harness recon tool) may gather raw context to keep your own
    context lean — but you, the planner, must read any code that touches a
@@ -71,8 +76,8 @@ roadmap item).
 - **Consumed by:** item <m> — <title> (repeat if more than one)
 - **Shape:** behavioural description of what's produced (e.g. "a CLI flag
   that accepts X and does Y"; concrete types/signatures come in the Plan phase)
-- **Verify:** (left blank — the Plan phase fills this in with a concrete check
-  the orchestrator can run)
+- **Verify:** (left blank — the Plan phase fills this in with a runnable check
+  that fails if the promised behaviour breaks, not just if the symbol is missing)
 ```
 
 5. **Run the annotation pass** across `ROADMAP.md`, every `REQUIREMENTS.md`,
@@ -95,7 +100,7 @@ roadmap item).
 ### Re-planning a single item (failure recovery)
 
 The steps above describe the first, whole-roadmap Refine pass. When the
-orchestrator (see `plan-phase.md`'s EXECUTE.md template) halts on a failed
+orchestrator (see `execute-template.md`) halts on a failed
 item, recovery re-runs Refine **scoped to that one item** — see
 `references/replan-phase.md` for the mechanics. It reuses this file's
 REQUIREMENTS.md template and the same "ask, don't guess" discipline, just

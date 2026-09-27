@@ -1,7 +1,7 @@
 ## Re-plan phase (failure recovery)
 
 Triggered explicitly — never automatically. When the orchestrator (see
-`plan-phase.md`'s EXECUTE.md template) hits a failure, it documents and halts;
+`execute-template.md`) hits a failure, it documents and halts;
 it never re-plans itself. Getting the roadmap moving again is a deliberate,
 user-initiated step: they read the item's `FAILURE.md`, decide it's worth
 pursuing, and explicitly ask to re-plan that item. This phase is what runs
