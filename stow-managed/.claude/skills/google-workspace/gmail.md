@@ -36,7 +36,7 @@ For all reading operations, use the wrapper scripts. They strip the JSON securit
 ```
 
 **Operations with no wrapper yet** (get-label, drafts, get-draft, threads, get-thread,
-get-vacation, get-signature, filters, get-filter, history): if you need one of these,
+get-vacation, get-signature, history): if you need one of these,
 state what you need and ask the user to add a new wrapper script.
 
 **`get-message` is NOT a valid gws-cli subcommand — do not attempt it.**
@@ -126,9 +126,50 @@ Note: `gmail-list` and `gmail-search` do **not** show attachment columns — the
 
 ## Moving / Organizing
 
-Label operations (add-labels, remove-labels, mark-read, mark-unread, modify-thread-labels,
-batch-modify, create-label) have no wrappers yet. Ask the user to add wrapper scripts
-if you need to organize email — do not call gws-cli directly.
+```bash
+# Create a label (slash creates hierarchy). Output: <label-id> | <name>
+~/bin/agent_scripts/gmail-create-label "Receipts/2026"
+~/bin/agent_scripts/gmail-create-label "Quiet" --visibility labelHide
+
+# Update a label (rename / colors / visibility). Needs the label ID from gmail-labels.
+~/bin/agent_scripts/gmail-update-label Label_12345 --name "Receipts/2027"
+~/bin/agent_scripts/gmail-update-label Label_12345 --text-color "#ffffff" --background-color "#039be5"
+
+# List filters. Output: <filter-id> | criteria | action
+~/bin/agent_scripts/gmail-filters
+
+# Inspect one filter
+~/bin/agent_scripts/gmail-get-filter <filter-id>
+
+# Create a filter — needs >= 1 criterion AND >= 1 action
+~/bin/agent_scripts/gmail-create-filter --from "newsletter@example.com" --remove-labels INBOX --add-labels Label_12345
+~/bin/agent_scripts/gmail-create-filter --query "invoice" --has-attachment --never-spam --star
+# (delete-filter has NO wrapper — filters are permanent for the agent; only create real ones)
+
+> ⚠️ **`gmail-create-filter` is currently blocked by an OAuth scope gap** (verified
+> 2026-09-28): the Gmail filters-create API requires the `gmail.settings.basic`
+> scope, but gws-cli 1.3.1's gmail scope map requests only `gmail.modify` — it
+> never asks for the setting scope, so no re-auth or consent can grant it. The
+> call fails with `Gmail API error: Request had insufficient authentication
+> scopes.` `gmail-filters` (list) and `gmail-get-filter` DO work under the current
+> grant — only creation is blocked. Do not retry create-filter or suggest
+> re-authenticating; the fix must land upstream in gws-cli's scope map
+> (`gws/auth/scopes.py`). Until then, ask the user to create filters in the
+> Gmail UI (Settings → Filters), then the agent can list/inspect them.
+
+# Backfill: apply label actions to EXISTING messages matching a query.
+# Gmail has no native "run filter on inbox" — this composite is search + batch-modify.
+~/bin/agent_scripts/gmail-backfill "from:newsletter@example.com" --add-labels Label_12345 --dry-run
+~/bin/agent_scripts/gmail-backfill "from:newsletter@example.com" --add-labels Label_12345 --max 200
+~/bin/agent_scripts/gmail-backfill "from:boss older_than:1y" --remove-labels INBOX   # archive in bulk
+# --dry-run prints the match count and would-be actions without modifying anything.
+# Always dry-run first; confirm with the user before a real run on a large match set.
+# Chunks batch-modify at 100 IDs per API call automatically.
+```
+
+Per-message `add-labels`/`remove-labels` and a standalone `batch-modify` wrapper do not
+exist — use `gmail-backfill` for bulk label application. `delete-label` and `delete-filter`
+have no wrappers (destructive; blocked by absence).
 
 ## Common label IDs
 

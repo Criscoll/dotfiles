@@ -1,0 +1,116 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import argparse, json, subprocess, sys
+
+GWS = ["uvx", "gws-cli@1.3.1", "gmail"]
+CHUNK_SIZE = 100
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def extract(wrapped):
+    """Tolerant unwrap: handles both security_enabled shapes
+    ({"messages": "[...]", ...} and plain "[...]")."""
+    if isinstance(wrapped, dict) and "data" in wrapped:
+        return wrapped["data"]
+    return wrapped
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Apply label actions to existing messages matching a Gmail query "
+                    "(search + batch-modify composite)")
+    parser.add_argument("query", help="Gmail search query, e.g. 'from:boss is:unread'")
+    parser.add_argument("--add-labels", metavar="IDS",
+                        help="Comma-separated label IDs to add (e.g. Label_123)")
+    parser.add_argument("--remove-labels", metavar="IDS",
+                        help="Comma-separated label IDs to remove (INBOX archives)")
+    parser.add_argument("--max", type=int, default=100,
+                        help="Max messages to match (default 100)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Print match count and would-be actions; modify nothing")
+    args = parser.parse_args()
+
+    if not args.add_labels and not args.remove_labels:
+        eprint("Usage: gmail-backfill needs at least one of "
+               "--add-labels / --remove-labels")
+        sys.exit(2)
+
+    result = subprocess.run(
+        GWS + ["search", args.query, "--max", str(args.max)],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        msg = result.stderr.strip()
+        if result.stdout:
+            try:
+                err = json.loads(result.stdout)
+                msg = err.get("message", msg) or msg
+            except json.JSONDecodeError:
+                pass
+        eprint(msg)
+        sys.exit(result.returncode)
+
+    try:
+        outer = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        eprint("Unexpected non-JSON output:")
+        print(result.stdout, end="")
+        sys.exit(1)
+
+    data_str = extract(outer.get("messages"))
+    if not data_str:
+        print("Matched 0 messages.")
+        return
+
+    try:
+        msgs = json.loads(data_str) if isinstance(data_str, str) else data_str
+    except json.JSONDecodeError:
+        eprint("Failed to parse message data.")
+        sys.exit(1)
+
+    if not msgs:
+        print("Matched 0 messages.")
+        return
+
+    ids = [m.get("id") for m in msgs if m.get("id")]
+    print(f"Matched {len(ids)} messages.")
+
+    if args.dry_run:
+        if args.add_labels:
+            print(f"Would add labels: {args.add_labels}")
+        if args.remove_labels:
+            print(f"Would remove labels: {args.remove_labels}")
+        return
+
+    for start in range(0, len(ids), CHUNK_SIZE):
+        chunk = ",".join(ids[start:start + CHUNK_SIZE])
+        cmd = GWS + ["batch-modify", chunk]
+        if args.add_labels:
+            cmd += ["--add-labels", args.add_labels]
+        if args.remove_labels:
+            cmd += ["--remove-labels", args.remove_labels]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            msg = result.stderr.strip()
+            if result.stdout:
+                try:
+                    err = json.loads(result.stdout)
+                    msg = err.get("message", msg) or msg
+                except json.JSONDecodeError:
+                    pass
+            eprint(f"batch-modify failed on messages {start + 1}-{min(start + CHUNK_SIZE, len(ids))}: {msg}")
+            sys.exit(result.returncode)
+        print(f"Applied to messages {start + 1}-{min(start + CHUNK_SIZE, len(ids))}")
+
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()

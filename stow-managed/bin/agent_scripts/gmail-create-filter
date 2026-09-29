@@ -1,0 +1,146 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import argparse, json, subprocess, sys
+
+GWS = ["uvx", "gws-cli@1.3.1", "gmail", "create-filter"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def unwrap(obj):
+    if isinstance(obj, str):
+        try:
+            return unwrap(json.loads(obj))
+        except json.JSONDecodeError:
+            return None
+    if isinstance(obj, list):
+        for item in obj:
+            if isinstance(item, dict) and "id" in item:
+                return item
+        return None
+    if isinstance(obj, dict):
+        if "filter_id" in obj:
+            return {"id": obj["filter_id"]}
+        if "id" in obj:
+            return obj
+        for key in ("filter", "data"):
+            if key in obj:
+                found = unwrap(obj[key])
+                if found is not None:
+                    return found
+    return None
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Create a Gmail filter (gws-cli wrapper)")
+    criteria = parser.add_argument_group("criteria (at least one required)")
+    criteria.add_argument("--from", dest="from_", metavar="F", help="Match sender")
+    criteria.add_argument("--to", metavar="T", help="Match recipient")
+    criteria.add_argument("--subject", metavar="S", help="Match subject")
+    criteria.add_argument("--query", metavar="Q", help="Match raw Gmail query")
+    criteria.add_argument("--has-attachment", action="store_true", help="Match only messages with attachments")
+    actions = parser.add_argument_group("actions (at least one required)")
+    actions.add_argument("--add-labels", metavar="IDS", help="Comma-separated label IDs to add")
+    actions.add_argument("--remove-labels", metavar="IDS", help="Comma-separated label IDs to remove")
+    actions.add_argument("--archive", action="store_true", help="Archive (remove from inbox)")
+    actions.add_argument("--star", action="store_true", help="Star the message")
+    imp = actions.add_mutually_exclusive_group()
+    imp.add_argument("--important", action="store_true", help="Mark important")
+    imp.add_argument("--not-important", action="store_true", help="Never mark important")
+    actions.add_argument("--never-spam", action="store_true", help="Never send to spam")
+    actions.add_argument("--trash", action="store_true", help="Send to trash")
+    actions.add_argument("--forward", metavar="E", help="Forward to email address")
+    parser.add_argument("--json", action="store_true", dest="json_out",
+                        help="Output raw gws-cli response as JSON")
+    args = parser.parse_args()
+
+    has_criterion = any([args.from_, args.to, args.subject, args.query, args.has_attachment])
+    has_action = any([args.add_labels, args.remove_labels, args.archive, args.star,
+                      args.important, args.not_important, args.never_spam,
+                      args.trash, args.forward])
+    if not has_criterion or not has_action:
+        eprint("Usage: gmail-create-filter needs at least one criterion "
+               "(--from/--to/--subject/--query/--has-attachment) and at least one action "
+               "(--add-labels/--remove-labels/--archive/--star/--important/--not-important/"
+               "--never-spam/--trash/--forward)")
+        sys.exit(2)
+
+    cmd = GWS[:]
+    for flag, val in [("--from", args.from_), ("--to", args.to), ("--subject", args.subject),
+                      ("--query", args.query), ("--add-labels", args.add_labels),
+                      ("--remove-labels", args.remove_labels), ("--forward", args.forward)]:
+        if val:
+            cmd += [flag, val]
+    for flag in ("--has-attachment", "--archive", "--star", "--never-spam", "--trash"):
+        if getattr(args, flag.lstrip("-").replace("-", "_")):
+            cmd.append(flag)
+    for flag, attr in [("--important", "important"), ("--not-important", "not_important")]:
+        if getattr(args, attr):
+            cmd.append(flag)
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        msg = result.stderr.strip()
+        if result.stdout:
+            try:
+                err = json.loads(result.stdout)
+                msg = err.get("message", msg) or msg
+            except json.JSONDecodeError:
+                pass
+        eprint(msg)
+        sys.exit(result.returncode)
+
+    if args.json_out:
+        print(result.stdout, end="")
+        return
+
+    try:
+        outer = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        eprint("Unexpected non-JSON output:")
+        print(result.stdout, end="")
+        sys.exit(1)
+
+    filt = unwrap(outer)
+    if filt is None:
+        eprint("Unrecognized create-filter response shape; raw output follows.")
+        print(result.stdout, end="")
+        sys.exit(1)
+
+    print(f"{filt.get('id', '')} | created")
+    criteria = filt.get("criteria")
+    action = filt.get("action")
+    if criteria:
+        print("Criteria:")
+        for key, val in criteria.items():
+            if val:
+                print(f"  {key}: {val}")
+    if action:
+        print("Action:")
+        for key, val in action.items():
+            if val:
+                print(f"  {key}: {val}")
+    if not criteria and not action:
+        echo = []
+        for flag, val in [("--from", args.from_), ("--to", args.to),
+                          ("--subject", args.subject), ("--query", args.query),
+                          ("--add-labels", args.add_labels),
+                          ("--remove-labels", args.remove_labels),
+                          ("--forward", args.forward)]:
+            if val:
+                echo.append(f"{flag}={val}")
+        for flag in ("--has-attachment", "--archive", "--star", "--never-spam",
+                     "--trash", "--important", "--not-important"):
+            if getattr(args, flag.lstrip("-").replace("-", "_")):
+                echo.append(flag)
+        print("Configured: " + " ".join(echo))
+
+
+if __name__ == "__main__":
+    main()

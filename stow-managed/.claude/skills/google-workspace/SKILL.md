@@ -1,7 +1,10 @@
 ---
 name: google-workspace
 description: >-
-  Read Gmail (list/search/read/label-move), download and view email attachments
+  Read Gmail (list/search/read/label-move), manage Gmail labels
+  (create/rename labels), list existing Gmail filters (creating filters is
+  blocked by a gws-cli OAuth scope gap), backfill label actions onto
+  existing messages matching a query, download and view email attachments
   (PDFs, etc.), manage Calendar (list/get/create/update), and search/download
   Google Drive files (list/search/get/download/export) via gws-cli wrapper
   scripts in `~/bin/agent_scripts/`.
@@ -9,10 +12,12 @@ description: >-
   send, delete, and destructive Calendar/Drive operations are structurally blocked
   and cannot be invoked regardless of how the command is phrased.
   Trigger phrases: "check email", "search gmail", "list emails", "read email",
-  "archive email", "label email", "mark as read", "list calendar events",
-  "create event", "update event", "google calendar", "gmail", "workspace",
-  "attachment", "download attachment", "email pdf", "has attachment",
-  "search drive", "find file", "download file", "google drive", "drive file".
+  "archive email", "label email", "mark as read", "create label", "rename label",
+  "create filter", "gmail filters", "backfill", "organize inbox",
+  "list calendar events", "create event", "update event", "google calendar",
+  "gmail", "workspace", "attachment", "download attachment", "email pdf",
+  "has attachment", "search drive", "find file", "download file",
+  "google drive", "drive file".
 disable-model-invocation: false
 ---
 
@@ -68,8 +73,7 @@ even if you attempt them. Do not suggest or attempt these:
 
 **Gmail:** `send`, `reply`, `send-with-attachment`, `create-draft`, `update-draft`,
 `send-draft`, `delete-draft`, `delete`, `trash-thread`, `untrash`, `untrash-thread`,
-`delete-thread`, `delete-label`, `update-label`, `set-vacation`, `set-signature`,
-`create-filter`, `delete-filter`
+`delete-thread`, `delete-label`, `delete-filter`, `set-vacation`, `set-signature`
 
 **Calendar:** `clear-calendar`, `delete-calendar`, `create-calendar`,
 `add-acl`, `remove-acl`, `update-acl`, `subscribe`, `unsubscribe`, `clear-reminders`
