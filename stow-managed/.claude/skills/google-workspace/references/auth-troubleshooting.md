@@ -262,9 +262,12 @@ cat ~/.config/gws-cli/gws_config.json   # check current enabled_services
 Edit `enabled_services` directly (plaintext JSON, safe to edit with a normal
 text edit — no `gws-cli` invocation needed) down to the services that are (a)
 actually used by a wrapper script in `~/bin/agent_scripts/` and (b) confirmed
-present on the permissions page. For this skill, that's just `gmail` and
-`calendar` — no `docs-*`/`sheets-*`/`slides-*`/`drive-*` wrapper scripts exist,
-so those services being ungrantable cost nothing functionally.
+present on the permissions page. For this skill, that's now `gmail`, `calendar`,
+`drive`, `docs` and `sheets` (all granted 2026-10-10, each backed by `gmail-*`/
+`calendar-*`/`drive-*`/`docs-*`/`sheets-*` wrappers). `slides` and `convert`
+remain ungranted and have no wrapper, so they must not be added back — they
+cost nothing functionally and re-adding them restarts the `invalid_scope`
+refresh loop.
 
 **You will not need a new consent screen if you're only removing services** —
 same mechanism as Case B: shrinking the request to a subset of what's already
@@ -273,15 +276,15 @@ after trimming to `gmail` + `calendar`, `gmail-labels` and `calendar-list` both
 refreshed with no browser prompt.
 
 **Adding a granted-but-currently-unused service back is also safe without a
-new consent flow** — e.g. `drive` was re-added to `enabled_services` here even
-though no wrapper script uses it yet, because the permissions page confirmed
-it's already granted. Verify via the permissions page before re-adding
-anything, don't assume based on what "should" have been granted. Adding back
-`docs`/`sheets`/`slides`/`convert` **would** require a fresh consent pass
-(and, per this same failure mode, you'd need to explicitly check those
-permission boxes and then re-verify the grant landed via the permissions page
-before trusting it — don't just assume completing the flow means the scope
-was actually granted).
+new consent flow** — e.g. `drive` was re-added to `enabled_services` here
+because the permissions page confirmed it's already granted. Verify via the
+permissions page before re-adding anything, don't assume based on what
+"should" have been granted. Adding a never-granted service (`docs`/`sheets`
+were added this way and granted on 2026-10-10; `slides`/`convert` are still
+ungranted) **requires** a fresh consent pass (and, per this same failure mode,
+you'd need to explicitly check those permission boxes and then re-verify the
+grant landed via the permissions page before trusting it — don't just assume
+completing the flow means the scope was actually granted).
 
 **What would trigger Case C again:** adding any service to `enabled_services`
 whose scope isn't already listed on the permissions page, without completing a

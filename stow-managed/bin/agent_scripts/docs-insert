@@ -1,0 +1,54 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Insert plain text into a Google Doc at a character index or after anchor text.
+
+Position is --index N (default 1 = start of body) or --after-text TEXT, which
+inserts immediately after the Nth case-sensitive match (--occurrence, default 1).
+Indexes shift after every edit; use docs-find to get fresh ones. To add text at
+the end of the doc use docs-append.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, doc_find, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    p.add_argument("text", nargs="?")
+    p.add_argument("--stdin", action="store_true", help="read text from stdin")
+    where = p.add_mutually_exclusive_group()
+    where.add_argument("--index", type=int, help="character index to insert at")
+    where.add_argument("--after-text", help="insert right after this (case-sensitive) text")
+    p.add_argument("--occurrence", type=int, default=1, help="with --after-text: Nth match")
+    p.add_argument("--tab", help="tab ID (not title)")
+    args = p.parse_args()
+
+    if args.stdin == (args.text is not None):
+        die("Provide exactly one of <text> or --stdin", 2)
+    text = sys.stdin.read() if args.stdin else args.text
+
+    if args.after_text is not None:
+        r = doc_find(args.doc_id, args.after_text, args.tab, args.occurrence)
+        index = r["end_index"]
+    else:
+        index = args.index if args.index is not None else 1
+
+    sub = ["docs", "insert", args.doc_id, "--index", str(index)]
+    if args.tab:
+        sub += ["--tab", args.tab]
+    outer = run_gws(sub + ["--", text])
+    print(f"Inserted {outer.get('text_length', len(text))} chars at index {index}")
+
+
+if __name__ == "__main__":
+    main()

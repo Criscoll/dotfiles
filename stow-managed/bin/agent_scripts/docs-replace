@@ -1,0 +1,63 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Replace text in a Google Doc.
+
+By default replaces ALL matches doc-wide (no preview is possible; the count of
+replacements is printed). With --occurrence N only the Nth match changes; that
+requires --match-case because matching is case-sensitive there. The N-th-match
+path is composed from docs find-text + insert + delete (insert at the end of the
+match first, then delete the match), so it is not atomic: if the delete fails the
+new text is already in the doc and the script says so.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, doc_find, replace_span, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    p.add_argument("find")
+    p.add_argument("replace")
+    p.add_argument("--match-case", action="store_true", help="case-sensitive matching")
+    p.add_argument("--occurrence", type=int, help="change only the Nth match (1-based)")
+    p.add_argument("--tab", help="tab ID (not title)")
+    args = p.parse_args()
+
+    if args.occurrence is not None:
+        if not args.match_case:
+            die("--occurrence requires --match-case (matching is case-sensitive)", 2)
+        r = doc_find(args.doc_id, args.find, args.tab, args.occurrence)
+        start, end = r["index"], r["end_index"]
+        print(
+            f"Match {args.occurrence} of {r.get('total_occurrences')} "
+            f"at indexes {start}-{end}: {args.find!r}"
+        )
+        replace_span(args.doc_id, start, end, args.replace, args.tab)
+        print(f"Replaced occurrence {args.occurrence} of {args.find!r} with {args.replace!r}")
+        return
+
+    sub = ["docs", "replace", args.doc_id]
+    if args.match_case:
+        sub.append("--match-case")
+    if args.tab:
+        sub += ["--tab", args.tab]
+    outer = run_gws(sub + ["--", args.find, args.replace])
+    n = outer.get("occurrences_changed", 0)
+    if n:
+        print(f'Replaced {n} occurrence(s) of "{args.find}"')
+    else:
+        print(f'No matches for "{args.find}"; nothing changed')
+
+
+if __name__ == "__main__":
+    main()

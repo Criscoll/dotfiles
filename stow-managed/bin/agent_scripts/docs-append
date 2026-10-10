@@ -1,0 +1,38 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Append text to the end of a Google Doc (or tab)."""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("doc_id")
+    p.add_argument("text", nargs="?")
+    p.add_argument("--stdin", action="store_true", help="read text from stdin")
+    p.add_argument("--tab", help="tab ID (not title)")
+    args = p.parse_args()
+
+    if args.stdin == (args.text is not None):
+        die("Provide exactly one of <text> or --stdin", 2)
+
+    sub = ["docs", "append", args.doc_id]
+    if args.tab:
+        sub += ["--tab", args.tab]
+    if args.stdin:
+        outer = run_gws(sub + ["--stdin"], stdin=sys.stdin.read())
+    else:
+        outer = run_gws(sub + ["--", args.text])
+    print(f"Appended {outer.get('text_length')} chars at index {outer.get('index')}")
+
+
+if __name__ == "__main__":
+    main()

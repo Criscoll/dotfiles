@@ -1,0 +1,49 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Append rows after the last row of data in a spreadsheet tab or range.
+
+VALUES is a JSON array of rows, e.g. '[["x","y"]]'. Input is parsed as if typed in
+(USER_ENTERED), so "=1+1" becomes a formula. New rows are inserted, never
+overwriting existing cells.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    p.add_argument("range", help="tab name or A1 range to search for the table, e.g. Sheet1")
+    p.add_argument("--values", help="JSON array of rows")
+    p.add_argument("--stdin", action="store_true", help="read the JSON values from stdin")
+    args = p.parse_args()
+
+    if args.stdin == (args.values is not None):
+        die("Provide exactly one of --values or --stdin", 2)
+    raw = sys.stdin.read() if args.stdin else args.values
+    try:
+        rows = json.loads(raw)
+    except json.JSONDecodeError as e:
+        die(f"Values are not valid JSON: {e}", 2)
+    if not isinstance(rows, list) or not all(isinstance(r, list) for r in rows):
+        die("Values must be a JSON array of arrays, e.g. [[\"a\",\"b\"],[1,2]]", 2)
+
+    outer = run_gws(
+        ["sheets", "append", args.spreadsheet_id, args.range, "--stdin"], stdin=json.dumps(rows)
+    )
+    print(f"Appended {outer.get('updated_rows')} rows at {outer.get('range', args.range)}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,134 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Change a spreadsheet's structure: insert/delete rows or columns, sort, manage tabs.
+
+Tabs are selected by TITLE (--tab), resolved to the numeric sheet id for you; an
+unknown title lists the existing ones. Row and column indexes are 0-based and
+end-exclusive: rows 0 1 is the first row only (A1 notation row 1). gws-cli cannot
+insert rows/columns at index 0 (the API rejects it); insert at 1 or later.
+
+Destructive ops print what is about to go first: delete-rows/delete-columns show
+the affected cells, delete-tab shows the tab's size and its first rows.
+
+Ops:
+  insert-rows|insert-columns --tab T START COUNT
+  delete-rows|delete-columns --tab T START END
+  sort --tab T START_ROW END_ROW START_COL END_COL SORT_COL [--desc]
+  add-tab TITLE
+  rename-tab --tab OLD NEW_TITLE
+  delete-tab --tab T
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import (
+    cell_text,
+    col_letters,
+    die,
+    read_values,
+    resolve_tab,
+    run_gws,
+)
+
+
+def quoted(title):
+    return "'" + title.replace("'", "''") + "'"
+
+
+def show_cells(sheet_id, rng, label):
+    _, values = read_values(sheet_id, rng)
+    if any(any(c != "" for c in row) for row in values):
+        print(f"{label} (cells being removed):")
+        for row in values:
+            print("\t".join(cell_text(c) for c in row))
+    else:
+        print(f"{label}: (empty)")
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    sub = p.add_subparsers(dest="op", required=True, metavar="OP")
+
+    def op(name, ints=(), tab=True, text=None, desc=False):
+        sp = sub.add_parser(name, help=f"{name} (see top-level --help)")
+        if tab:
+            sp.add_argument("--tab", required=True, help="tab title")
+        for n in ints:
+            sp.add_argument(n, type=int)
+        if text:
+            sp.add_argument(text)
+        if desc:
+            sp.add_argument("--desc", action="store_true", help="sort descending")
+
+    op("insert-rows", ("start", "count"))
+    op("insert-columns", ("start", "count"))
+    op("delete-rows", ("start", "end"))
+    op("delete-columns", ("start", "end"))
+    op("sort", ("start_row", "end_row", "start_col", "end_col", "sort_col"), desc=True)
+    op("add-tab", tab=False, text="title")
+    op("rename-tab", text="new_title")
+    op("delete-tab")
+    args = p.parse_args()
+    sid = args.spreadsheet_id
+
+    if args.op == "add-tab":
+        outer = run_gws(["sheets", "add-sheet", sid, "--", args.title])
+        print(f"Added tab {args.title!r} (sheet_id {outer.get('sheet_id', '?')})")
+        return
+
+    tab = resolve_tab(sid, args.tab)
+    tid = str(tab["sheet_id"])
+    last_col = col_letters(max(int(tab.get("column_count", 1)) - 1, 0))
+    name = args.tab
+
+    if args.op in ("insert-rows", "insert-columns"):
+        if args.count < 1:
+            die("count must be >= 1", 2)
+        kind = args.op.split("-")[1]
+        run_gws(["sheets", args.op, sid, tid, str(args.start), str(args.count)])
+        print(f"Inserted {args.count} {kind} at index {args.start} in {name!r}")
+    elif args.op in ("delete-rows", "delete-columns"):
+        if not 0 <= args.start < args.end:
+            die("Require 0 <= start < end", 2)
+        kind = args.op.split("-")[1]
+        if kind == "rows":
+            rng = f"{quoted(name)}!A{args.start + 1}:{last_col}{args.end}"
+        else:
+            rng = f"{quoted(name)}!{col_letters(args.start)}1:{col_letters(args.end - 1)}{tab['row_count']}"
+        print(f"Deleting {kind} {args.start}-{args.end} (end exclusive) of {name!r}, range {rng}")
+        show_cells(sid, rng, "Before")
+        run_gws(["sheets", args.op, sid, tid, str(args.start), str(args.end)])
+        print(f"Deleted {kind} {args.start}-{args.end} from {name!r}")
+    elif args.op == "sort":
+        sub_args = ["sheets", "sort", sid, tid]
+        sub_args += [str(getattr(args, n)) for n in ("start_row", "end_row", "start_col", "end_col", "sort_col")]
+        if args.desc:
+            sub_args.append("--desc")
+        run_gws(sub_args)
+        order = "descending" if args.desc else "ascending"
+        print(
+            f"Sorted {name!r} rows {args.start_row}-{args.end_row}, cols "
+            f"{args.start_col}-{args.end_col} by col {args.sort_col} {order}"
+        )
+    elif args.op == "rename-tab":
+        run_gws(["sheets", "rename-sheet", sid, tid, "--", args.new_title])
+        print(f"Renamed tab {name!r} to {args.new_title!r}")
+    elif args.op == "delete-tab":
+        print(f"Deleting tab {name!r} ({tab['row_count']} x {tab['column_count']})")
+        rng = f"{quoted(name)}!A1:{last_col}5"
+        show_cells(sid, rng, "First rows")
+        run_gws(["sheets", "delete-sheet", sid, tid])
+        print(f"Deleted tab {name!r}")
+
+
+if __name__ == "__main__":
+    main()

@@ -6,6 +6,8 @@ All Drive operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-c
 `get`, `download`, `export`. No wrapper exists for uploading, deleting, sharing, moving,
 copying, renaming, or any other mutating operation — see "Operations with no wrapper" below.
 
+To read or edit native Docs/Sheets content, use docs.md / sheets.md.
+
 ## Listing and searching
 
 ```bash

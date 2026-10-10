@@ -1,0 +1,60 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Find and replace text across a spreadsheet.
+
+Scope is one tab (--tab TITLE) or every tab (--all-tabs; also the default when
+neither is given). Matching is case-insensitive unless --match-case. There is no
+preview: only the counts of changes are printed, so be specific with --tab and
+--entire-cell. Use sheets-read afterwards to confirm.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import resolve_tab, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    p.add_argument("find")
+    p.add_argument("replace")
+    scope = p.add_mutually_exclusive_group()
+    scope.add_argument("--tab", help="tab title to limit to")
+    scope.add_argument("--all-tabs", action="store_true", help="search every tab")
+    p.add_argument("--match-case", action="store_true")
+    p.add_argument("--entire-cell", action="store_true", help="match whole cell contents only")
+    p.add_argument("--regex", action="store_true", help="treat <find> as a regular expression")
+    args = p.parse_args()
+
+    sub = ["sheets", "find-replace", args.spreadsheet_id]
+    if args.tab:
+        sub += ["--sheet-id", str(resolve_tab(args.spreadsheet_id, args.tab)["sheet_id"])]
+        scope_msg = f"tab {args.tab!r}"
+    else:
+        sub.append("--all-sheets")
+        scope_msg = "all tabs"
+    for flag, on in (
+        ("--match-case", args.match_case),
+        ("--entire-cell", args.entire_cell),
+        ("--regex", args.regex),
+    ):
+        if on:
+            sub.append(flag)
+
+    outer = run_gws(sub + ["--", args.find, args.replace])
+    print(
+        f"Replaced in {scope_msg}: occurrences={outer.get('occurrences_changed', 0)} "
+        f"values={outer.get('values_changed', 0)} sheets={outer.get('sheets_changed', 0)}"
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,58 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Write values to a spreadsheet range, printing what was there first.
+
+VALUES is a JSON array of rows, e.g. '[["a","b"],[1,2]]'. Input is parsed as if
+typed in (USER_ENTERED), so "=1+1" becomes a formula. The target range is read
+first (formulas shown as formulas) and printed as `Before:`, so the overwritten
+content is visible in the transcript.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import cell_text, die, read_values, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    p.add_argument("range", help="A1 notation, e.g. Sheet1!A1:B2")
+    p.add_argument("--values", help="JSON array of rows")
+    p.add_argument("--stdin", action="store_true", help="read the JSON values from stdin")
+    args = p.parse_args()
+
+    if args.stdin == (args.values is not None):
+        die("Provide exactly one of --values or --stdin", 2)
+    raw = sys.stdin.read() if args.stdin else args.values
+    try:
+        rows = json.loads(raw)
+    except json.JSONDecodeError as e:
+        die(f"Values are not valid JSON: {e}", 2)
+    if not isinstance(rows, list) or not all(isinstance(r, list) for r in rows):
+        die("Values must be a JSON array of arrays, e.g. [[\"a\",\"b\"],[1,2]]", 2)
+
+    _, before = read_values(args.spreadsheet_id, args.range, formulas=True)
+    if any(any(c != "" for c in row) for row in before):
+        print("Before:")
+        for row in before:
+            print("\t".join(cell_text(c) for c in row))
+    else:
+        print("Before: (empty)")
+
+    outer = run_gws(
+        ["sheets", "write", args.spreadsheet_id, args.range, "--stdin"], stdin=json.dumps(rows)
+    )
+    print(f"Wrote {outer.get('updated_cells')} cells to {outer.get('range', args.range)}")
+
+
+if __name__ == "__main__":
+    main()

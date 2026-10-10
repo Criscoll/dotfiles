@@ -1,0 +1,76 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Insert Markdown into a Google Doc, keeping inline styles (bold, italic, links).
+
+Limitation (gws-cli): paragraph styles are dropped, so `# Heading` arrives as plain
+text and list items as plain lines; only inline text formatting survives.
+
+Default position is the end of the doc (--at-end); use --index N for a specific
+character index (1 = start of body). At the end, a leading newline is added when
+the last paragraph is non-empty so the markdown starts its own paragraph. The end
+index is computed from the text docs read returns, so for docs with tables at the
+end prefer --index. gws-cli renders the Markdown through a temporary Drive doc
+that it deletes afterwards.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, doc_read, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    p.add_argument("markdown", nargs="?")
+    p.add_argument("--stdin", action="store_true", help="read Markdown from stdin")
+    p.add_argument("--file", help="read Markdown from this file")
+    where = p.add_mutually_exclusive_group()
+    where.add_argument("--index", type=int, help="character index to insert at")
+    where.add_argument("--at-end", action="store_true", help="insert at end of doc (default)")
+    p.add_argument("--tab", help="tab ID (not title)")
+    args = p.parse_args()
+
+    sources = [args.markdown is not None, args.stdin, args.file is not None]
+    if sum(sources) != 1:
+        die("Provide exactly one of <markdown>, --stdin, or --file PATH", 2)
+    if args.stdin:
+        md = sys.stdin.read()
+    elif args.file:
+        try:
+            with open(args.file, encoding="utf-8") as f:
+                md = f.read()
+        except OSError as e:
+            die(f"Cannot read {args.file}: {e}", 2)
+    else:
+        md = args.markdown
+
+    if args.index is not None:
+        index = args.index
+    else:
+        _, _, content = doc_read(args.doc_id, args.tab)
+        # Doc indexes count UTF-16 code units; the body ends with a newline that must stay last.
+        index = max(len(content.encode("utf-16-le")) // 2, 1)
+        if content[-2:-1] not in ("", "\n"):
+            md = "\n" + md  # last paragraph is non-empty: start the markdown on its own line
+
+    sub = ["docs", "insert-markdown", args.doc_id, "--index", str(index), "--stdin"]
+    if args.tab:
+        sub += ["--tab", args.tab]
+    outer = run_gws(sub, stdin=md)
+    lines = md.count("\n") + 1
+    print(
+        f"Inserted {outer.get('inserted_length')} chars ({lines} markdown lines) "
+        f"at index {outer.get('inserted_at_index', index)}"
+    )
+
+
+if __name__ == "__main__":
+    main()

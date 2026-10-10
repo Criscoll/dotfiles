@@ -1,0 +1,39 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Find the character index of text in a Google Doc.
+
+Case-sensitive. Text inside tables is never found. Indexes are character
+positions (index 1 = start of body) and are off after non-BMP characters
+(emoji). Indexes shift after every edit, so re-run after editing.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import doc_find
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    p.add_argument("text")
+    p.add_argument("--tab", help="tab ID (not title)")
+    p.add_argument("--occurrence", type=int, default=1, help="1-based match number (default 1)")
+    args = p.parse_args()
+
+    r = doc_find(args.doc_id, args.text, args.tab, args.occurrence)
+    print(
+        f"index={r.get('index')} end_index={r.get('end_index')} "
+        f"length={r.get('length')} occurrences={r.get('total_occurrences')}"
+    )
+
+
+if __name__ == "__main__":
+    main()

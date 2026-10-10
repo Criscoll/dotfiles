@@ -1,0 +1,40 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Create a new Google Doc, optionally with initial content."""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import extract, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("title")
+    p.add_argument("--content", help="initial text content")
+    p.add_argument("--stdin", action="store_true", help="read initial content from stdin")
+    p.add_argument("--folder", help="Drive folder ID to create the doc in")
+    args = p.parse_args()
+
+    sub = ["docs", "create"]
+    stdin = None
+    if args.stdin:
+        stdin = sys.stdin.read()
+        sub += ["--stdin"]
+    elif args.content is not None:
+        sub += ["--content", args.content]
+    if args.folder:
+        sub += ["--folder", args.folder]
+
+    outer = run_gws(sub + ["--", args.title], stdin=stdin)
+    title = extract(outer.get("title", args.title))
+    print(f"Created: {title} (id: {outer.get('document_id', '')}) {outer.get('web_view_link', '')}")
+
+
+if __name__ == "__main__":
+    main()

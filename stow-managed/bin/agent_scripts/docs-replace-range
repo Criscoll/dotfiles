@@ -1,0 +1,57 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Replace an existing span of a Google Doc, by start/end index, with new text.
+
+Indexes are character positions (index 1 = start of body, end exclusive); get
+them from docs-find and re-run it after any edit. Prints the doc title, the range
+and the text being replaced (a best-effort preview that assumes a plain-text body;
+it can be wrong around tables or emoji) before changing anything.
+
+Composed from insert-at-end-of-span then delete-span, so it is not atomic: if the
+delete fails the new text is already in the doc and the script says so.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, doc_read, range_preview, replace_span
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    p.add_argument("start_index", type=int)
+    p.add_argument("end_index", type=int)
+    p.add_argument("text", nargs="?")
+    p.add_argument("--stdin", action="store_true", help="read replacement text from stdin")
+    p.add_argument("--tab", help="tab ID (not title)")
+    args = p.parse_args()
+
+    if args.stdin == (args.text is not None):
+        die("Provide exactly one of <text> or --stdin", 2)
+    if not 0 < args.start_index < args.end_index:
+        die("Require 0 < start_index < end_index", 2)
+    text = sys.stdin.read() if args.stdin else args.text
+
+    title, _, content = doc_read(args.doc_id, args.tab)
+    old = range_preview(content, args.start_index, args.end_index)
+    print(f"Doc: {title}")
+    print(f"Replacing indexes {args.start_index}-{args.end_index} with {text!r}")
+    if old is None:
+        print("Warning: could not preview the text being replaced (range outside read text)")
+    else:
+        print(f"Replacing text (preview, assumes plain-text body): {old!r}")
+
+    replace_span(args.doc_id, args.start_index, args.end_index, text, args.tab)
+    print(f"Replaced indexes {args.start_index}-{args.end_index}")
+
+
+if __name__ == "__main__":
+    main()

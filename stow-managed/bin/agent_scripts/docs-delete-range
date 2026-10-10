@@ -1,0 +1,52 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Delete a span of a Google Doc by start/end character index (end exclusive).
+
+Get indexes from docs-find; they shift after every edit, so re-run it first.
+Before deleting, prints the doc title, the range and the doomed text (a
+best-effort preview that assumes a plain-text body, so it can be wrong around
+tables or emoji; a warning is printed when it can't be shown).
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, doc_read, range_preview, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    p.add_argument("start_index", type=int)
+    p.add_argument("end_index", type=int)
+    p.add_argument("--tab", help="tab ID (not title)")
+    args = p.parse_args()
+
+    if not 0 < args.start_index < args.end_index:
+        die("Require 0 < start_index < end_index", 2)
+
+    title, _, content = doc_read(args.doc_id, args.tab)
+    doomed = range_preview(content, args.start_index, args.end_index)
+    print(f"Doc: {title}")
+    print(f"Deleting indexes {args.start_index}-{args.end_index}")
+    if doomed is None:
+        print("Warning: could not preview the text being deleted (range outside read text)")
+    else:
+        print(f"Deleting text (preview, assumes plain-text body): {doomed!r}")
+
+    sub = ["docs", "delete", args.doc_id]
+    if args.tab:
+        sub += ["--tab", args.tab]
+    run_gws(sub + ["--", str(args.start_index), str(args.end_index)])
+    print(f"Deleted indexes {args.start_index}-{args.end_index}")
+
+
+if __name__ == "__main__":
+    main()

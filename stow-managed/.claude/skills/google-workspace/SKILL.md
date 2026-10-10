@@ -6,8 +6,10 @@ description: >-
   blocked by a gws-cli OAuth scope gap), backfill label actions onto
   existing messages matching a query, download and view email attachments
   (PDFs, etc.), manage Calendar (list/get/create/update), and search/download
-  Google Drive files (list/search/get/download/export) via gws-cli wrapper
-  scripts in `~/bin/agent_scripts/`.
+  Google Drive files (list/search/get/download/export), and read, create and
+  edit native Google Docs and Sheets content (read text/cells, append, insert,
+  replace, delete ranges, write/append rows, find-replace, add/rename/delete
+  tabs, sort) via gws-cli wrapper scripts in `~/bin/agent_scripts/`.
   Enforced at the harness layer by a deny-by-default allow-list hook —
   send, delete, and destructive Calendar/Drive operations are structurally blocked
   and cannot be invoked regardless of how the command is phrased.
@@ -17,12 +19,14 @@ description: >-
   "list calendar events", "create event", "update event", "google calendar",
   "gmail", "workspace", "attachment", "download attachment", "email pdf",
   "has attachment", "search drive", "find file", "download file",
-  "google drive", "drive file".
+  "google drive", "drive file", "google doc", "read doc", "edit doc",
+  "update doc", "spreadsheet", "google sheet", "read sheet", "edit sheet",
+  "append row", "docs-", "sheets-".
 disable-model-invocation: false
 ---
 
-You are running the google-workspace skill. Drive `gws-cli` for Gmail, Calendar, and
-Drive work. **Send, delete, and destructive calendar/Drive operations are structurally
+You are running the google-workspace skill. Drive `gws-cli` for Gmail, Calendar,
+Drive, Docs, and Sheets work. **Send, delete, and destructive calendar/Drive operations are structurally
 unavailable — the harness hook blocks them even if attempted.**
 
 Always pin the exact version: `uvx gws-cli@1.3.1 <service> <subcommand> [flags]`
@@ -39,8 +43,8 @@ If this errors with an auth/token error, point the user to the per-machine setup
 section below rather than continuing.
 
 For Gmail list, search, and read operations, Calendar list, get, create, and update
-operations, and Drive list, search, get, download, and export operations, always use
-the wrapper scripts in `~/bin/agent_scripts/` rather than raw `gws-cli`. The wrappers
+operations, Drive list, search, get, download, and export operations, and Docs/Sheets
+read, create, and edit operations, always use the wrapper scripts in `~/bin/agent_scripts/` rather than raw `gws-cli`. The wrappers
 unwrap the outer JSON envelope, truncate long bodies, and format output as compact
 one-line-per-item listings, cutting token usage by an order of magnitude.
 
@@ -52,6 +56,13 @@ Read all three reference files before doing any Gmail, Calendar, or Drive work:
 cat "${CLAUDE_SKILL_DIR}/gmail.md"
 cat "${CLAUDE_SKILL_DIR}/calendar.md"
 cat "${CLAUDE_SKILL_DIR}/drive.md"
+```
+
+Before any Docs or Sheets work, also read:
+
+```bash
+cat "${CLAUDE_SKILL_DIR}/docs.md"
+cat "${CLAUDE_SKILL_DIR}/sheets.md"
 ```
 
 ## Load reference files when relevant
@@ -86,6 +97,16 @@ series masters are refused by the wrapper unless `--force` is passed.
 `delete-comment`, `list-comments`, `get-comment`, `add-permission`, `update-permission`,
 `remove-permission`, `list-permissions`, `list-revisions`, `get-revision`,
 `delete-revision`, `transfer-ownership`, `list-changes`, `watch-changes`
+
+**Docs:** no wrapper for tab create/delete/rename/reorder, formatting, tables, images,
+headers/footers, footnotes, named ranges, suggestions (accept/reject), page or
+document style, paragraph/text style, or bullets. Docs/Sheets creation is
+available, but there is no delete/trash wrapper for either — the user deletes
+files manually.
+
+**Sheets:** no wrapper for `clear`, formatting, charts, pivots, protected or named
+ranges, conditional formats, validation, merges, filters, banding, copy-paste,
+auto-fill, move, duplicate-sheet, text-to-columns, or trim-whitespace.
 
 This list is not hook-structurally-enforced the way `.enc` file access is — it's
 enforced by which wrapper scripts exist. Do not attempt these via raw `gws-cli` even
@@ -140,12 +161,12 @@ Without this flag, the browser shows "Authorization successful" but the terminal
 `Scope has changed from ... to ...` and no token gets saved — a confusing false negative.
 
 **On a headless/remote machine (VPS, no local browser):** the flow starts a local
-callback server on `http://127.0.0.1:8081/` and prints an authorization URL, then waits.
+callback server on `http://127.0.0.1:8080/` and prints an authorization URL, then waits.
 A different machine's browser can't reach that callback server directly. Tunnel it:
 
-1. Leave the terminal running the auth command open — it's waiting on port 8081.
+1. Leave the terminal running the auth command open — it's waiting on port 8080.
 2. From the machine with a browser, in a separate terminal:
-   `ssh -L 8081:localhost:8081 <user>@<remote-host>` (leave this open too; nothing needs
+   `ssh -L 8080:localhost:8080 <user>@<remote-host>` (leave this open too; nothing needs
    to run inside it).
 3. Copy the printed URL and open it in that browser, approve access.
 4. The tunnel forwards the callback to the waiting process, which completes and saves

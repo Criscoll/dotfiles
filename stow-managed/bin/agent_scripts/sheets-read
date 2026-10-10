@@ -1,0 +1,37 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Read a spreadsheet range as tab-separated rows (header: `<range> | <n> rows`).
+
+Range is A1 notation, e.g. Sheet1!A1:C10 (omit for the first tab). Cells with
+embedded tabs/newlines are escaped as \\t / \\n. --formulas shows formulas
+instead of computed values.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import cell_text, read_values
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    p.add_argument("range", nargs="?")
+    p.add_argument("--formulas", action="store_true")
+    args = p.parse_args()
+
+    rng, values = read_values(args.spreadsheet_id, args.range, args.formulas)
+    print(f"{rng} | {len(values)} rows")
+    for row in values:
+        print("\t".join(cell_text(c) for c in row))
+
+
+if __name__ == "__main__":
+    main()
