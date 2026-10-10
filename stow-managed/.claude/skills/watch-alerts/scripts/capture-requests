@@ -1,0 +1,101 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["playwright==1.60.0"]
+# ///
+"""Capture fetch/XHR responses from the running browser-inspect Chromium as JSONL.
+
+Probing helper for watch-alerts: start it in the background, then drive the
+booking widget with browser-nav / browser-click to reveal which endpoint
+serves availability.
+
+  capture-requests --seconds 90 --match api-yoa > /tmp/cap.jsonl &
+"""
+
+import argparse
+import json
+import os
+import sys
+
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import sync_playwright
+
+STATE = os.path.expanduser("~/.cache/browser-scraping/active")
+DEFAULT_CDP_URL = "http://localhost:9222"
+# Enough to recognise a request's shape without dumping whole payloads.
+POST_DATA_MAX = 1024
+BODY_MAX = 2048
+CAPTURED_TYPES = {"fetch", "xhr"}
+TEXTUAL_TYPES = ("json", "text", "xml")
+
+
+def read_cdp_url():
+    try:
+        with open(STATE) as f:
+            state = json.load(f)
+    except (OSError, ValueError):
+        return DEFAULT_CDP_URL
+    return state.get("cdp_url", DEFAULT_CDP_URL)
+
+
+def make_handler(match):
+    def on_response(response):
+        request = response.request
+        if request.resource_type not in CAPTURED_TYPES:
+            return
+        if match and match not in response.url:
+            return
+        content_type = response.headers.get("content-type", "")
+        body = None
+        if any(t in content_type for t in TEXTUAL_TYPES):
+            try:
+                body = response.text()[:BODY_MAX]
+            except PlaywrightError:
+                body = None  # redirects and aborted loads have no readable body
+        post_data = request.post_data
+        print(
+            json.dumps(
+                {
+                    "method": request.method,
+                    "url": response.url,
+                    "post_data": post_data[:POST_DATA_MAX] if post_data else None,
+                    "status": response.status,
+                    "content_type": content_type,
+                    "body": body,
+                }
+            ),
+            flush=True,
+        )
+
+    return on_response
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--seconds", type=int, default=60, help="capture duration (default 60)")
+    parser.add_argument("--match", help="only keep URLs containing this substring")
+    args = parser.parse_args()
+
+    handler = make_handler(args.match)
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.connect_over_cdp(read_cdp_url())
+        except PlaywrightError as e:
+            sys.exit(f"No browser listening ({e}). Run ~/bin/agent_scripts/browser-start first.")
+
+        def attach(page):
+            page.on("response", handler)
+
+        for context in browser.contexts:
+            for page in context.pages:
+                attach(page)
+            context.on("page", attach)
+
+        # Playwright's sync API only dispatches events while it is waiting on a page.
+        pages = [pg for c in browser.contexts for pg in c.pages]
+        waiter = pages[0] if pages else browser.contexts[0].new_page()
+        waiter.wait_for_timeout(args.seconds * 1000)
+
+
+if __name__ == "__main__":
+    main()

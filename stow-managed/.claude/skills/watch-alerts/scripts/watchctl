@@ -1,0 +1,283 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Manage watch-alerts watchers: scaffold, schedule via systemd user timers, inspect, remove.
+
+Watcher instances live in ~/.local/share/watchers/<name>/ (outside the repo).
+Output is pipe-friendly: one record per line, fields joined with ' | '.
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+SKILL_DIR = Path(__file__).resolve().parent.parent
+TEMPLATES = SKILL_DIR / "templates"
+WATCHERS_DIR = Path.home() / ".local" / "share" / "watchers"
+ARCHIVE_DIR = WATCHERS_DIR / ".archive"
+UNIT_DIR = Path.home() / ".config" / "systemd" / "user"
+ENV_FILE = Path.home() / ".config" / "agent-scripts" / "env"
+NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+# A race loop stops itself after duration_min; this slack lets it log "race end"
+# before systemd's hard RuntimeMaxSec kill, which is only a backstop.
+RACE_RUNTIME_SLACK_MIN = 5
+# A single check is one 20 s HTTP call; 120 s covers a retry-less slow run.
+CHECK_TIMEOUT_SEC = 120
+HTTP_TIMEOUT_SEC = 20
+
+
+def die(msg, code=1):
+    print(msg, file=sys.stderr)
+    sys.exit(code)
+
+
+def watcher_dir(name):
+    if not NAME_RE.match(name):
+        die(f"invalid name '{name}': use lowercase letters, digits and dashes", 2)
+    return WATCHERS_DIR / name
+
+
+def load_config(name):
+    path = watcher_dir(name) / "config.json"
+    if not path.exists():
+        die(f"no such watcher: {name} ({path} missing)")
+    return json.loads(path.read_text())
+
+
+def uv_bin():
+    return shutil.which("uv") or str(Path.home() / "bin" / "uv")
+
+
+def systemctl(*args, check=True):
+    return subprocess.run(["systemctl", "--user", *args], check=check, capture_output=True, text=True)
+
+
+def validate_calendar(expr):
+    res = subprocess.run(["systemd-analyze", "calendar", expr], check=False, capture_output=True, text=True)
+    if res.returncode != 0:
+        die(f"invalid OnCalendar expression '{expr}':\n{res.stderr.strip()}", 2)
+
+
+def cmd_new(args):
+    d = watcher_dir(args.name)
+    if d.exists():
+        die(f"{d} already exists")
+    d.mkdir(parents=True)
+    shutil.copy(TEMPLATES / "watcher.py", d / "watcher.py")
+    cfg = json.loads((TEMPLATES / "config.example.json").read_text())
+    cfg["name"] = args.name
+    (d / "config.json").write_text(json.dumps(cfg, indent=2) + "\n")
+    os.chmod(d / "watcher.py", 0o755)
+    print(f"created | {d} | edit check() in watcher.py and fill config.json")
+
+
+def cmd_run(args):
+    d = watcher_dir(args.name)
+    if not (d / "watcher.py").exists():
+        die(f"no such watcher: {args.name}")
+    flag = [f"--{args.mode}"] if args.mode else []
+    res = subprocess.run([uv_bin(), "run", "--script", str(d / "watcher.py"), *flag], check=False)
+    sys.exit(res.returncode)
+
+
+def unit_service(name, cfg, race):
+    suffix = "-race" if race else ""
+    lines = [
+        "[Unit]",
+        f"Description=watch-alerts{' race' if race else ''}: {cfg['title']}",
+        "After=network-online.target",
+        "Wants=network-online.target",
+        "",
+        "[Service]",
+        "Type=simple" if race else "Type=oneshot",
+        "Environment=PYTHONUNBUFFERED=1",
+        f"ExecStart=%h/bin/uv run --script %h/.local/share/watchers/{name}/watcher.py"
+        + (" --race" if race else ""),
+    ]
+    if race:
+        runtime = (cfg["race"]["duration_min"] + RACE_RUNTIME_SLACK_MIN) * 60
+        lines.append(f"RuntimeMaxSec={runtime}")
+    else:
+        lines.append(f"TimeoutStartSec={CHECK_TIMEOUT_SEC}")
+    if cfg.get("memory_max"):
+        lines.append(f"MemoryMax={cfg['memory_max']}")
+    return f"watcher-{name}{suffix}.service", "\n".join(lines) + "\n"
+
+
+def unit_timer(name, cfg, race):
+    suffix = "-race" if race else ""
+    # AccuracySec defaults to 1min, which silently breaks second-level timing.
+    lines = [
+        "[Unit]",
+        f"Description=watch-alerts{' race' if race else ''} timer: {cfg['title']}",
+        "",
+        "[Timer]",
+        f"OnCalendar={cfg['race']['at'] if race else cfg['schedule']}",
+        "AccuracySec=1s",
+    ]
+    if not race:
+        lines.append(f"RandomizedDelaySec={cfg.get('jitter_sec', 0)}")
+    lines += ["Persistent=false", "", "[Install]", "WantedBy=timers.target"]
+    return f"watcher-{name}{suffix}.timer", "\n".join(lines) + "\n"
+
+
+def cmd_install(args):
+    cfg = load_config(args.name)
+    name = args.name
+    validate_calendar(cfg["schedule"])
+    race = "race" in cfg
+    if race:
+        validate_calendar(cfg["race"]["at"])
+    UNIT_DIR.mkdir(parents=True, exist_ok=True)
+    units = [unit_service(name, cfg, False), unit_timer(name, cfg, False)]
+    if race:
+        units += [unit_service(name, cfg, True), unit_timer(name, cfg, True)]
+    for fname, body in units:
+        (UNIT_DIR / fname).write_text(body)
+    systemctl("daemon-reload")
+    timers = [f for f, _ in units if f.endswith(".timer")]
+    systemctl("enable", "--now", *timers)
+    print(f"installed | {name} | {', '.join(timers)}")
+
+
+def show(unit, *props):
+    out = systemctl("show", unit, *[f"-p{p}" for p in props], check=False).stdout
+    return dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+
+
+def cmd_list(_args):
+    names = sorted(p.name for p in WATCHERS_DIR.iterdir() if p.is_dir() and not p.name.startswith(".")) \
+        if WATCHERS_DIR.exists() else []
+    if not names:
+        print("No watchers found.")
+        return
+    for name in names:
+        cfg_path = WATCHERS_DIR / name / "config.json"
+        expires = json.loads(cfg_path.read_text()).get("expires", "?") if cfg_path.exists() else "?"
+        for kind, suffix in (("main", ""), ("race", "-race")):
+            timer = f"watcher-{name}{suffix}.timer"
+            t = show(timer, "LoadState", "ActiveState", "NextElapseUSecRealtime")
+            if t.get("LoadState") != "loaded":
+                if kind == "main":
+                    print(f"{name} | main | not-installed | - | - | expires {expires}")
+                continue
+            s = show(f"watcher-{name}{suffix}.service", "Result", "ExecMainStatus", "ExecMainStartTimestamp")
+            if s.get("ExecMainStartTimestamp"):
+                last = f"{s.get('Result', '?')} (exit {s.get('ExecMainStatus', '?')})"
+            else:
+                last = "never run"
+            print(
+                f"{name} | {kind} | {t.get('ActiveState')} | next {t.get('NextElapseUSecRealtime') or '-'}"
+                f" | last {last} | expires {expires}"
+            )
+
+
+def cmd_logs(args):
+    watcher_dir(args.name)
+    subprocess.run(
+        ["journalctl", "--user", "-u", f"watcher-{args.name}*", "-n", str(args.n), "--no-pager"],
+        check=False,
+    )
+
+
+def cmd_remove(args):
+    d = watcher_dir(args.name)
+    name = args.name
+    if not d.exists():
+        die(f"no such watcher: {name}")
+    for suffix in ("", "-race"):
+        systemctl("disable", "--now", f"watcher-{name}{suffix}.timer", check=False)
+        systemctl("stop", f"watcher-{name}{suffix}.service", check=False)
+        for ext in ("timer", "service"):
+            (UNIT_DIR / f"watcher-{name}{suffix}.{ext}").unlink(missing_ok=True)
+    systemctl("daemon-reload")
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    dest = ARCHIVE_DIR / f"{name}-{datetime.now():%Y%m%d}"
+    if dest.exists():
+        dest = ARCHIVE_DIR / f"{name}-{datetime.now():%Y%m%d-%H%M%S}"
+    shutil.move(str(d), str(dest))
+    print(f"removed | {name} | archived to {dest}")
+
+
+def load_ntfy_topic():
+    topic = os.environ.get("NTFY_TOPIC", "").strip()
+    if topic:
+        return topic
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("export "):
+                line = line[len("export ") :].strip()
+            if line.startswith("NTFY_TOPIC="):
+                return line.split("=", 1)[1].strip().strip("'\"")
+    die(f"NTFY_TOPIC not set (env or {ENV_FILE}); see SKILL.md one-time setup")
+
+
+def cmd_test_notify(_args):
+    payload = {
+        "topic": load_ntfy_topic(),
+        "title": "watch-alerts test",
+        "message": "Test push from watchctl test-notify",
+        "priority": 3,
+        "tags": ["white_check_mark"],
+    }
+    req = urllib.request.Request(
+        "https://ntfy.sh/",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC):
+        pass
+    print("test push sent")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("new", help="scaffold a watcher from the templates")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_new)
+
+    p = sub.add_parser("run", help="run a watcher in the foreground")
+    p.add_argument("name")
+    modes = p.add_mutually_exclusive_group()
+    for m in ("dry-run", "race", "test-notify"):
+        modes.add_argument(f"--{m}", dest="mode", action="store_const", const=m)
+    p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("install", help="write systemd user units and enable the timer(s)")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_install)
+
+    p = sub.add_parser("list", help="one line per watcher timer")
+    p.set_defaults(func=cmd_list)
+
+    p = sub.add_parser("logs", help="journald output for a watcher")
+    p.add_argument("name")
+    p.add_argument("-n", type=int, default=50)
+    p.set_defaults(func=cmd_logs)
+
+    p = sub.add_parser("remove", help="disable timers, delete units, archive the dir")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_remove)
+
+    p = sub.add_parser("test-notify", help="send one test push")
+    p.set_defaults(func=cmd_test_notify)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
