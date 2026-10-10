@@ -1,0 +1,61 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Apply character formatting (bold, italic, underline, size, colour, link) to a Google Doc span.
+
+Target with --text TEXT (the Nth case-sensitive match) or --range START END
+(end exclusive). Flags left out are not changed; --no-bold etc. turn a style off.
+--color is hex (#RRGGBB). --link URL makes the span a hyperlink.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import add_target_args, die, resolve_target, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    add_target_args(p)
+    p.add_argument("--bold", action=argparse.BooleanOptionalAction)
+    p.add_argument("--italic", action=argparse.BooleanOptionalAction)
+    p.add_argument("--underline", action=argparse.BooleanOptionalAction)
+    p.add_argument("--size", type=int, help="font size in points")
+    p.add_argument("--color", help="text colour, hex like #FF0000")
+    p.add_argument("--link", help="URL to link the span to")
+    p.add_argument("--tab", help="tab ID (not title); not applicable to --link")
+    args = p.parse_args()
+
+    styled = any(v is not None for v in (args.bold, args.italic, args.underline, args.size, args.color))
+    if not (styled or args.link):
+        die("Provide at least one of --bold/--italic/--underline/--size/--color/--link", 2)
+    if args.link and args.tab:
+        die("--link does not support --tab (gws-cli limitation)", 2)
+    start, end = resolve_target(args, args.tab)
+
+    if styled:
+        sub = ["docs", "format", args.doc_id, str(start), str(end)]
+        for flag, value in (("bold", args.bold), ("italic", args.italic), ("underline", args.underline)):
+            if value is not None:
+                sub.append(f"--{flag}" if value else f"--no-{flag}")
+        if args.size:
+            sub += ["--font-size", str(args.size)]
+        if args.color:
+            sub += ["--color", args.color]
+        if args.tab:
+            sub += ["--tab", args.tab]
+        run_gws(sub)
+    if args.link:
+        run_gws(["docs", "insert-link", args.doc_id, str(start), str(end), args.link])
+    print(f"Formatted indexes {start}-{end}")
+
+
+if __name__ == "__main__":
+    main()

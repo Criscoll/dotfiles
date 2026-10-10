@@ -2,12 +2,14 @@
 
 Imported (not executed) by the wrapper scripts via
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))). The only I/O is
-the gws-cli subprocess call.
+the gws-cli subprocess call, plus a scratch temp dir for `docs export`.
 """
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 
 GWS = ["uvx", "gws-cli@1.3.1"]
 
@@ -90,6 +92,167 @@ def doc_find(doc_id, text, tab=None, occurrence=1):
     if tab:
         args += ["--tab", tab]
     return run_gws(args + ["--", text])
+
+
+def doc_read_markdown(doc_id):
+    """Return the Doc exported as Markdown (shows headings, lists, bold, links, tables).
+
+    `docs export` can only write to a file, so it goes through a fresh temp dir.
+    It has no --tab option: multi-tab docs export the first tab.
+    """
+    with tempfile.TemporaryDirectory() as scratch:
+        path = os.path.join(scratch, "export.md")
+        run_gws(["docs", "export", doc_id, path, "--format", "markdown"])
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
+
+def utf16_len(text):
+    """Length in Doc index units (UTF-16 code units), unlike len() for emoji."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def utf16_slice(text, start, length):
+    """`length` Doc index units of `text` starting at unit offset `start` (emoji count as 2)."""
+    out, pos = [], 0
+    for ch in text:
+        if pos >= start + length:
+            break
+        if pos >= start:
+            out.append(ch)
+        pos += 2 if ord(ch) > 0xFFFF else 1
+    return "".join(out)
+
+
+def list_tables(doc_id):
+    """Return the Doc's tables in document order: dicts with startIndex/endIndex/rows/columns.
+
+    gws-cli's table commands have no --tab option, so this covers the first tab.
+    """
+    return run_gws(["docs", "list-tables", doc_id]).get("tables") or []
+
+
+def table_is_empty(table):
+    """True when every cell is empty (span == table + rows + cells' bare paragraphs)."""
+    rows, cols = table["rows"], table["columns"]
+    return table["endIndex"] - table["startIndex"] == 2 + rows * (1 + 2 * cols)
+
+
+def table_cell_index(table, row, col):
+    """Doc index of the (empty) paragraph inside cell (row, col), both 0-based.
+
+    A table opens with 1 unit; each row adds 1 and each cell adds 2 (cell start +
+    its newline), so cell (r, c) sits at start + 3 + r * (1 + 2 * cols) + 2 * c.
+    """
+    return table["startIndex"] + 3 + row * (1 + 2 * table["columns"]) + 2 * col
+
+
+def fill_table(doc_id, table, grid, bold_header=False):
+    """Write `grid` (list of rows of str) into the empty `table`; return cells written.
+
+    Cells are filled last to first so the text added to one cell never shifts the
+    index of a cell still to be written. Cells beyond the table's size are an error.
+    """
+    if len(grid) > table["rows"] or any(len(r) > table["columns"] for r in grid):
+        die(f"Values ({len(grid)} rows) do not fit a {table['rows']}x{table['columns']} table")
+    written = 0
+    for r in range(len(grid) - 1, -1, -1):
+        for c in range(len(grid[r]) - 1, -1, -1):
+            text = grid[r][c]
+            if text:
+                index = table_cell_index(table, r, c)
+                run_gws(["docs", "insert", doc_id, "--index", str(index), "--", text])
+                written += 1
+    if bold_header and grid:
+        # Row 0 is filled left to right, so each cell sits after the text of the cells before it.
+        offset = 0
+        for c, text in enumerate(grid[0]):
+            if text:
+                start = table_cell_index(table, 0, c) + offset
+                run_gws(["docs", "format", doc_id, str(start), str(start + utf16_len(text)), "--bold"])
+            offset += utf16_len(text)
+    return written
+
+
+def parse_grid(raw):
+    """Parse a JSON array of rows into a rectangular list of str cells (short rows padded)."""
+    try:
+        grid = json.loads(raw)
+    except json.JSONDecodeError as e:
+        die(f"Values must be a JSON array of rows, e.g. '[[\"a\",\"b\"],[1,2]]': {e}", 2)
+    if not grid or not isinstance(grid, list) or not all(isinstance(r, list) and r for r in grid):
+        die("Values must be a non-empty JSON array of non-empty rows", 2)
+    cols = max(len(r) for r in grid)
+    return [[str(v) for v in r] + [""] * (cols - len(r)) for r in grid]
+
+
+def add_target_args(parser):
+    """Add the shared 'which span' options used by the docs formatting wrappers."""
+    where = parser.add_mutually_exclusive_group(required=True)
+    where.add_argument("--range", nargs=2, type=int, metavar=("START", "END"),
+                       help="character indexes (end exclusive)")
+    where.add_argument("--text", help="the (case-sensitive) text to act on")
+    parser.add_argument("--occurrence", type=int, default=1, help="with --text: Nth match")
+
+
+def resolve_target(args, tab=None):
+    """Return (start, end) from --range, or by locating --text; exit on a bad range."""
+    if args.range:
+        start, end = args.range
+        if not 0 < start < end:
+            die("Require 0 < START < END", 2)
+        return start, end
+    found = doc_find(args.doc_id, args.text, tab, args.occurrence)
+    return found["index"], found["end_index"]
+
+
+MAX_OCCURRENCES = 50
+
+
+def verify_span(doc_id, start, end, expect, tab=None):
+    """Exit unless the Doc text at indexes [start, end) is exactly `expect`.
+
+    Asks the Doc where `expect` occurs (same index space the edit will use) and
+    checks one match sits at exactly this span, so an index that went stale after
+    another edit aborts the script instead of corrupting the doc. Text inside
+    tables is never found, so a span in a table cannot be verified.
+    """
+    try:
+        first = try_gws_find(doc_id, expect, tab, 1)
+        total = min(first.get("total_occurrences") or 1, MAX_OCCURRENCES)
+        for n in range(1, total + 1):
+            found = first if n == 1 else try_gws_find(doc_id, expect, tab, n)
+            if found["index"] == start and found["end_index"] == end:
+                return
+        seen = f"the text occurs {total} time(s), none at {start}-{end}"
+    except GwsError as e:
+        seen = f"the text was not found ({e})"
+    die(
+        f"Guard failed, no change made: indexes {start}-{end} no longer hold the "
+        f"expected text ({seen}). Re-run docs-find for fresh indexes.",
+        3,
+    )
+
+
+def try_gws_find(doc_id, text, tab, occurrence):
+    args = ["docs", "find-text", doc_id, "--occurrence", str(occurrence)]
+    if tab:
+        args += ["--tab", tab]
+    return try_gws(args + ["--", text])
+
+
+def find_after(doc_id, text, min_index, tab=None):
+    """First match of `text` starting at or after `min_index`; exit if there is none."""
+    try:
+        first = try_gws_find(doc_id, text, tab, 1)
+        total = min(first.get("total_occurrences") or 1, MAX_OCCURRENCES)
+        for n in range(1, total + 1):
+            found = first if n == 1 else try_gws_find(doc_id, text, tab, n)
+            if found["index"] >= min_index:
+                return found
+    except GwsError as e:
+        die(f"Could not find {text!r}: {e}", e.code)
+    die(f"No match for {text!r} at or after index {min_index}")
 
 
 def sheet_tabs(sheet_id):

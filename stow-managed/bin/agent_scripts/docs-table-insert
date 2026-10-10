@@ -1,0 +1,87 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Insert a table into a Google Doc and fill it from a JSON grid in one step.
+
+--values is a JSON array of rows, e.g. '[["Name","Qty"],["Apples",3]]'; the table is
+sized to the longest row (short rows are padded), cells are plain text, and a
+cell may contain newlines. Position is --index N, right after anchor text
+(--after-text, case-sensitive, Nth match via --occurrence), or the end of the doc.
+--header makes the first row bold.
+
+Only the first tab is supported (gws-cli's table commands have no tab option).
+After inserting, the script checks the doc grew by exactly the text written and
+warns if not, so run docs-read --markdown to confirm the result.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import (
+    die,
+    doc_find,
+    fill_table,
+    list_tables,
+    parse_grid,
+    run_gws,
+    utf16_len,
+)
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    p.add_argument("--values", help="JSON array of rows")
+    p.add_argument("--stdin", action="store_true", help="read the JSON from stdin")
+    where = p.add_mutually_exclusive_group()
+    where.add_argument("--index", type=int, help="character index to insert at")
+    where.add_argument("--after-text", help="insert right after this (case-sensitive) text")
+    p.add_argument("--occurrence", type=int, default=1, help="with --after-text: Nth match")
+    p.add_argument("--header", action="store_true", help="bold the first row")
+    args = p.parse_args()
+
+    if args.stdin == (args.values is not None):
+        die("Provide exactly one of --values or --stdin", 2)
+    grid = parse_grid(sys.stdin.read() if args.stdin else args.values)
+    rows, cols = len(grid), len(grid[0])
+
+    index = args.index
+    if args.after_text is not None:
+        index = doc_find(args.doc_id, args.after_text, None, args.occurrence)["end_index"]
+
+    before = list_tables(args.doc_id)
+    sub = ["docs", "insert-table", args.doc_id, str(rows), str(cols)]
+    if index is not None:
+        sub += ["--index", str(index)]
+    run_gws(sub)
+
+    after = list_tables(args.doc_id)
+    if len(after) != len(before) + 1:
+        die(f"Table insert did not register ({len(before)} -> {len(after)} tables); check the doc")
+    n = len(after) - 1 if index is None else next(
+        i for i, t in enumerate(after) if t["startIndex"] >= index
+    )
+    table = after[n]
+
+    written = fill_table(args.doc_id, table, grid, args.header)
+    expected = table["endIndex"] + sum(utf16_len(v) for r in grid for v in r)
+    actual = list_tables(args.doc_id)[n]["endIndex"]
+    print(
+        f"Inserted {rows}x{cols} table #{n} at index {table['startIndex']}; "
+        f"filled {written} cells"
+    )
+    if actual != expected:
+        print(
+            f"Warning: table ends at {actual}, expected {expected}; "
+            "check it with docs-read --markdown"
+        )
+
+
+if __name__ == "__main__":
+    main()

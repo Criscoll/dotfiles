@@ -3,25 +3,38 @@
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""Read a Google Doc as plain text (truncated to 5000 chars unless --full)."""
+"""Read a Google Doc as plain text (truncated to 5000 chars unless --full).
+
+--markdown reads the first tab as Markdown instead, which shows what plain text
+hides: heading levels, bullets/numbering, bold/italic, links and tables. Use it to
+check formatting after an edit. Its text does not map to character indexes.
+"""
 
 import argparse
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _gws_workspace import doc_read
+from _gws_workspace import die, doc_read, doc_read_markdown
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("doc_id")
-    p.add_argument("--tab", help="tab ID (not title)")
+    p.add_argument("--tab", help="tab ID (not title); not supported with --markdown")
+    p.add_argument("--markdown", action="store_true", help="show formatting as Markdown")
     p.add_argument("--full", action="store_true", help="do not truncate")
     p.add_argument("--limit", type=int, default=5000, help="max chars (default 5000)")
     args = p.parse_args()
 
+    if args.markdown and args.tab:
+        die("--markdown exports the first tab only; drop --tab", 2)
+
     title, tab_id, content = doc_read(args.doc_id, args.tab)
+    if args.markdown:
+        content = doc_read_markdown(args.doc_id)
     print(f"Title: {title}")
     if tab_id:
         print(f"Tab: {tab_id}")

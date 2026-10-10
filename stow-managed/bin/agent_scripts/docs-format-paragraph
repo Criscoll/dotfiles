@@ -1,0 +1,53 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Set the heading level and/or alignment of paragraphs in a Google Doc.
+
+Target the paragraphs with --text TEXT (the paragraph containing the Nth
+case-sensitive match) or --range START END (every paragraph overlapping the
+span; end exclusive). --style takes normal, title, subtitle or h1..h6.
+First tab only (gws-cli has no tab option for paragraph formatting).
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import add_target_args, die, resolve_target, run_gws
+
+STYLES = {
+    "normal": "NORMAL_TEXT",
+    "title": "TITLE",
+    "subtitle": "SUBTITLE",
+    **{f"h{n}": f"HEADING_{n}" for n in range(1, 7)},
+}
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    add_target_args(p)
+    p.add_argument("--style", choices=STYLES)
+    p.add_argument("--align", choices=["start", "center", "end", "justified"])
+    args = p.parse_args()
+
+    if not (args.style or args.align):
+        die("Provide at least one of --style or --align", 2)
+    start, end = resolve_target(args)
+
+    sub = ["docs", "format-paragraph", args.doc_id, str(start), str(end)]
+    if args.style:
+        sub += ["--style", STYLES[args.style]]
+    if args.align:
+        sub += ["--align", args.align.upper()]
+    run_gws(sub)
+    print(f"Formatted paragraphs overlapping {start}-{end}")
+
+
+if __name__ == "__main__":
+    main()

@@ -6,7 +6,10 @@
 """Replace an existing span of a Google Doc, by start/end index, with new text.
 
 Indexes are character positions (index 1 = start of body, end exclusive); get
-them from docs-find and re-run it after any edit. Prints the doc title, the range
+them from docs-find and re-run it after any edit. Pass --expect TEXT, the exact
+text currently at the span: the script re-checks it and aborts with no change if
+the indexes have gone stale (--no-expect skips the guard). Text inside tables
+can't be verified, so spans there need --no-expect. Prints the doc title, the range
 and the text being replaced (a best-effort preview that assumes a plain-text body;
 it can be wrong around tables or emoji) before changing anything.
 
@@ -19,7 +22,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _gws_workspace import die, doc_read, range_preview, replace_span
+from _gws_workspace import die, doc_read, range_preview, replace_span, verify_span
 
 
 def main():
@@ -32,6 +35,9 @@ def main():
     p.add_argument("text", nargs="?")
     p.add_argument("--stdin", action="store_true", help="read replacement text from stdin")
     p.add_argument("--tab", help="tab ID (not title)")
+    guard = p.add_mutually_exclusive_group(required=True)
+    guard.add_argument("--expect", help="the exact text currently at this span; abort if not")
+    guard.add_argument("--no-expect", action="store_true", help="skip the guard (unsafe)")
     args = p.parse_args()
 
     if args.stdin == (args.text is not None):
@@ -39,6 +45,9 @@ def main():
     if not 0 < args.start_index < args.end_index:
         die("Require 0 < start_index < end_index", 2)
     text = sys.stdin.read() if args.stdin else args.text
+
+    if args.expect is not None:
+        verify_span(args.doc_id, args.start_index, args.end_index, args.expect, args.tab)
 
     title, _, content = doc_read(args.doc_id, args.tab)
     old = range_preview(content, args.start_index, args.end_index)

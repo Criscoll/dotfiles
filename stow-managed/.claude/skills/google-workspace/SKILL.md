@@ -8,8 +8,8 @@ description: >-
   (PDFs, etc.), manage Calendar (list/get/create/update), and search/download
   Google Drive files (list/search/get/download/export), and read, create and
   edit native Google Docs and Sheets content (read text/cells, append, insert,
-  replace, delete ranges, write/append rows, find-replace, add/rename/delete
-  tabs, sort) via gws-cli wrapper scripts in `~/bin/agent_scripts/`.
+  replace sections, delete ranges, headings, bullets, text styles, Doc tables,
+  write/append rows, find-replace, add/rename/delete tabs, sort) via gws-cli wrapper scripts in `~/bin/agent_scripts/`.
   Enforced at the harness layer by a deny-by-default allow-list hook —
   send, delete, and destructive Calendar/Drive operations are structurally blocked
   and cannot be invoked regardless of how the command is phrased.
@@ -98,9 +98,10 @@ series masters are refused by the wrapper unless `--force` is passed.
 `remove-permission`, `list-permissions`, `list-revisions`, `get-revision`,
 `delete-revision`, `transfer-ownership`, `list-changes`, `watch-changes`
 
-**Docs:** no wrapper for tab create/delete/rename/reorder, formatting, tables, images,
-headers/footers, footnotes, named ranges, suggestions (accept/reject), page or
-document style, paragraph/text style, or bullets. Docs/Sheets creation is
+**Docs:** no wrapper for tab create/delete/rename/reorder, table row/column edits,
+cell merge/styling, images, headers/footers, footnotes, named ranges, suggestions
+(accept/reject), page or document style, or nested list levels (headings, bullets,
+text style and tables do have wrappers — see docs.md). Docs/Sheets creation is
 available, but there is no delete/trash wrapper for either — the user deletes
 files manually.
 

@@ -6,6 +6,9 @@
 """Delete a span of a Google Doc by start/end character index (end exclusive).
 
 Get indexes from docs-find; they shift after every edit, so re-run it first.
+Pass --expect TEXT, the exact text currently at the span: the script re-checks it
+and aborts with no change if the indexes have gone stale (--no-expect skips the
+guard). Text inside tables can't be verified, so spans there need --no-expect.
 Before deleting, prints the doc title, the range and the doomed text (a
 best-effort preview that assumes a plain-text body, so it can be wrong around
 tables or emoji; a warning is printed when it can't be shown).
@@ -16,7 +19,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _gws_workspace import die, doc_read, range_preview, run_gws
+from _gws_workspace import die, doc_read, range_preview, run_gws, verify_span
 
 
 def main():
@@ -27,10 +30,16 @@ def main():
     p.add_argument("start_index", type=int)
     p.add_argument("end_index", type=int)
     p.add_argument("--tab", help="tab ID (not title)")
+    guard = p.add_mutually_exclusive_group(required=True)
+    guard.add_argument("--expect", help="the exact text currently at this span; abort if not")
+    guard.add_argument("--no-expect", action="store_true", help="skip the guard (unsafe)")
     args = p.parse_args()
 
     if not 0 < args.start_index < args.end_index:
         die("Require 0 < start_index < end_index", 2)
+
+    if args.expect is not None:
+        verify_span(args.doc_id, args.start_index, args.end_index, args.expect, args.tab)
 
     title, _, content = doc_read(args.doc_id, args.tab)
     doomed = range_preview(content, args.start_index, args.end_index)

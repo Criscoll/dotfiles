@@ -3,10 +3,16 @@
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""Insert Markdown into a Google Doc, keeping inline styles (bold, italic, links).
+"""Insert Markdown into a Google Doc: inline styles, headings and lists.
 
-Limitation (gws-cli): paragraph styles are dropped, so `# Heading` arrives as plain
-text and list items as plain lines; only inline text formatting survives.
+The underlying insert keeps only inline styles (bold, italic, links) and drops the
+`#`, `-` and `1.` markers, leaving plain lines. This script then reads the inserted
+text back, matches each line to its Markdown line, and applies `#`..`######`
+heading styles and bullet/numbered lists (one list per run of adjacent items).
+If the lines can't be matched up (code fences, tables, quotes, rules, or a doc
+with tables above the insert point) the styling step is skipped with a warning
+and only the text and inline styles land. Nested list levels are flattened.
+Block styling works on the first tab only, so it is skipped with --tab.
 
 Default position is the end of the doc (--at-end); use --index N for a specific
 character index (1 = start of body). At the end, a leading newline is added when
@@ -18,10 +24,80 @@ that it deletes afterwards.
 
 import argparse
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _gws_workspace import die, doc_read, run_gws
+from _gws_workspace import die, doc_read, list_tables, run_gws, utf16_len, utf16_slice
+
+BLOCK_PATTERNS = [
+    (re.compile(r"^(#{1,6})\s+(.*)$"), "heading"),
+    (re.compile(r"^\s*[-*+]\s+(.*)$"), "bullet"),
+    (re.compile(r"^\s*\d+[.)]\s+(.*)$"), "numbered"),
+]
+LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+MARKUP = re.compile(r"[\s*_~`]")
+
+
+def classify(md):
+    """Return [(kind, level, comparable_text)] for each non-blank Markdown line."""
+    blocks = []
+    for line in md.splitlines():
+        if not line.strip():
+            continue
+        kind, level, body = "text", 0, line
+        for pattern, name in BLOCK_PATTERNS:
+            m = pattern.match(line)
+            if m:
+                kind, body = name, m.group(m.lastindex)
+                level = len(m.group(1)) if name == "heading" else 0
+                break
+        blocks.append((kind, level, MARKUP.sub("", LINK.sub(r"\1", body))))
+    return blocks
+
+
+def rendered_lines(content, start):
+    """Non-blank lines of `content` from Doc index `start`: [(index, end_index, comparable_text)]."""
+    lines, offset = [], start
+    for raw in content.split("\n"):
+        if raw.strip():
+            lines.append((offset, offset + utf16_len(raw), MARKUP.sub("", raw)))
+        offset += utf16_len(raw) + 1
+    return lines
+
+
+def apply_list(doc_id, run):
+    command = "create-bullets" if run[0] == "bullet" else "create-numbered"
+    run_gws(["docs", command, doc_id, str(run[1]), str(run[2])])
+
+
+def style_blocks(doc_id, md, start, length):
+    """Apply heading and list styles to the `length` chars just inserted at index `start`."""
+    blocks = classify(md)
+    if not any(kind != "text" for kind, _, _ in blocks):
+        return None
+    _, _, content = doc_read(doc_id)
+    lines = rendered_lines(utf16_slice(content, start - 1, length), start)
+    if [b[2] for b in blocks] != [line[2] for line in lines]:
+        return "Warning: skipped heading/list styling (inserted lines did not match the Markdown)"
+
+    headings = lists = 0
+    run = None  # [kind, first_index, last_end_index, previous_end] for adjacent list items
+    for (kind, level, _), (first, last, _) in zip(blocks, lines):
+        if run and not (kind == run[0] and first == run[3] + 1):
+            apply_list(doc_id, run)
+            lists += 1
+            run = None
+        if kind == "heading":
+            run_gws(["docs", "format-paragraph", doc_id, str(first), str(last),
+                     "--style", f"HEADING_{level}"])
+            headings += 1
+        elif kind in ("bullet", "numbered"):
+            run = [kind, run[1] if run else first, last, last]
+    if run:
+        apply_list(doc_id, run)
+        lists += 1
+    return f"Styled {headings} headings and {lists} lists"
 
 
 def main():
@@ -55,6 +131,12 @@ def main():
     if args.index is not None:
         index = args.index
     else:
+        if not args.tab and list_tables(args.doc_id):
+            die(
+                "The doc has tables, which the end-of-doc index calculation cannot see "
+                "(it would land inside a cell). Pass --index N explicitly.",
+                2,
+            )
         _, _, content = doc_read(args.doc_id, args.tab)
         # Doc indexes count UTF-16 code units; the body ends with a newline that must stay last.
         index = max(len(content.encode("utf-16-le")) // 2, 1)
@@ -66,10 +148,15 @@ def main():
         sub += ["--tab", args.tab]
     outer = run_gws(sub, stdin=md)
     lines = md.count("\n") + 1
-    print(
-        f"Inserted {outer.get('inserted_length')} chars ({lines} markdown lines) "
-        f"at index {outer.get('inserted_at_index', index)}"
-    )
+    inserted_at = outer.get("inserted_at_index", index)
+    inserted = outer.get("inserted_length")
+    print(f"Inserted {inserted} chars ({lines} markdown lines) at index {inserted_at}")
+    if args.tab:
+        print("Note: heading/list styling skipped (first tab only)")
+    elif inserted:
+        note = style_blocks(args.doc_id, md, inserted_at, inserted)
+        if note:
+            print(note)
 
 
 if __name__ == "__main__":

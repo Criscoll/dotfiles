@@ -1,0 +1,45 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Turn paragraphs of a Google Doc into a bulleted or numbered list, or remove the list.
+
+Target the paragraphs with --text TEXT (the paragraph containing the Nth
+case-sensitive match) or --range START END (every paragraph overlapping the
+span; end exclusive). One call over a multi-paragraph range makes ONE list, so
+numbered items count 1, 2, 3 across it. --preset overrides the default glyphs
+(e.g. BULLET_CHECKBOX, NUMBERED_UPPERALPHA_ALPHA_ROMAN; see docs-bullets --help
+in gws-cli). First tab only.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import add_target_args, resolve_target, run_gws
+
+COMMANDS = {"bullet": "create-bullets", "numbered": "create-numbered", "none": "remove-bullets"}
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    add_target_args(p)
+    p.add_argument("--kind", choices=COMMANDS, required=True)
+    p.add_argument("--preset", help="gws-cli list preset name (not valid with --kind none)")
+    args = p.parse_args()
+
+    start, end = resolve_target(args)
+    sub = ["docs", COMMANDS[args.kind], args.doc_id, str(start), str(end)]
+    if args.preset and args.kind != "none":
+        sub += ["--preset", args.preset]
+    run_gws(sub)
+    print(f"Applied kind={args.kind} to paragraphs overlapping {start}-{end}")
+
+
+if __name__ == "__main__":
+    main()

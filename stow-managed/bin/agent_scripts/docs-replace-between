@@ -1,0 +1,105 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Replace everything between two anchor lines of a Google Doc, in one call.
+
+Resolves the indexes itself, so there is nothing to go stale between a lookup and
+the edit. The span runs from the line AFTER the line containing <start-anchor>
+(the anchor line stays) up to the start of the line containing <end-anchor>
+(that line stays too). The end anchor is the first match after the start anchor
+and must be at the start of its line. The new text is whole lines; a trailing
+newline is added if missing. An empty replacement clears the section.
+
+Prints the old text being replaced first, then the index span the new text now
+occupies (feed it to docs-format-paragraph / docs-bullets --range). The new
+lines are reset to normal paragraphs without bullets, because inserted text would
+otherwise inherit the end anchor's style (e.g. its heading). Plain text
+only: a table or emoji above the anchors makes the indexes unverifiable, and the
+script aborts without changing anything. Not atomic (insert then delete): if the
+delete fails the script says the doc is half-edited.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import (
+    die,
+    doc_find,
+    doc_read,
+    find_after,
+    replace_span,
+    run_gws,
+    utf16_len,
+    utf16_slice,
+)
+
+PREVIEW_CHARS = 400
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    p.add_argument("start_anchor")
+    p.add_argument("end_anchor")
+    p.add_argument("text", nargs="?")
+    p.add_argument("--stdin", action="store_true", help="read replacement text from stdin")
+    p.add_argument("--start-occurrence", type=int, default=1, help="Nth match of start anchor")
+    p.add_argument("--tab", help="tab ID (not title)")
+    args = p.parse_args()
+
+    if args.stdin == (args.text is not None):
+        die("Provide exactly one of <text> or --stdin", 2)
+    text = sys.stdin.read() if args.stdin else args.text
+    if text and not text.endswith("\n"):
+        text += "\n"
+
+    start_hit = doc_find(args.doc_id, args.start_anchor, args.tab, args.start_occurrence)
+    end_hit = find_after(args.doc_id, args.end_anchor, start_hit["end_index"], args.tab)
+    title, _, content = doc_read(args.doc_id, args.tab)
+
+    # The anchors must sit where find-text says in the text we read, else offsets can't be trusted.
+    for hit, anchor in ((start_hit, args.start_anchor), (end_hit, args.end_anchor)):
+        if utf16_slice(content, hit["index"] - 1, utf16_len(anchor)) != anchor:
+            die(
+                f"Cannot verify the position of {anchor!r} (a table or emoji earlier in the "
+                "doc shifts indexes). No change made; use docs-find with docs-replace-range."
+            )
+    if utf16_slice(content, end_hit["index"] - 2, 1) != "\n":
+        die(f"End anchor {args.end_anchor!r} is not at the start of a line. No change made.")
+
+    rest = utf16_slice(content, start_hit["end_index"] - 1, 10**9)
+    if "\n" not in rest:
+        die("No line break after the start anchor. No change made.")
+    span_start = start_hit["end_index"] + utf16_len(rest[: rest.index("\n")]) + 1
+    span_end = end_hit["index"]
+    if span_start > span_end:
+        die("The anchors are on the same line or out of order. No change made.")
+
+    old = utf16_slice(content, span_start - 1, span_end - span_start)
+    shown = old if len(old) <= PREVIEW_CHARS else old[:PREVIEW_CHARS] + "…"
+    print(f"Doc: {title}")
+    print(f"Replacing indexes {span_start}-{span_end} (old text, {len(old)} chars): {shown!r}")
+
+    if span_start == span_end:
+        if text:
+            run_gws(["docs", "insert", args.doc_id, "--index", str(span_start)]
+                    + (["--tab", args.tab] if args.tab else []) + ["--", text])
+    else:
+        replace_span(args.doc_id, span_start, span_end, text, args.tab)
+    new_end = span_start + utf16_len(text)
+    if text:
+        # Inserted lines inherit the end anchor's paragraph style (often a heading).
+        run_gws(["docs", "format-paragraph", args.doc_id, str(span_start), str(new_end),
+                 "--style", "NORMAL_TEXT"])
+        run_gws(["docs", "remove-bullets", args.doc_id, str(span_start), str(new_end)])
+    print(f"New text occupies indexes {span_start}-{new_end} (normal paragraphs, no bullets)")
+
+
+if __name__ == "__main__":
+    main()

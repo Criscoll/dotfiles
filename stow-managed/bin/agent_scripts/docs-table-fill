@@ -1,0 +1,50 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Fill an EMPTY existing table in a Google Doc from a JSON grid.
+
+Take the table number from docs-table-list (0-based, document order). The grid
+starts at the top-left cell and may be smaller than the table. Refuses a table that
+already has content, because cell text can only be added, not read or replaced
+by index; to change existing cell text use docs-replace (it matches inside tables).
+--header makes the first row bold. Only the first tab is supported.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, fill_table, list_tables, parse_grid, table_is_empty
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    p.add_argument("table", type=int, help="table number from docs-table-list")
+    p.add_argument("--values", help="JSON array of rows")
+    p.add_argument("--stdin", action="store_true", help="read the JSON from stdin")
+    p.add_argument("--header", action="store_true", help="bold the first row")
+    args = p.parse_args()
+
+    if args.stdin == (args.values is not None):
+        die("Provide exactly one of --values or --stdin", 2)
+    grid = parse_grid(sys.stdin.read() if args.stdin else args.values)
+
+    tables = list_tables(args.doc_id)
+    if not 0 <= args.table < len(tables):
+        die(f"No table #{args.table}; the doc has {len(tables)} (see docs-table-list)")
+    table = tables[args.table]
+    if not table_is_empty(table):
+        die(f"Table #{args.table} already has content; docs-table-fill only fills empty tables")
+
+    written = fill_table(args.doc_id, table, grid, args.header)
+    print(f"Filled {written} cells of table #{args.table} ({table['rows']}x{table['columns']})")
+
+
+if __name__ == "__main__":
+    main()

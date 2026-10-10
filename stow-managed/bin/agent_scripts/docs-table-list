@@ -1,0 +1,39 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""List the tables in a Google Doc: number, size, index span and whether it is empty.
+
+Tables are numbered from 0 in document order; docs-table-fill takes that number.
+Only the first tab is covered (gws-cli's table commands have no tab option).
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import list_tables, table_is_empty
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    args = p.parse_args()
+
+    tables = list_tables(args.doc_id)
+    if not tables:
+        print("No tables")
+    for n, t in enumerate(tables):
+        state = "empty" if table_is_empty(t) else "has content"
+        print(
+            f"{n} | {t['rows']}x{t['columns']} | index={t['startIndex']} "
+            f"end_index={t['endIndex']} | {state}"
+        )
+
+
+if __name__ == "__main__":
+    main()
