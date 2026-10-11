@@ -5,7 +5,9 @@
 # ///
 """Manage watch-alerts watchers: scaffold, schedule via systemd user timers, inspect, remove.
 
-Watcher instances live in ~/.local/share/watchers/<name>/ (outside the repo).
+Watcher instances live in ~/.local/share/watchers/<name>/. `adopt` moves a watcher's
+code into the dotfiles repo (stow-managed) and stows it back as symlinks; private values
+belong in the gitignored config.local.json, deep-merged over config.json.
 Output is pipe-friendly: one record per line, fields joined with ' | '.
 """
 
@@ -22,7 +24,9 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES = SKILL_DIR / "templates"
+REPO_DIR = SKILL_DIR.parents[3]
 WATCHERS_DIR = Path.home() / ".local" / "share" / "watchers"
+TRACKED_DIR = REPO_DIR / "stow-managed" / ".local" / "share" / "watchers"
 ARCHIVE_DIR = WATCHERS_DIR / ".archive"
 UNIT_DIR = Path.home() / ".config" / "systemd" / "user"
 ENV_FILE = Path.home() / ".config" / "agent-scripts" / "env"
@@ -47,11 +51,25 @@ def watcher_dir(name):
     return WATCHERS_DIR / name
 
 
+def deep_merge(base, override):
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
 def load_config(name):
-    path = watcher_dir(name) / "config.json"
+    d = watcher_dir(name)
+    path = d / "config.json"
     if not path.exists():
         die(f"no such watcher: {name} ({path} missing)")
-    return json.loads(path.read_text())
+    cfg = json.loads(path.read_text())
+    local = d / "config.local.json"
+    if local.exists():
+        deep_merge(cfg, json.loads(local.read_text()))
+    return cfg
 
 
 def uv_bin():
@@ -79,6 +97,29 @@ def cmd_new(args):
     (d / "config.json").write_text(json.dumps(cfg, indent=2) + "\n")
     os.chmod(d / "watcher.py", 0o755)
     print(f"created | {d} | edit check() in watcher.py and fill config.json")
+
+
+def cmd_adopt(args):
+    d = watcher_dir(args.name)
+    dest = TRACKED_DIR / args.name
+    if dest.exists():
+        die(f"{dest} already exists")
+    for fname in ("watcher.py", "config.json"):
+        if not (d / fname).is_file() or (d / fname).is_symlink():
+            die(f"{d / fname} must be a regular file (already adopted?)")
+    dest.mkdir(parents=True)
+    for fname in ("watcher.py", "config.json"):
+        shutil.move(str(d / fname), str(dest / fname))
+    stow = ["stow", "-v", "-t", str(Path.home()), "stow-managed"]
+    res = subprocess.run([*stow[:1], "--simulate", *stow[1:]], cwd=REPO_DIR, check=False)
+    if res.returncode == 0:
+        res = subprocess.run(stow, cwd=REPO_DIR, check=False)
+    if res.returncode != 0:
+        for fname in ("watcher.py", "config.json"):
+            shutil.move(str(dest / fname), str(d / fname))
+        dest.rmdir()
+        die("stow failed; files restored to the instance dir", res.returncode)
+    print(f"adopted | {args.name} | {dest} | review for private values, then commit")
 
 
 def cmd_run(args):
@@ -162,8 +203,7 @@ def cmd_list(_args):
         print("No watchers found.")
         return
     for name in names:
-        cfg_path = WATCHERS_DIR / name / "config.json"
-        expires = json.loads(cfg_path.read_text()).get("expires", "?") if cfg_path.exists() else "?"
+        expires = load_config(name).get("expires", "?") if (WATCHERS_DIR / name / "config.json").exists() else "?"
         for kind, suffix in (("main", ""), ("race", "-race")):
             timer = f"watcher-{name}{suffix}.timer"
             t = show(timer, "LoadState", "ActiveState", "NextElapseUSecRealtime")
@@ -205,8 +245,12 @@ def cmd_remove(args):
     dest = ARCHIVE_DIR / f"{name}-{datetime.now():%Y%m%d}"
     if dest.exists():
         dest = ARCHIVE_DIR / f"{name}-{datetime.now():%Y%m%d-%H%M%S}"
-    shutil.move(str(d), str(dest))
+    # copy + delete rather than move: an adopted watcher's files are stow symlinks into the repo
+    shutil.copytree(d, dest)
+    shutil.rmtree(d)
     print(f"removed | {name} | archived to {dest}")
+    if (TRACKED_DIR / name).exists():
+        print(f"note | tracked copy remains at {TRACKED_DIR / name}; git rm it to drop it for good, else the next stow re-links it")
 
 
 def load_ntfy_topic():
@@ -248,6 +292,10 @@ def main():
     p = sub.add_parser("new", help="scaffold a watcher from the templates")
     p.add_argument("name")
     p.set_defaults(func=cmd_new)
+
+    p = sub.add_parser("adopt", help="move watcher.py and config.json into the dotfiles repo and stow them back")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_adopt)
 
     p = sub.add_parser("run", help="run a watcher in the foreground")
     p.add_argument("name")

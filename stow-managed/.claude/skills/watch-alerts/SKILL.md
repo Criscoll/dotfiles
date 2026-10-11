@@ -24,7 +24,8 @@ UA rotation are all out of bounds. If a site blocks the VPS, report it as infeas
 instead of evading.
 
 Tools: `~/.claude/skills/watch-alerts/scripts/watchctl` (manager) and `.../scripts/capture-requests`
-(probe helper). Watcher instances live in `~/.local/share/watchers/<name>/`, outside the repo.
+(probe helper). Watcher instances live in `~/.local/share/watchers/<name>/`; their code is version-controlled
+in the dotfiles repo (see step 7).
 
 ## Workflow
 
@@ -37,7 +38,8 @@ Copy this checklist and tick it off:
 - [ ] 5. Propose and confirm
 - [ ] 6. Build
 - [ ] 7. Record the platform
-- [ ] 8. Report
+- [ ] 8. Version-control the watcher
+- [ ] 9. Report
 
 1. **Setup check (once per machine).** `grep -c NTFY_TOPIC ~/.config/agent-scripts/env`. If
    absent: generate a topic with `python3 -c 'import secrets;print("watch-"+secrets.token_urlsafe(16))'`,
@@ -58,7 +60,13 @@ Copy this checklist and tick it off:
 7. **New platform?** Write `references/platforms/<platform>.md` (endpoints, response shape,
    deep-link format, a tested `check()`); venue-specific facts stay in the watcher config.
    Remind the user to review and commit it.
-8. **Infeasible?** Report why and suggest the manual fallback (a calendar reminder at the release time).
+8. **Version-control the watcher.** The dotfiles repo is public, so first move anything personal
+   (home coordinates, addresses, names, party details, anything in `title`) out of `config.json`
+   into `config.local.json` (gitignored, deep-merged over `config.json`) and leave placeholders
+   in `config.json`. Check `watchctl run <name> --dry-run` still passes, then
+   `watchctl adopt <name>` moves `watcher.py` + `config.json` into `stow-managed/.local/share/watchers/<name>/`
+   and stows them back as symlinks. Remind the user to review and commit; never commit for them.
+9. **Infeasible?** Report why and suggest the manual fallback (a calendar reminder at the release time).
 
 ## Watcher contract
 
@@ -74,7 +82,7 @@ timers after `expires`.
 ~/.claude/skills/watch-alerts/scripts/watchctl list                 # name | timer | state | next | last result | expiry
 ~/.claude/skills/watch-alerts/scripts/watchctl logs <name> -n 50     # journald
 ~/.claude/skills/watch-alerts/scripts/watchctl run <name> --dry-run  # one check, no push, exit 2 on CheckError
-~/.claude/skills/watch-alerts/scripts/watchctl remove <name>         # stops timers, deletes units, archives dir
+~/.claude/skills/watch-alerts/scripts/watchctl remove <name>         # stops timers, deletes units, archives dir (tracked repo copy is left alone)
 ```
 
 ## Load Reference Files When Relevant

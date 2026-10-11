@@ -6,8 +6,8 @@
 """Single-file availability watcher: probe -> condition -> ntfy push.
 
 Copied per watch into ~/.local/share/watchers/<name>/ by `watchctl new`; only
-check() below is site-specific. Reads config.json next to this file, keeps
-state.json next to it, and logs one line per run to stdout (-> journald).
+check() below is site-specific. Reads config.json next to this file (plus an optional
+config.local.json deep-merged over it), keeps state.json next to it, and logs one line per run to stdout (-> journald).
 
 Modes:
   (default)      one check, for the systemd timer
@@ -31,8 +31,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-HERE = Path(__file__).resolve().parent
+# Not .resolve(): when watcher.py is a stow symlink, state must stay beside the link, not in the repo.
+HERE = Path(__file__).absolute().parent
 CONFIG_PATH = HERE / "config.json"
+CONFIG_LOCAL_PATH = HERE / "config.local.json"
 STATE_PATH = HERE / "state.json"
 LOCK_PATH = HERE / ".lock"
 ENV_FILE = Path.home() / ".config" / "agent-scripts" / "env"
@@ -138,9 +140,20 @@ def notify(title, message, priority=3, click=None, tags=None):
         pass
 
 
+def deep_merge(base, override):
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
 def load_config():
     cfg = dict(CONFIG_DEFAULTS)
     cfg.update(json.loads(CONFIG_PATH.read_text()))
+    if CONFIG_LOCAL_PATH.exists():
+        deep_merge(cfg, json.loads(CONFIG_LOCAL_PATH.read_text()))
     missing = [k for k in CONFIG_REQUIRED if k not in cfg]
     if missing:
         sys.exit(f"config.json missing fields: {', '.join(missing)}")
