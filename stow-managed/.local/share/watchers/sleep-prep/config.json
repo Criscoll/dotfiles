@@ -1,0 +1,100 @@
+{
+  "name": "sleep-prep",
+  "title": "Sleep prep: <suburb>",
+  "deep_link": null,
+  "expires": "2027-03-31",
+  "timezone": "Australia/Sydney",
+  "schedule": "*-*-* 18:30/15:00 Australia/Sydney",
+  "jitter_sec": 0,
+  "error_threshold": 2,
+  "heartbeat_hours": 8760,
+  "hit_priority": 3,
+  "params": {
+    "timezone": "Australia/Sydney",
+    "latitude": null,
+    "longitude": null,
+    "models": [
+      "best_match",
+      "ecmwf_ifs025",
+      "icon_global",
+      "gfs_global",
+      "gem_global"
+    ],
+    "min_models": 3,
+    "bedtime_hour": 22,
+    "soak_tau_hours": 8,
+    "humidity_bump": {
+      "base_dew_point": 14,
+      "per_degree": 0.75,
+      "max": 3
+    },
+    "tier_edges": [
+      19,
+      22,
+      26,
+      29
+    ],
+    "anchor": {
+      "label": "Sun 11 Oct",
+      "load": 23.2
+    },
+    "facing_deg": 0,
+    "facing_label": "north",
+    "ventilation": {
+      "min_cooler_by": 2,
+      "min_into_kmh": 5
+    },
+    "ac_house_threshold": 25,
+    "bom_station": {
+      "wmo": "<WMO number>",
+      "name": "<station name>"
+    },
+    "link": {
+      "label": "BoM Sydney forecast",
+      "url": "https://www.bom.gov.au/location/australia/new-south-wales/metropolitan/bnsw_pt131-sydney"
+    },
+    "tiers": [
+      {
+        "title": "Sleep prep: mild, no prep",
+        "advice": "**No prep needed tonight.**",
+        "priority": 2,
+        "tags": [
+          "white_check_mark"
+        ]
+      },
+      {
+        "title": "Sleep prep: warm, light fans",
+        "advice": "**Warm night.** From bedtime ({bed}): ducted fan (fan mode) on **medium** and bedroom fan on **low-medium**.",
+        "priority": 3,
+        "tags": [
+          "partly_sunny"
+        ]
+      },
+      {
+        "title": "Sleep prep: muggy, fans HIGH",
+        "advice": "**Like your hot night:** ducted fan on **HIGH** and bedroom fan on **HIGH** from bedtime ({bed}), not after you wake up.",
+        "priority": 4,
+        "tags": [
+          "sweat_drops"
+        ]
+      },
+      {
+        "title": "Sleep prep: HOT, use the AC",
+        "advice": "**Pre-cool the bedroom with the AC** (cool mode, door shut) **{pre}-{bed}**, then ducted fan **HIGH** and bedroom fan **HIGH**.",
+        "priority": 4,
+        "tags": [
+          "fire"
+        ]
+      },
+      {
+        "title": "Sleep prep: VERY HOT, AC tonight",
+        "advice": "**Very hot night.** **Pre-cool the bedroom with the AC from {pre}** (door shut), then run the AC in **timed blocks** through the night with ducted fan **HIGH** and bedroom fan **HIGH** in between.",
+        "priority": 4,
+        "tags": [
+          "fire",
+          "warning"
+        ]
+      }
+    ]
+  }
+}

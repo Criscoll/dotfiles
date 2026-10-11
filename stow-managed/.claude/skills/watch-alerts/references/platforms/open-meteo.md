@@ -154,9 +154,9 @@ def bom_actuals(params, as_of):
         return f"Last night actual: unavailable ({type(e).__name__}: {e})."
 ```
 
-## Worked example: `sleep-prep` (machine-local, not in the repo)
+## Worked example: `sleep-prep` (full source in `stow-managed/.local/share/watchers/sleep-prep/`)
 
-`~/.local/share/watchers/sleep-prep/` turns the above into one push per local day (key =
+The watcher (`~/.local/share/watchers/sleep-prep/`; home coordinates and station live in its untracked `config.local.json`) turns the above into one push per local day (key =
 date, so the 15-minute retry never double-sends). Design notes worth reusing:
 
 - **Heat-soak estimate:** exponentially smoothed outdoor temperature (tau 8 h) read at
