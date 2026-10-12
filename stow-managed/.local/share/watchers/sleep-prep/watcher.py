@@ -34,6 +34,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
+from itertools import groupby
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -130,6 +131,7 @@ LOAD_HOUR = 24  # the heat-soak estimate is read at midnight
 SLEEP_FROM, SLEEP_TO = 22, 30  # hours considered for ventilation, AC bursts and showers
 BURST_RECHECK_MIN = 30  # while the load is under the AC threshold, look again this much later
 SLOTS_PER_BURST = 2  # AC timer slots per burst: 'cool' to start it, 'back to fan' to end it
+DAY_MINUTES = 24 * 60  # the AC timer's slots reset at midnight
 HISTORY_DAYS = 2  # days of past hourly data fed to the heat-soak smoother
 BOM_MIN_ROWS = 12  # fewer rows than this in the night window means a stale or truncated feed
 BOM_WINDOW_HOURS = 10  # 21:00 -> 07:00
@@ -347,15 +349,21 @@ def ac_bursts(soaked, per_model, at, params, tier):
 
 
 def fit_timer(bursts, sizes):
-    """Thin bursts to what the AC timer holds (config params.ac_bursts.timer_slots).
+    """Thin bursts to what the AC timer holds: params.ac_bursts.timer_slots_per_day, so the bursts
+    before and after midnight each get a full day's slots. A burst counts against the day it
+    starts in; walk bursts start on the half hour and last at most 20 min, so none spans midnight.
 
-    Too many: keep the first and last, space the rest evenly between them, and make each the
-    long burst, since there are fewer of them."""
-    limit = sizes["timer_slots"] // SLOTS_PER_BURST
-    if len(bursts) <= limit:
-        return bursts
-    first, last = bursts[0][0], bursts[-1][0]
-    return [(first + i * (last - first) // (limit - 1), sizes["hot"]["minutes"]) for i in range(limit)]
+    Too many in a day: keep that day's first and last, space the rest evenly between them, and
+    make each the long burst, since there are fewer of them."""
+    limit = sizes["timer_slots_per_day"] // SLOTS_PER_BURST
+    fitted = []
+    for _, group in groupby(bursts, key=lambda burst: burst[0] // DAY_MINUTES):
+        day = list(group)
+        if len(day) > limit:
+            first, last = day[0][0], day[-1][0]
+            day = [(first + i * (last - first) // (limit - 1), sizes["hot"]["minutes"]) for i in range(limit)]
+        fitted += day
+    return fitted
 
 
 def shower_text(precip, at):
@@ -461,13 +469,18 @@ def check(params):
     else:
         if tier >= 3 and (wanted := ac_bursts(soaked, per_model, at, params, tier)):
             bursts = fit_timer(wanted, params["ac_bursts"])
-            slots = f"{len(bursts) * SLOTS_PER_BURST} of {params['ac_bursts']['timer_slots']} slots"
-            if len(bursts) < len(wanted):
-                slots += f", spread from {len(wanted)} bursts"
-            entries = "\n".join(
-                f"- {minute_label(start)} cool, {minute_label(start + length)} fan" for start, length in bursts
-            )
-            parts.append(f"**AC timer** ({slots})\n\n{entries}")
+            # One list per day: the after-midnight entries go into tomorrow's timer schedule.
+            for day, group in groupby(bursts, key=lambda burst: burst[0] // DAY_MINUTES):
+                kept = list(group)
+                needed = sum(start // DAY_MINUTES == day for start, _ in wanted)
+                slots = f"{len(kept) * SLOTS_PER_BURST} of {params['ac_bursts']['timer_slots_per_day']} slots"
+                if len(kept) < needed:
+                    slots += f", spread from {needed} bursts"
+                when = "before midnight" if day == 0 else "after midnight, in tomorrow's schedule"
+                entries = "\n".join(
+                    f"- {minute_label(start)} cool, {minute_label(start + length)} fan" for start, length in kept
+                )
+                parts.append(f"**AC timer, {when}** ({slots})\n\n{entries}")
         outside = "\n".join(f"- {hour_label(h)}: **{mid:.0f}°**{note}" for h, mid, note in samples)
         air = [
             f"Dew point {dew}, wind {wind}",

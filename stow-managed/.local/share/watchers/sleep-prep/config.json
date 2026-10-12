@@ -46,7 +46,7 @@
     },
     "ac_house_threshold": 25,
     "ac_bursts": {
-      "timer_slots": 8,
+      "timer_slots_per_day": 8,
       "hot_over_by": 2,
       "hot": {
         "minutes": 20,
