@@ -45,12 +45,24 @@
       "min_into_kmh": 5
     },
     "ac_house_threshold": 25,
+    "ac_bursts": {
+      "timer_slots": 8,
+      "hot_over_by": 2,
+      "hot": {
+        "minutes": 20,
+        "every_min": 60
+      },
+      "warm": {
+        "minutes": 10,
+        "every_min": 90
+      }
+    },
     "bom_station": {
       "wmo": "<WMO number>",
       "name": "<station name>"
     },
     "link": {
-      "label": "BoM Sydney forecast",
+      "label": "Sydney (CBD)",
       "url": "https://www.bom.gov.au/location/australia/new-south-wales/metropolitan/bnsw_pt131-sydney"
     },
     "tiers": [
@@ -80,7 +92,7 @@
       },
       {
         "title": "Sleep prep: HOT, use the AC",
-        "advice": "**Pre-cool the bedroom with the AC** (cool mode, door shut) **{pre}-{bed}**, then ducted fan **HIGH** and bedroom fan **HIGH**.",
+        "advice": "**Pre-cool the bedroom with the AC** (cool mode, door shut) **{pre}-{bed}**, then ducted fan **HIGH** and bedroom fan **HIGH**, with the AC timer below.",
         "priority": 4,
         "tags": [
           "fire"
@@ -88,7 +100,7 @@
       },
       {
         "title": "Sleep prep: VERY HOT, AC tonight",
-        "advice": "**Very hot night.** **Pre-cool the bedroom with the AC from {pre}** (door shut), then run the AC in **timed blocks** through the night with ducted fan **HIGH** and bedroom fan **HIGH** in between.",
+        "advice": "**Very hot night.** **Pre-cool the bedroom with the AC from {pre}** (door shut), then run the AC on the **timer below** through the night, with ducted fan **HIGH** and bedroom fan **HIGH** in between.",
         "priority": 4,
         "tags": [
           "fire",

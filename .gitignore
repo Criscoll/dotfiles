@@ -37,4 +37,5 @@ stow-managed/.pi/agent/models-store.json
 stow-managed/.local/share/watchers/*/config.local.json
 stow-managed/.local/share/watchers/*/state.json
 stow-managed/.local/share/watchers/*/state.json.tmp
+stow-managed/.local/share/watchers/*/history.jsonl
 stow-managed/.local/share/watchers/*/.lock

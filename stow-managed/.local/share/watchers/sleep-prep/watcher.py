@@ -7,14 +7,16 @@
 
 Copied per watch into ~/.local/share/watchers/<name>/ by `watchctl new`; only
 check() below is site-specific (plus Hit's optional title/priority/tags, so each
-day's push carries its own headline). Reads config.json next to this file, keeps
-state.json next to it, and logs one line per run to stdout (-> journald).
+day's push carries its own headline, and its record, kept in history.jsonl for
+--review). Reads config.json next to this file, keeps state.json and
+history.jsonl next to it, and logs one line per run to stdout (-> journald).
 
 Modes:
   (default)      one check, for the systemd timer
   --race         loop every race.interval_sec for race.duration_min
   --dry-run      one check, print result, no notify, no state; exit 0 ok / 2 CheckError
   --test-notify  send one test push
+  --review [N]   forecast vs measured for the last N recorded nights (default 7)
 """
 
 import argparse
@@ -40,6 +42,7 @@ HERE = Path(__file__).absolute().parent
 CONFIG_PATH = HERE / "config.json"
 CONFIG_LOCAL_PATH = HERE / "config.local.json"
 STATE_PATH = HERE / "state.json"
+HISTORY_PATH = HERE / "history.jsonl"
 LOCK_PATH = HERE / ".lock"
 ENV_FILE = Path.home() / ".config" / "agent-scripts" / "env"
 
@@ -82,6 +85,7 @@ class Hit:
     priority: int | None = None  # overrides config hit_priority
     tags: list[str] | None = None  # overrides the default ["tada"]
     markdown: bool = False  # message body is Markdown
+    record: dict | None = None  # appended to history.jsonl, with the push, once it is sent
 
 
 def http_get_json(url, params=None, headers=None):
@@ -123,7 +127,9 @@ COMPASS = (
 # Hours are offsets from local midnight of the as-of day: 22 = 22:00 tonight, 27 = 03:00 tomorrow.
 NIGHT_FROM, NIGHT_TO = 21, 27  # window for the dew-point mean
 LOAD_HOUR = 24  # the heat-soak estimate is read at midnight
-SLEEP_FROM, SLEEP_TO = 22, 30  # hours considered for ventilation, AC blocks and showers
+SLEEP_FROM, SLEEP_TO = 22, 30  # hours considered for ventilation, AC bursts and showers
+BURST_RECHECK_MIN = 30  # while the load is under the AC threshold, look again this much later
+SLOTS_PER_BURST = 2  # AC timer slots per burst: 'cool' to start it, 'back to fan' to end it
 HISTORY_DAYS = 2  # days of past hourly data fed to the heat-soak smoother
 BOM_MIN_ROWS = 12  # fewer rows than this in the night window means a stale or truncated feed
 BOM_WINDOW_HOURS = 10  # 21:00 -> 07:00
@@ -131,6 +137,10 @@ BOM_WINDOW_HOURS = 10  # 21:00 -> 07:00
 
 def hour_label(hours):
     return f"{hours % 24:02d}:00"
+
+
+def minute_label(minutes):
+    return f"{minutes // 60 % 24:02d}:{minutes % 60:02d}"
 
 
 def compass(deg):
@@ -305,11 +315,47 @@ def window_advice(t, soaked, speed, u, v, at, params):
     return "outside stays warmer than the house; keep it shut."
 
 
-def ac_blocks(soaked, at, params, tier):
-    """Hours (as a span list) where the estimated house temperature is still above comfort."""
+def ac_bursts(soaked, per_model, at, params, tier):
+    """Timed AC bursts after the pre-cool: [(start, length)], start in minutes from local midnight.
+
+    The bedroom has no zone sensor, so the AC cools as hard as it can until switched off; short
+    bursts stop it overcooling the room. The heat load (house estimate + muggy bump) sets the
+    burst size: longer and closer together while well over the threshold (config
+    params.ac_bursts), shorter and sparser once only just over, none once under."""
+    sizes = params["ac_bursts"]
     threshold = params["ac_house_threshold"] - (1 if tier >= len(params["tier_edges"]) else 0)
-    hours = [h for h in range(SLEEP_FROM, SLEEP_TO + 1) if soaked[at(h)] >= threshold]
-    return span_text(spans(hours))
+    bump = humidity_bump(statistics.median(a["dew_mean"] for a in per_model), params["humidity_bump"])
+
+    def over(minute):
+        hour, part = divmod(minute, 60)
+        now, nxt = soaked[at(hour)], soaked[at(hour + 1)]
+        return now + (nxt - now) * part / 60 + bump - threshold
+
+    def size(excess):
+        return sizes["hot"] if excess >= sizes["hot_over_by"] else sizes["warm"]
+
+    bursts = []
+    minute = params["bedtime_hour"] * 60  # the pre-cool runs continuously up to bedtime
+    excess = over(minute)
+    while True:
+        minute += size(excess)["every_min"] if excess >= 0 else BURST_RECHECK_MIN
+        if minute >= SLEEP_TO * 60:
+            return bursts
+        excess = over(minute)
+        if excess >= 0:
+            bursts.append((minute, size(excess)["minutes"]))
+
+
+def fit_timer(bursts, sizes):
+    """Thin bursts to what the AC timer holds (config params.ac_bursts.timer_slots).
+
+    Too many: keep the first and last, space the rest evenly between them, and make each the
+    long burst, since there are fewer of them."""
+    limit = sizes["timer_slots"] // SLOTS_PER_BURST
+    if len(bursts) <= limit:
+        return bursts
+    first, last = bursts[0][0], bursts[-1][0]
+    return [(first + i * (last - first) // (limit - 1), sizes["hot"]["minutes"]) for i in range(limit)]
 
 
 def shower_text(precip, at):
@@ -318,8 +364,11 @@ def shower_text(precip, at):
 
 
 def bom_actuals(params, as_of):
-    """One line on last night's measured conditions; failures degrade to a note, never raise."""
+    """Last night's measured conditions as (one-line summary, observations for history.jsonl).
+
+    Failures degrade to a note and no observations, never raise."""
     station = params["bom_station"]
+    source = f"Last night, measured at {station['name']} (BoM)"
     try:
         data = http_get_json(BOM_OBS_URL.format(wmo=station["wmo"]))
         midnight = datetime(as_of.year, as_of.month, as_of.day)
@@ -333,16 +382,32 @@ def bom_actuals(params, as_of):
             ),
             key=lambda r: r["local_date_time_full"],
         )
+        observed = {
+            "night": (as_of - timedelta(days=1)).isoformat(),
+            "station": station["name"],
+            "observations": [
+                {
+                    "time": datetime.strptime(r["local_date_time_full"], "%Y%m%d%H%M%S").isoformat(timespec="minutes"),
+                    "temp": r["air_temp"],
+                    "dew_point": r["dewpt"],
+                    "humidity": r["rel_hum"],
+                    "wind_kmh": r["wind_spd_kmh"],
+                    "wind_dir": r["wind_dir"],
+                }
+                for r in night
+            ],
+        }
         if len(night) < BOM_MIN_ROWS:
-            return f"Last night actual: only {len(night)} observations found (feed stale?)."
+            return f"{source}: only {len(night)} observations found (feed stale?).", observed
         calm_share = sum((r["wind_spd_kmh"] or 0) <= 2 for r in night) / len(night)
         humidity = max(r["rel_hum"] for r in night if r["rel_hum"] is not None)
-        return (
-            f"Last night actual: min {min(r['air_temp'] for r in night):.1f}°, "
+        summary = (
+            f"{source}: min {min(r['air_temp'] for r in night):.1f}°, "
             f"RH up to {humidity}%, calm {calm_share * BOM_WINDOW_HOURS:.0f} of {BOM_WINDOW_HOURS} h."
         )
+        return summary, observed
     except (CheckError, KeyError, TypeError, ValueError) as e:
-        return f"Last night actual: unavailable ({type(e).__name__}: {e})."
+        return f"{source}: unavailable ({type(e).__name__}: {e}).", None
 
 
 def check(params):
@@ -374,29 +439,35 @@ def check(params):
 
     bed = params["bedtime_hour"]
     tc = params["tiers"][tier]
-    # (hour, median temperature, models-disagree note) at bedtime, midnight, 03:00 and 06:00.
-    # Only the hour the models disagree on most gets a note, to keep the list glanceable.
-    hourly = [
-        (h, [cols["temperature_2m"][at(h)] for cols in by_model.values()])
-        for h in (bed, LOAD_HOUR, 27, 30)
-    ]
-    widest = max(range(len(hourly)), key=lambda i: max(hourly[i][1]) - min(hourly[i][1]))
+    # (hour, median temperature, range across models) at bedtime, midnight, 03:00 and 06:00.
+    # The range is always shown: the median alone reads as more certain than it is, and BoM's
+    # own forecast can sit outside it.
     samples = []
-    for i, (h, values) in enumerate(hourly):
-        note = f" ({r})" if i == widest and (r := models_range(values)) else ""
-        samples.append((h, statistics.median(values), note))
+    for h in (bed, LOAD_HOUR, 27, 30):
+        values = [cols["temperature_2m"][at(h)] for cols in by_model.values()]
+        low, high = round(min(values)), round(max(values))
+        samples.append((h, statistics.median(values), f" ({low}-{high}°)" if low != high else ""))
+    source = f"forecast for home: median of {len(by_model)} global models"
     dew = dew_text([a["dew_mean"] for a in per_model], params["humidity_bump"]["base_dew_point"])
     wind = wind_clause(speed, u, v, at)
 
     # Markdown, one paragraph per block: list items and blank lines are what the phone apps
     # render reliably, single newlines inside a paragraph are not.
     parts = [f"> {tc['advice'].format(bed=hour_label(bed), pre=hour_label(bed - 1))}"]
+    bursts = []
     if tier == 0:
         temps = ", ".join(f"{mid:.0f}° at {hour_label(h)}" for h, mid, _ in samples)
-        parts.append(f"Outside {temps}. Dew point {dew}, wind {wind}.")
+        parts.append(f"Outside ({source}): {temps}. Dew point {dew}, wind {wind}.")
     else:
-        if tier >= 3 and (blocks := ac_blocks(soaked, at, params, tier)):
-            parts.append(f"**AC on:** {blocks}, while the house is still warm.")
+        if tier >= 3 and (wanted := ac_bursts(soaked, per_model, at, params, tier)):
+            bursts = fit_timer(wanted, params["ac_bursts"])
+            slots = f"{len(bursts) * SLOTS_PER_BURST} of {params['ac_bursts']['timer_slots']} slots"
+            if len(bursts) < len(wanted):
+                slots += f", spread from {len(wanted)} bursts"
+            entries = "\n".join(
+                f"- {minute_label(start)} cool, {minute_label(start + length)} fan" for start, length in bursts
+            )
+            parts.append(f"**AC timer** ({slots})\n\n{entries}")
         outside = "\n".join(f"- {hour_label(h)}: **{mid:.0f}°**{note}" for h, mid, note in samples)
         air = [
             f"Dew point {dew}, wind {wind}",
@@ -406,17 +477,35 @@ def check(params):
         anchor = params["anchor"]
         agree = "models agree" if min(tiers) == max(tiers) else f"models split {min(tiers)}-{max(tiers)}"
         parts += [
-            f"**Outside**\n\n{outside}",
-            "**Air**\n\n" + "\n".join(f"- {item}" for item in air if item),
+            f"**Outside** ({source}, range in brackets)\n\n{outside}",
+            "**Air** (same forecast)\n\n" + "\n".join(f"- {item}" for item in air if item),
             f"**Load {load:.0f}** vs {anchor['load']:.0f} on your hot night ({anchor['label']}). "
             f"Tier {tier} of {len(edges)}, {agree}.",
         ]
     if len(by_model) < len(params["models"]):
         parts.append(f"Only {len(by_model)} of {len(params['models'])} models answered.")
-    parts.append(bom_actuals(params, as_of))
+    last_night, observed = bom_actuals(params, as_of)
+    parts.append(last_night)
     link = params["link"]
-    parts.append(f"[{link['label']}]({link['url']})")
+    parts.append(f"BoM's own forecast, for comparison: [{link['label']}]({link['url']})")
 
+    # Tonight's forecast as the models gave it, plus last night's measurements: --review pairs
+    # each night's forecast with the measurements recorded the next evening.
+    hours = range(NIGHT_FROM, SLEEP_TO + 1)
+    midnight = datetime(as_of.year, as_of.month, as_of.day)
+    record = {
+        "night": as_of.isoformat(),
+        "tier": tier,
+        "load": round(load, 2),
+        "hours": [(midnight + timedelta(hours=h)).isoformat(timespec="minutes") for h in hours],
+        "models": {
+            model: {var: [cols[var][at(h)] for h in hours] for var in HOURLY_VARS} | {"load": round(a["load"], 2)}
+            for (model, cols), a in zip(by_model.items(), per_model, strict=True)
+        },
+        "house_estimate": [round(soaked[at(h)], 2) for h in hours],
+        "ac_timer": [[minute_label(start), length] for start, length in bursts],
+        "last_night": observed,
+    }
     return [
         Hit(
             key=as_of.isoformat(),
@@ -425,8 +514,59 @@ def check(params):
             priority=tc["priority"],
             tags=tc["tags"],
             markdown=True,
+            record=record,
         )
     ]
+
+
+def review(nights):
+    """Forecast vs measured for the last `nights` recorded nights, then each model's error."""
+    if not HISTORY_PATH.exists():
+        return f"No history yet ({HISTORY_PATH} is written when a push is sent)."
+    records = [json.loads(line) for line in HISTORY_PATH.read_text().splitlines() if line.strip()]
+    forecasts = {r["night"]: r for r in records}
+    measured = {
+        r["last_night"]["night"]: {o["time"]: o["temp"] for o in r["last_night"]["observations"]}
+        for r in records
+        if r.get("last_night")
+    }
+    samples = ("22:00", "00:00", "03:00", "06:00")
+    lines = [
+        f"{'night':<11}{'tier':<5}{'load':<6}"
+        + "".join(f"{label + ' fc/act':<20}" for label in samples)
+        + "min fc/act"
+    ]
+    errors = {}  # model -> [forecast - measured] at every hour with a measurement
+    for night in sorted(forecasts)[-nights:]:
+        r, actual = forecasts[night], measured.get(night, {})
+        models = r["models"]
+        median = [statistics.median(m["temperature_2m"][i] for m in models.values()) for i in range(len(r["hours"]))]
+        for i, when in enumerate(r["hours"]):
+            if actual.get(when) is not None:
+                errors.setdefault("median", []).append(median[i] - actual[when])
+                for name, m in models.items():
+                    errors.setdefault(name, []).append(m["temperature_2m"][i] - actual[when])
+        row = f"{night:<11}{r['tier']:<5}{r['load']:<6.1f}"
+        for label in samples:
+            i = [when[-5:] for when in r["hours"]].index(label)
+            values = [m["temperature_2m"][i] for m in models.values()]
+            act = actual.get(r["hours"][i])
+            cell = f"{median[i]:.0f} ({min(values):.0f}-{max(values):.0f}) / " + ("-" if act is None else f"{act:.1f}")
+            row += f"{cell:<20}"
+        in_window = [v for when, v in actual.items() if r["hours"][0] <= when <= r["hours"][-1] and v is not None]
+        row += f"{min(median):.1f} / " + (f"{min(in_window):.1f}" if in_window else "-")
+        lines.append(row)
+        if r["ac_timer"]:
+            lines.append(" " * 11 + "AC: " + ", ".join(f"{start} {length}m" for start, length in r["ac_timer"]))
+    lines.append("")
+    if not errors:
+        lines.append("No measurements yet: a night's are recorded with the next evening's push.")
+        return "\n".join(lines)
+    lines.append(f"Error vs measured, hourly 21:00-06:00 ({len(errors['median'])} readings), + = forecast too warm:")
+    for name, diffs in errors.items():
+        mae = statistics.fmean(abs(d) for d in diffs)
+        lines.append(f"  {name:<14} mean abs {mae:.1f}°  bias {statistics.fmean(diffs):+.1f}°")
+    return "\n".join(lines)
 
 
 # ==== END SITE-SPECIFIC ====================================================
@@ -585,6 +725,11 @@ def run_once(cfg, state):
         )
         # Record only after the push succeeded, so a failed push retries next run.
         state["notified_keys"].extend(h.key for h in new)
+        with HISTORY_PATH.open("a") as history:
+            for h in new:
+                if h.record is not None:
+                    entry = {"sent_at": utcnow().isoformat(), "title": h.title or cfg["title"], "message": h.summary}
+                    history.write(json.dumps(entry | h.record) + "\n")
     log(name, f"ok | hits={len(hits)} new={len(new)}")
 
     if heartbeat_due(cfg, state):
@@ -622,7 +767,12 @@ def main():
     mode.add_argument("--race", action="store_true")
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--test-notify", action="store_true")
+    mode.add_argument("--review", type=int, nargs="?", const=7, metavar="NIGHTS")
     args = parser.parse_args()
+
+    if args.review:
+        print(review(args.review))
+        return 0
 
     cfg = load_config()
 

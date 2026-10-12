@@ -62,6 +62,21 @@ numbers: the `IDN60901.<wmo>.shtml` links on `https://www.bom.gov.au/nsw/observa
 BoM Sydney forecast: `https://www.bom.gov.au/location/australia/new-south-wales/metropolitan/bnsw_pt131-sydney`
 (the older `https://www.bom.gov.au/nsw/forecasts/sydney.shtml` redirects there).
 
+- **Link the user's suburb, not the city.** Suburb pages are
+  `.../metropolitan/o<id>-<suburb>` (an 8-digit id, not an OSM id). Find it with a web
+  search for `bom.gov.au/location <suburb>`; if the suburb has none, link the nearest one.
+  The legacy `https://www.bom.gov.au/places/nsw/<suburb>/forecast/` pages still rendered
+  on 2026-10-12. The URL names the suburb, so it goes in `config.local.json`.
+- **BoM's page is a different forecast, so label the push's sources.** Users check the
+  push against the linked page. On 2026-10-12 BoM had 24 degC at 22:00 for both the CBD
+  and an inner-west suburb, against a five-model median of 27 (range 25-28): the gap came
+  from the forecast source, not the location. The push now names its forecast ("median
+  of N global models", range always shown), the station behind "last night", and frames
+  the link as "BoM's own forecast, for comparison".
+- **Comparing by hand:** append `/accessible-forecast` to a location page for a text
+  table of hourly temperature and feels-like. It renders client-side:
+  `webcrawl --raw --wait-for 'js:() => document.body.innerText.includes("°")' <url>`.
+
 ## Building blocks (tested via `--dry-run`, 2026-10-12)
 
 Lifted from the `sleep-prep` watcher. They need `partial` (functools), `datetime`,
@@ -129,6 +144,7 @@ def median_series(by_model, var):
 def bom_actuals(params, as_of):
     """One line on last night (21:00 -> 07:00) at a BoM station; failures degrade to a note."""
     station = params["bom_station"]  # {"wmo": "95765", "name": "Sydney Olympic Park"}
+    source = f"Last night, measured at {station['name']} (BoM)"
     try:
         data = http_get_json(BOM_OBS_URL.format(wmo=station["wmo"]))
         midnight = datetime(as_of.year, as_of.month, as_of.day)
@@ -143,15 +159,15 @@ def bom_actuals(params, as_of):
             key=lambda r: r["local_date_time_full"],
         )
         if len(night) < BOM_MIN_ROWS:
-            return f"Last night actual: only {len(night)} observations found (feed stale?)."
+            return f"{source}: only {len(night)} observations found (feed stale?)."
         calm_share = sum((r["wind_spd_kmh"] or 0) <= 2 for r in night) / len(night)
         humidity = max(r["rel_hum"] for r in night if r["rel_hum"] is not None)
         return (
-            f"Last night actual: min {min(r['air_temp'] for r in night):.1f}°, "
+            f"{source}: min {min(r['air_temp'] for r in night):.1f}°, "
             f"RH up to {humidity}%, calm {calm_share * BOM_WINDOW_HOURS:.0f} of {BOM_WINDOW_HOURS} h."
         )
     except (CheckError, KeyError, TypeError, ValueError) as e:
-        return f"Last night actual: unavailable ({type(e).__name__}: {e})."
+        return f"{source}: unavailable ({type(e).__name__}: {e})."
 ```
 
 ## Worked example: `sleep-prep` (full source in `stow-managed/.local/share/watchers/sleep-prep/`)
