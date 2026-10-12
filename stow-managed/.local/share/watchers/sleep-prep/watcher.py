@@ -317,21 +317,26 @@ def window_advice(t, soaked, speed, u, v, at, params):
     return "outside stays warmer than the house; keep it shut."
 
 
-def ac_bursts(soaked, per_model, at, params, tier):
+def ac_bursts(soaked, dew_points, at, params, tier):
     """Timed AC bursts after the pre-cool: [(start, length)], start in minutes from local midnight.
 
     The bedroom has no zone sensor, so the AC cools as hard as it can until switched off; short
     bursts stop it overcooling the room. The heat load (house estimate + muggy bump) sets the
     burst size: longer and closer together while well over the threshold (config
-    params.ac_bursts), shorter and sparser once only just over, none once under."""
+    params.ac_bursts), shorter and sparser once only just over, none once under. The bump uses
+    the dew point at that time, not the night's mean: a dry evening averaged with a muggy small
+    hours hides the muggy part and ends the bursts early."""
     sizes = params["ac_bursts"]
     threshold = params["ac_house_threshold"] - (1 if tier >= len(params["tier_edges"]) else 0)
-    bump = humidity_bump(statistics.median(a["dew_mean"] for a in per_model), params["humidity_bump"])
 
     def over(minute):
         hour, part = divmod(minute, 60)
-        now, nxt = soaked[at(hour)], soaked[at(hour + 1)]
-        return now + (nxt - now) * part / 60 + bump - threshold
+
+        def at_minute(series):
+            now, nxt = series[at(hour)], series[at(hour + 1)]
+            return now + (nxt - now) * part / 60
+
+        return at_minute(soaked) + humidity_bump(at_minute(dew_points), params["humidity_bump"]) - threshold
 
     def size(excess):
         return sizes["hot"] if excess >= sizes["hot_over_by"] else sizes["warm"]
@@ -467,7 +472,7 @@ def check(params):
         temps = ", ".join(f"{mid:.0f}° at {hour_label(h)}" for h, mid, _ in samples)
         parts.append(f"Outside ({source}): {temps}. Dew point {dew}, wind {wind}.")
     else:
-        if tier >= 3 and (wanted := ac_bursts(soaked, per_model, at, params, tier)):
+        if tier >= 3 and (wanted := ac_bursts(soaked, median_series(by_model, "dew_point_2m"), at, params, tier)):
             bursts = fit_timer(wanted, params["ac_bursts"])
             # One list per day: the after-midnight entries go into tomorrow's timer schedule.
             for day, group in groupby(bursts, key=lambda burst: burst[0] // DAY_MINUTES):
