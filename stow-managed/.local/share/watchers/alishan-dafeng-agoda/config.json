@@ -1,0 +1,17 @@
+{
+  "name": "alishan-dafeng-agoda",
+  "title": "<hotel>: room free <nights>",
+  "deep_link": "<booking page deep link with dates>",
+  "expires": "2026-11-11",
+  "timezone": "Asia/Taipei",
+  "schedule": "*-*-* *:0/10:00",
+  "jitter_sec": 20,
+  "error_threshold": 3,
+  "heartbeat_hours": 24,
+  "hit_priority": 5,
+  "params": {
+    "hotel_id": 528785,
+    "adults": "<n>",
+    "nights": ["<YYYY-MM-DD>"]
+  }
+}

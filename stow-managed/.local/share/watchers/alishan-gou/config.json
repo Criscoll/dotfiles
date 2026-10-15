@@ -1,0 +1,23 @@
+{
+  "name": "alishan-gou",
+  "title": "<hotel>: room free <nights>",
+  "deep_link": "https://www.agh.com.tw/",
+  "expires": "2026-11-11",
+  "timezone": "Asia/Taipei",
+  "schedule": "*-*-* *:0/10:00",
+  "jitter_sec": 20,
+  "error_threshold": 3,
+  "heartbeat_hours": 24,
+  "hit_priority": 5,
+  "params": {
+    "rooms": {
+      "159": "B棟景觀兩人房 (view double)",
+      "168": "B棟雅緻兩人房 (double)",
+      "172": "B棟雅致雙人房 (twin)",
+      "173": "B棟三人房 (triple)",
+      "164": "B棟四人房 (quad)",
+      "166": "A棟四人房 (quad)"
+    },
+    "nights": ["<YYYY-MM-DD>"]
+  }
+}
