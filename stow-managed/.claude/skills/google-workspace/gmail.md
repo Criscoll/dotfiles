@@ -109,7 +109,22 @@ Note: if you have already run `gmail-read <message-id>`, the output already show
 ~/bin/agent_scripts/gmail-download-attachment <message-id> <attachment-id> <filename>
 # Saves to ~/Downloads/gmail-attachments/<filename>, prints the saved path to stdout
 # Optional: --out-dir <dir> to override the destination directory
+
+# Example
+~/bin/agent_scripts/gmail-download-attachment 18f3a9c2d4e5b601 'ANGjdJ8w…long-opaque-token…' referral.pdf
 ```
+
+Argument pitfalls (a wrong guess costs a failed API round-trip):
+- Order is `<message-id> <attachment-id> <filename>`. `<filename>` is the name you
+  want on disk (take it from the listing), never an ID. Swapping it with the
+  attachment ID fails with `Gmail API error: Invalid attachment token` (verified
+  2026-10-17).
+- Attachment IDs are long opaque tokens — several hundred chars (426 observed), may
+  contain `-` and `_`. Copy the whole ID verbatim and wrap it in single quotes; a
+  truncated ID fails with the same token error (verified). In `gmail-read` output it
+  sits inside `(attachment_id: <id>)` — do not include the closing `)`.
+- One attachment per call; there is no plural/batch wrapper. For several, run
+  `gmail-list-attachments <message-id>` (IDs are the first column) and loop.
 
 ### View a PDF after download
 ```bash

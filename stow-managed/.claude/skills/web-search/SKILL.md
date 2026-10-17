@@ -54,7 +54,22 @@ If missing, stow from the dotfiles repo hasn't been run. Do not attempt a fallba
 
 ## Output Format
 
-JSON array on stdout; provider/diagnostics on stderr:
+JSON array on stdout; provider/diagnostics on stderr (the `Searching (Brave …):
+<query>` banner and `Falling back to SearXNG …` notice are stderr — verified
+2026-10-17: with stderr split off, stdout parses cleanly with `json.load`).
+
+**Never merge stderr into stdout when parsing.** `websearch … 2>&1 | python3 -c
+"json.load(sys.stdin)"` puts the banner first and fails with `JSONDecodeError:
+Expecting value: line 1 column 1`. Parse stdout only, discarding or saving stderr:
+
+```bash
+~/bin/agent_scripts/websearch -n 5 "query" 2>/dev/null | python3 -c 'import json,sys; [print(r["url"]) for r in json.load(sys.stdin)]'
+# keep the provider banner for later: 2>/tmp/websearch.err
+```
+
+Do not "fix" this with `tail -n +2` — stdout has no banner line, so that would
+drop the opening `[` and break valid JSON. Dropping stderr also hides which
+provider served the search; if you need to know, redirect it to a file instead.
 
 ```json
 [
