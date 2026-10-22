@@ -24,6 +24,9 @@ For all reading operations, use the wrapper scripts. They strip the JSON securit
 # WARNING: gmail-read is API-backed — takes 30–60 seconds per call.
 # Never pipe with | head -N (no output is produced until the API call completes,
 # so head has nothing to truncate). Always use a 60-second timeout or higher.
+# gmail-read imports the gws library directly (not the gws-cli subprocess) because
+# gws-cli's own `gmail read` returns an empty body for HTML-only emails (e.g. NAB
+# notices). The wrapper falls back to text/html, converted to plain text.
 
 # Search
 ~/bin/agent_scripts/gmail-search "from:someone@example.com subject:invoice"

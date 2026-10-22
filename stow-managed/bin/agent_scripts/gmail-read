@@ -1,36 +1,57 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = []
+# dependencies = ["gws-cli==1.3.1"]
 # ///
 
-import json, re, subprocess, sys
+import base64, html, re, sys
 
-GWS = ["uvx", "gws-cli@1.3.1", "gmail", "read"]
+from googleapiclient.errors import HttpError
+from gws.services.gmail import GmailService
 
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
+def html_to_text(markup: str) -> str:
+    markup = re.sub(r"(?is)<(head|style|script)\b.*?</\1>", "", markup)
+    markup = re.sub(r"(?i)<br\s*/?>|</(p|div|tr|li|h[1-6]|table)>", "\n", markup)
+    markup = re.sub(r"(?i)</t[dh]>", " ", markup)
+    return html.unescape(re.sub(r"<[^>]+>", "", markup)).replace("\xa0", " ")
+
+
 def clean_text(text: str) -> str:
-    text = re.sub(r"<[^>]+>", "", text)
-    text = (
-        text.replace("&nbsp;", " ")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&amp;", "&")
-        .replace("&quot;", '"')
-        .replace("&#39;", "'")
-    )
+    text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
-def extract(wrapped):
-    if isinstance(wrapped, dict) and "data" in wrapped:
-        return wrapped["data"]
-    return wrapped
+def decode_part(part: dict) -> str:
+    data = part.get("body", {}).get("data", "")
+    return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", errors="replace")
+
+
+def find_part(payload: dict, mime: str):
+    """Depth-first search for the first non-attachment part of the given MIME type."""
+    if payload.get("mimeType") == mime and payload.get("body", {}).get("data") and not payload.get("filename"):
+        return payload
+    for sub in payload.get("parts", []):
+        found = find_part(sub, mime)
+        if found:
+            return found
+    return None
+
+
+def extract_body(payload: dict) -> str:
+    # gws-cli's own extractor only looks at text/plain, so HTML-only mail comes back empty.
+    plain = find_part(payload, "text/plain")
+    if plain:
+        return clean_text(decode_part(plain))
+    markup = find_part(payload, "text/html")
+    if markup:
+        return clean_text(html_to_text(decode_part(markup)))
+    return ""
 
 
 def main():
@@ -55,38 +76,26 @@ def main():
         eprint("Usage: gmail-read [--full] [--limit N] <message-id>")
         sys.exit(2)
 
-    result = subprocess.run(GWS + [message_id], capture_output=True, text=True)
-    if result.returncode != 0:
-        msg = result.stderr.strip()
-        if result.stdout:
-            try:
-                err = json.loads(result.stdout)
-                msg = err.get("message", msg) or msg
-            except json.JSONDecodeError:
-                pass
-        eprint(msg)
-        sys.exit(result.returncode)
-
+    service = GmailService()
     try:
-        outer = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        eprint("Unexpected non-JSON output:")
-        print(result.stdout, end="")
+        msg = service.execute(service.service.users().messages().get(userId="me", id=message_id, format="full"))
+    except HttpError as e:
+        eprint(f"Gmail API error: {e.reason}")
         sys.exit(1)
 
-    subject = extract(outer.get("subject", ""))
-    from_addr = outer.get("from_address", "")
-    to_addr = outer.get("to_address", "")
-    cc = outer.get("cc", "")
-    date = outer.get("date", "")
-    labels = outer.get("labels", [])
-    body = extract(outer.get("body", ""))
-
-    body_clean = clean_text(body)
+    payload = msg.get("payload", {})
+    headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
+    subject = headers.get("subject", "(no subject)")
+    from_addr = headers.get("from", "")
+    to_addr = headers.get("to", "")
+    cc = headers.get("cc", "")
+    date = headers.get("date", "")
+    labels = msg.get("labelIds", [])
+    body_clean = extract_body(payload)
     if not full and len(body_clean) > limit:
         body_clean = body_clean[:limit].rstrip() + "\n[…truncated, use --full to show all]"
 
-    attachments = outer.get("attachments", [])
+    attachments = service._extract_attachments(payload)
 
     print(f"From:    {from_addr}")
     print(f"To:      {to_addr}")
