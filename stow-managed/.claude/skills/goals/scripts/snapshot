@@ -1,0 +1,238 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Read-only snapshot of the weekly log, 05. Goals calendar and active task outlines for /goals.
+
+Prints plain-text `=== SECTION ===` blocks: Melbourne dates, log status, the focus week's log
+(plus any log created ahead of the current week, and the closing week's log when only the
+calendar half of a rollover is pending), the relevant Goals for the Week / Move the Needle
+descriptions as raw HTML, then the active outline paths and backlog names. It never writes a
+file or calls calendar-update. Exits 1 if any calendar fetch failed; everything else still prints.
+"""
+
+import html
+import re
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+SCRIBBLES = Path.home() / "Repos" / "scribbles"
+WORKBENCH = SCRIBBLES / "02_Workbench"
+LOG_DIR = WORKBENCH / "00_Weekly_Logs"
+ACTIVE_DIR = WORKBENCH / "03_Active"
+BACKLOG_DIR = WORKBENCH / "02_Backlog"
+CALENDAR_GET = Path.home() / "bin" / "agent_scripts" / "calendar-get"
+GOALS_CALENDAR = "d7e8d2283058b1cf4501917e8a924a8d623fbcc595f5e7f1abc80cd88d823997@group.calendar.google.com"
+WEEK_MASTER = "12k1buhgem5sguhl882be01b7d"  # Goals for the Week; instances suffixed with the week's Monday
+NEEDLE_MASTER = "46gvt7r9isdp1kvv0bgve3ju3o"  # Move the Needle; daily instances
+WEEK_FILE_RE = re.compile(r"^(\d{4})-W(\d{2})\.md$")
+TODAY_HEADING_RE = re.compile(r"^# Today \((.+?)\)\s*$", re.MULTILINE)
+# One calendar-get is a single API call (seconds, longer on a uvx cold start); this bounds a
+# hung request without cutting off a slow one.
+FETCH_TIMEOUT_SEC = 60
+
+
+def week_id(key):
+    return f"{key[0]}-W{key[1]:02d}"
+
+
+def monday(key):
+    return date.fromisocalendar(key[0], key[1], 1)
+
+
+def week_instance(key):
+    return f"{WEEK_MASTER}_{monday(key):%Y%m%d}"
+
+
+def needle_instance(day):
+    return f"{NEEDLE_MASTER}_{day:%Y%m%d}"
+
+
+def week_files():
+    files = {}
+    for path in LOG_DIR.glob("*-W*.md"):
+        m = WEEK_FILE_RE.match(path.name)
+        if m:
+            files[(int(m[1]), int(m[2]))] = path
+    return files
+
+
+def today_status(path, key, today):
+    """Status of the file's `# Today (...)` heading, plus the date it resolves to."""
+    m = TODAY_HEADING_RE.search(path.read_text())
+    if not m:
+        return "MISSING", None
+    heading = m[1]
+    # The heading has no year, so resolve it against the seven days of the file's ISO week.
+    days = [monday(key) + timedelta(days=i) for i in range(7)]
+    day = next((d for d in days if f"{d:%a %b %d}" == heading), None)
+    if day is None:
+        return f"UNRESOLVED (heading {heading} matches no day of {week_id(key)})", None
+    if day == today:
+        return "CURRENT", day
+    relation = "STALE" if day < today else "AHEAD"
+    return f"{relation} (heading {heading}, today {today:%a %b %d})", day
+
+
+def fetch(event_id):
+    cmd = [str(CALENDAR_GET), "--full", "--calendar", GOALS_CALENDAR, event_id]
+    try:
+        r = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=FETCH_TIMEOUT_SEC)
+    except subprocess.TimeoutExpired:
+        return False, f"calendar-get timed out after {FETCH_TIMEOUT_SEC}s"
+    if r.returncode != 0:
+        return False, r.stderr.strip() or f"calendar-get exited {r.returncode}"
+    return True, r.stdout.rstrip()
+
+
+def open_items(calendar_get_output):
+    """Count unmarked Closed-Ended items and blank Reflection lines in a week's description."""
+    _, _, desc = calendar_get_output.partition("\nDescription:\n")
+    text = re.sub(r"<br\s*/?>|</?(?:ul|li)>", "\n", desc, flags=re.IGNORECASE)
+    text = html.unescape(re.sub(r"<[^>]+>", "", text))
+    unmarked = blank = 0
+    section = None
+    for raw in text.splitlines():
+        line = raw.strip().lstrip("-*•").strip()
+        if re.fullmatch(r"closed-?\s*ended\s*:?", line, re.IGNORECASE):
+            section = "closed"
+        elif re.fullmatch(r"open-?\s*ended\s*:?", line, re.IGNORECASE):
+            section = "open"
+        elif line and section == "closed" and not line.endswith(("✅", "❌")):
+            unmarked += 1
+        elif section == "open" and re.fullmatch(r"reflection:", line, re.IGNORECASE):
+            blank += 1
+    return unmarked, blank
+
+
+def rel(path):
+    return path.relative_to(SCRIBBLES)
+
+
+def main():
+    t = datetime.now(ZoneInfo("Australia/Melbourne")).date()
+    cur = t.isocalendar()[:2]
+    mon = monday(cur)
+    sun = mon + timedelta(days=6)
+
+    files = week_files()
+    # A log created early for a later week never counts as the week in progress.
+    focus = max((k for k in files if k <= cur), default=None)
+    ahead = sorted(k for k in files if k > cur)
+
+    if focus is None:
+        week = "NO_LOGS"
+        today_line, today_day = "MISSING", None
+    else:
+        week = "CURRENT" if focus == cur else f"EXPIRED (latest {week_id(focus)}, current {week_id(cur)})"
+        today_line, today_day = today_status(files[focus], focus, t)
+    stale_day = today_day if today_line.startswith("STALE") else None
+
+    # Calendar half of a rollover the log already made: the current week when a later log was
+    # created early, otherwise last week once this week's log exists.
+    closing = new = None
+    if focus == cur:
+        if ahead:
+            closing, new = cur, ahead[0]
+        else:
+            closing, new = (t - timedelta(days=7)).isocalendar()[:2], cur
+
+    roles = {}
+
+    def want(event_id, role):
+        roles.setdefault(event_id, []).append(role)
+
+    if focus is not None:
+        want(week_instance(focus), f"Goals for the Week, focus week {week_id(focus)}")
+    if focus != cur:
+        want(week_instance(cur), f"Goals for the Week, current week {week_id(cur)}")
+    for key in ahead:
+        want(week_instance(key), f"Goals for the Week, ahead week {week_id(key)} (log created early)")
+    if stale_day:
+        want(needle_instance(stale_day), f"Move the Needle, stale Today {stale_day:%a %b %d}")
+    want(needle_instance(t), f"Move the Needle, today {t:%a %b %d}")
+
+    closing_id = week_instance(closing) if closing else None
+    ids = list(roles) + ([closing_id] if closing_id and closing_id not in roles else [])
+    with ThreadPoolExecutor(max_workers=len(ids)) as pool:
+        results = dict(zip(ids, pool.map(fetch, ids)))
+
+    closing_log = None
+    if closing is None:
+        cal_rollover = "n/a (week rollover due)" if week.startswith("EXPIRED") else "n/a (no logs)"
+    else:
+        ok, out = results[closing_id]
+        unmarked, blank = open_items(out) if ok else (0, 0)
+        if not ok:
+            cal_rollover = f"UNKNOWN (closing week {week_id(closing)} fetch failed)"
+        elif unmarked or blank:
+            cal_rollover = (
+                f"PENDING (closing {week_id(closing)}: {unmarked} unmarked Closed-Ended, "
+                f"{blank} blank Reflection; new {week_id(new)})"
+            )
+        else:
+            cal_rollover = "none"
+        if not ok or unmarked or blank:
+            want(closing_id, f"Goals for the Week, closing week {week_id(closing)}")
+            if closing != focus:
+                closing_log = files.get(closing)
+
+    cur_file = LOG_DIR / f"{week_id(cur)}.md"
+    print("=== DATES ===")
+    print(f"today: {t} ({t:%a}, Australia/Melbourne)")
+    print(f"iso_week: {week_id(cur)}")
+    print(f"week_heading: # {week_id(cur)} ({mon:%b %d} – {sun:%b %d})")
+    print(f"today_heading: # Today ({t:%a %b %d})")
+    print(f"week_instance: {week_instance(cur)}")
+    print(f"needle_instance: {needle_instance(t)}")
+    print()
+    print("=== LOG STATUS ===")
+    print(f"log_dir: {LOG_DIR}")
+    print(f"current_file: {cur_file.name} ({'exists' if cur_file.exists() else 'missing'})")
+    print(f"focus_file: {files[focus].name if focus else 'none'}")
+    print(f"ahead: {', '.join(files[k].name for k in ahead) or 'none'}")
+    print(f"week: {week}")
+    print(f"today_section: {today_line}")
+    print(f"calendar_rollover: {cal_rollover}")
+
+    logs = []
+    if focus is not None:
+        logs.append((files[focus], "focus week"))
+    if closing_log:
+        logs.append((closing_log, "closing week"))
+    logs += [(files[k], "ahead week, created early") for k in ahead]
+    for path, role in logs:
+        print()
+        print(f"=== LOG: {rel(path)} ({role}) ===")
+        print(path.read_text().rstrip())
+
+    failed = False
+    for event_id, event_roles in roles.items():
+        ok, out = results[event_id]
+        failed |= not ok
+        print()
+        print(f"=== CALENDAR: {'; '.join(event_roles)} | {event_id} ===")
+        print(out if ok else f"FETCH FAILED: {out}")
+
+    active = sorted(
+        rel(p) for p in ACTIVE_DIR.rglob("outline.md")
+        if "02_Archived" not in p.relative_to(ACTIVE_DIR).parts
+    )
+    print()
+    print(f"=== TASKS: active outlines ({len(active)}) ===")
+    print("\n".join(str(p) for p in active))
+    backlog = sorted(p.name for p in BACKLOG_DIR.iterdir()) if BACKLOG_DIR.is_dir() else []
+    print()
+    print(f"=== TASKS: backlog entries ({len(backlog)}) ===")
+    print("\n".join(backlog))
+
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()
