@@ -28,10 +28,15 @@
       "per_degree": 0.75,
       "max": 3
     },
+    "calm_bump": {
+      "forecast_bias_kmh": 2.5,
+      "calm_below_kmh": 6,
+      "max": 1
+    },
     "tier_edges": [
       19,
       22,
-      26,
+      23.5,
       29
     ],
     "anchor": {
@@ -44,7 +49,7 @@
       "min_cooler_by": 2,
       "min_into_kmh": 5
     },
-    "ac_house_threshold": 25,
+    "ac_house_threshold": 23.5,
     "ac_bursts": {
       "timer_slots_per_day": 8,
       "hot_over_by": 2,

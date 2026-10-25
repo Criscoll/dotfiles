@@ -247,16 +247,27 @@ def humidity_bump(dew_point, bump):
     return min(max((dew_point - bump["base_dew_point"]) * bump["per_degree"], 0.0), bump["max"])
 
 
+def calm_bump(mean_wind, bump):
+    """Still air keeps the house's heat in: add up to bump['max'] degrees of load as the wind falls
+    under bump['calm_below_kmh']. The models run windier than the station reads, so their wind is
+    first lowered by bump['forecast_bias_kmh']."""
+    wind = max(mean_wind - bump["forecast_bias_kmh"], 0.0)
+    return bump["max"] * min(max(1 - wind / bump["calm_below_kmh"], 0.0), 1.0)
+
+
 def tier_of(load, edges):
     return sum(load >= edge for edge in edges)
 
 
 def assess(cols, at, params):
-    """Heat load for one model: smoothed outdoor temperature at midnight plus the muggy bump."""
+    """Heat load for one model: smoothed outdoor temperature at midnight plus the muggy and calm bumps."""
     soaked = soak(cols["temperature_2m"], params["soak_tau_hours"])
     dew_mean = statistics.fmean(cols["dew_point_2m"][at(NIGHT_FROM) : at(NIGHT_TO) + 1])
+    wind_mean = statistics.fmean(cols["wind_speed_10m"][at(NIGHT_FROM) : at(NIGHT_TO) + 1])
     return {
-        "load": soaked[at(LOAD_HOUR)] + humidity_bump(dew_mean, params["humidity_bump"]),
+        "load": soaked[at(LOAD_HOUR)]
+        + humidity_bump(dew_mean, params["humidity_bump"])
+        + calm_bump(wind_mean, params["calm_bump"]),
         "dew_mean": dew_mean,
     }
 
