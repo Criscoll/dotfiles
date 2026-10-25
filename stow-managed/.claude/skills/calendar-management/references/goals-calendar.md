@@ -1,22 +1,25 @@
-# Goals calendar (`05. Goals`)
+# Goals calendar (`02_Goals`)
 
 Calendar ID: `d7e8d2283058b1cf4501917e8a924a8d623fbcc595f5e7f1abc80cd88d823997@group.calendar.google.com`
 
 A personal goal-tracking calendar. The **event descriptions** carry the content; the summaries
-stay fixed. Treat it as a *record*, not a task list — closed days and weeks are kept as history
-and are never blanked or overwritten.
+stay fixed. Treat it as a *record*, not a task list — closed days are kept as history and are
+never blanked or overwritten.
+
+It carries one active series, the daily `Move the Needle`. The week's goals live in the weekly
+log (`log-management`), not here — see "Retired: `Goals for the Week`" below.
 
 ## Scope — only act on explicit request
 
 The Goals calendar is **excluded from the routine all-calendars triage sweep**. Only touch it when
-the user asks directly — e.g. "roll over the week", "set up today's needle", "review my goals",
-"close out yesterday". Outside those requests, leave it alone.
+the user asks directly — e.g. "set up today's needle", "close out yesterday", "review my needle".
+Outside those requests, leave it alone.
 
-Content is the user's. **Never invent, import, or unprompted-suggest goal text.** The rollover and
-leftover procedures below have confirm-first steps — those are the only ways new text enters a
-description, and always with the user's say-so. The mechanical bits introduced below (carry-count
-tags, the rollover's holistic question) are process, not content, and don't need per-instance
-permission — the wording that fills them in still does.
+Content is the user's. **Never invent, import, or unprompted-suggest goal text.** The populate and
+leftover procedures below are the only ways new text enters a description: populating takes its
+wording from the weekly log and asks when the pick isn't obvious, and leftovers are confirmed
+first. The mechanical normalization pass is process, not content, and doesn't need per-instance
+permission.
 
 ## Day anchoring — confirm what "today" is first
 
@@ -28,16 +31,7 @@ dates are a built-in check. Skipping this caused a full triage pass on the wrong
 declared "already closed, nothing to carry" when the previous day's needle still had unfinished
 items).
 
-## The two active series
-
-### `Goals for the Week` — the planning layer
-
-- Weekly recurring, **Monday → Monday** (a 7-day all-day block; end date is exclusive). Recurs
-  through end of 2026. Master event ID `12k1buhgem5sguhl882be01b7d`; instances are
-  `12k1buhgem5sguhl882be01b7d_YYYYMMDD` where the date is that week's **Monday**.
-- Description is split into two headed sections, `Closed-Ended:` and `Open-Ended:` — see
-  "Closed-Ended vs Open-Ended" below for what goes in each and how each is structured.
-- The daily `Move the Needle` list is drawn from here.
+## The active series
 
 ### `Move the Needle` — the daily layer
 
@@ -45,14 +39,32 @@ items).
   `46gvt7r9isdp1kvv0bgve3ju3o_YYYYMMDD`.
 - Description = the 1–3 things that would move the current week's goals forward that day, as a
   flat `<ul><li>` list (see "Formatting" below).
-- Pull from **both** Closed-Ended and Open-Ended across the week — an Open-Ended goal with no day
-  anywhere in the week is a stalled project, not a low-priority one, and won't get caught unless
-  it has at least one slot.
+- Drawn from the weekly log's `# Today` and `# Weekly Goals` success lines (the log is the source
+  of truth for the week's goals). Pull across *all* of the week's goals, not just the loudest: a
+  goal that never lands on a day is a stalled project, not a low-priority one, and won't get
+  caught unless it has at least one slot.
 - Every item must pass the outcome-verb test below before it goes on a day — that's what keeps
   this list from turning into a research log.
 - The event **summary** itself may carry a trailing mark: `Move the Needle ✅` (a day that
   delivered) or `Move the Needle ❌` (a wasted day). The agent proposes this; the user confirms
   before it is applied.
+
+### Retired: `Goals for the Week`
+
+Retired 2026-10-26. It was a write-only copy of the log's `# Weekly Goals`, re-sorted into
+Closed-/Open-Ended sections, and kept the week's goals in two places that had to be synced by hand
+at every rollover. The log is now the only record of the week's goals.
+
+- **Never populate, normalise, roll over, mark or otherwise write** a `Goals for the Week`
+  instance.
+- The recurring master `12k1buhgem5sguhl882be01b7d` still runs to the end of 2026 and keeps
+  producing empty instances. Ignore them. Never modify the master; ending the recurrence is the
+  user's call, not an agent's.
+- Instances up to 2026-W44 are the historical record, in the old format: `Closed-Ended:` and
+  `Open-Ended:` sections, inline `Reflection:` lines, `(carried Nx)` tags. Read them if asked.
+  Never edit them.
+- The two things only this series had now live in the log: the per-goal reflection and the
+  carried count are written at week close (`log-management`'s `weekly-rollover.md`, step 3).
 
 ### Dormant: `Goals for the Month (<Month>)`
 
@@ -61,70 +73,36 @@ through May 2026, then discontinued. This is not a recurring series. Leave exist
 don't create new ones and don't maintain a monthly (or quarterly/yearly) layer unless the user
 explicitly revives it.
 
-## Closed-Ended vs Open-Ended
-
-**Closed-Ended** — has a definitive done state (pay a bill, book a ticket, have a conversation).
-Flat `<ul><li>` list, one item per line. Marked `✅`/`❌` on the item itself.
-
-**Open-Ended** — no natural finish line (engagement planning, a house move, a trip itinerary). Each
-item is a top-level `<li>` containing a **nested** `<ul>` with:
-
-- The concrete action(s) for this cycle — this is the floor, not a ceiling: the smallest real
-  thing that has to happen for the week to count as progress, not an exhaustive plan. Label it
-  `Bare minimum:` when there's more than one action or the scope could be read multiple ways;
-  leave it unlabelled when there's a single obvious action (e.g. just "Decide X or Y").
-- `Reflection:` — left blank when the week starts, filled in at rollover with what tangibly
-  happened (see "Reflection goes inline" below).
-
-No separate "Bonus" slot — if the week exceeds the bare minimum, say so in the Reflection line
-instead of tracking stretch goals as their own element.
-
-Example structure (content is illustrative, not live):
-```html
-Open-Ended:<br><ul><li>Engagement Planning<ul><li>Decide on proposing during the November trip, or book it as a standalone activity in Sydney</li><li>Reflection:</li></ul></li></ul><ul><li>Holiday Itinerary Planning<ul><li>Bare minimum: Taipei day-by-day plan drafted, tickets booked for anything needing advance booking; Alishan day-by-day plan drafted, tickets booked (e.g. sunrise train)</li><li>Reflection:</li></ul></li></ul>
-```
-
 ## Formatting — always real HTML bullets
 
 Google Calendar's description field renders **real `<ul><li>` bullet lists**, not literal `- `
 dash characters — a hand-typed dash just shows up as a hyphen glyph, not an indented bullet.
-Author the HTML directly when writing a description:
-
-- Flat list (Closed-Ended, `Move the Needle` days): `<ul><li>item</li><li>item</li></ul>`
-- Nested list (Open-Ended): `<ul><li>Goal name<ul><li>sub-item</li><li>sub-item</li></ul></li></ul>`
-- Section headers (`Closed-Ended:`, `Open-Ended:`) stay as plain text followed by `<br>` — not
-  wrapped in a list themselves.
+Author the HTML directly when writing a description. A `Move the Needle` day is a flat list:
+`<ul><li>item</li><li>item</li></ul>`.
 
 This is the current convention — `calendar-update --description` stores exactly what's sent, so
 plain `- ` dashes render as plain dashes, not bullets.
 
 ### Format normalization — always first, before any content edit
 
-The user often edits goals from their phone during the week, which mangles the formatting:
-literal `- ` dashes instead of `<ul><li>` bullets, lowercase item starts, stray spaces,
-broken nesting, uneven blank lines. **Before any other content step on a Goals for the Week
-instance (rollover, needle population, sync, marks), run a mechanical normalization pass on
-that week's description — and on the new week's description during rollover.** Do the same for
-any other week instance the request focuses on.
+The user often edits the needle from their phone, which mangles the formatting: literal `- `
+dashes instead of `<ul><li>` bullets, lowercase item starts, stray spaces, uneven blank lines.
+**Before any other content step on a `Move the Needle` instance (populate, leftovers, marks), run
+a mechanical normalization pass on that day's description.** Do the same for any other day the
+request focuses on, including the target day of a leftovers carry.
 
 Allowed fixes (mechanical only — never touch meaning):
 
-- Convert literal `- ` (or `* `, `•`) dash lines into real `<ul><li>` items, preserving
-  indentation as nesting where the original was indented (Open-Ended sub-lists stay nested).
-- Capitalise the first letter of each item and goal name; leave the rest of the wording alone.
+- Convert literal `- ` (or `* `, `•`) dash lines into real `<ul><li>` items.
+- Capitalise the first letter of each item; leave the rest of the wording alone.
 - Collapse repeated spaces, trim leading/trailing whitespace on lines, remove empty list items
   and stray doubled `<br>`/blank lines.
-- Normalise the section headers to exactly `Closed-Ended:` and `Open-Ended:` (fix casing,
-  spacing, stray punctuation around them).
-- Fix broken nesting: Open-Ended goal names are top-level `<li>` with their actions and
-  `Reflection:` line nested; Closed-Ended items stay flat.
 - Normalise mark placement so `✅`/`❌` sits at the end of its item line (fix spacing around
   the mark, don't add or remove marks).
-- Normalise `(carried Nx)` tag spacing/casing if drifted.
 
-Forbidden during normalization: rewording, reordering, adding/removing items, filling or
-altering `Reflection:` text, changing any `✅`/`❌` mark or carried count. If a structural fix
-would require guessing at meaning (e.g. a merged line could be two items), ask the user.
+Forbidden during normalization: rewording, reordering, adding/removing items, changing any
+`✅`/`❌` mark. If a structural fix would require guessing at meaning (e.g. a merged line could be
+two items), ask the user.
 
 If the description is already clean, skip silently — no `calendar-update` call, no commentary.
 When normalization did change something, say in one line what was fixed before proceeding to
@@ -132,13 +110,13 @@ the actual request.
 
 ## Outcome-verb test — does a real thing exist after?
 
-Before an item goes on the Closed-Ended list or a `Move the Needle` day, ask: *does something
-concrete exist afterward that didn't exist before* — a message sent, a booking made, a decision
-recorded, a deposit paid? If the honest answer is "I'll know more" or "I'll have a plan," it fails
-the test and needs to be made more concrete before it's added.
+Before an item goes on a `Move the Needle` day, ask: *does something concrete exist afterward
+that didn't exist before* — a message sent, a booking made, a decision recorded, a deposit paid?
+If the honest answer is "I'll know more" or "I'll have a plan," it fails the test and needs to be
+made more concrete before it's added.
 
 This exists because of a standing pattern the user has flagged (see the "Fake Productivity"
-reminder on the Capture calendar): research, notes, and information-gathering feel productive but
+reminder on the 03_Reminders calendar): research, notes, and information-gathering feel productive but
 produce nothing, and that's exactly what this system is meant to catch. Watch for verbs that let
 something sound done while staying vague — `follow up`, `look into`, `research`, `figure out`,
 `establish`, `explore` — and reword to the concrete version underneath:
@@ -152,86 +130,34 @@ This applies when *picking* items too, not just rewording existing ones — a `M
 whose item is "research flights" hasn't earned its slot; "send Mimi 2-3 flight options and ask for
 a pick by Sunday" has.
 
-## Reflection goes inline, not in a separate section
-
-Each Open-Ended item carries its own `Reflection:` line nested under it — not a standalone
-"Reflection" block elsewhere in the description. Inline keeps what-was-planned and
-what-actually-happened next to each other instead of requiring a scroll to cross-reference.
-
-At weekly rollover, don't fill the Reflection line with just "done" or "not done" — answer the
-holistic question honestly: *what tangible thing exists now that didn't a week ago?* "Spent time
-on it" or "looked into options" is not a filled Reflection line — it's the fake-productivity
-pattern the reminder warns about, just relocated into this calendar.
-
-## Carry-forward staleness tag for Open-Ended items
-
-If an Open-Ended item's bare minimum wasn't met and it carries into the next week, append a count
-to the item's own line (not the Reflection line): `Engagement Planning (carried 1x)`, then
-`(carried 2x)`, and so on. This makes drift visible — without it, an item silently carried for
-months looks identical to one carried once, which is how open-ended goals go stale unnoticed.
-Drop the suffix once a cycle's bare minimum is actually met.
-
 ## Reading and writing descriptions
 
 - `calendar-get --full <id> --calendar <goals-id>` returns the description **with Google's
   rich-text HTML** — `<br>`, `<ul>`, `<li>`, `<span>`, `&nbsp;`. Read through it.
 - `calendar-update --description` **replaces the entire field.** Always `calendar-get --full`
   first, keep the existing content verbatim, and only append marks / add carried items.
-- **Preserve the user's structure with a minimal touch**: keep the `Closed-Ended:`/`Open-Ended:`
-  headings, keep nested lists nested, don't reorder items, don't reword. The one exception is
-  the mechanical format-normalization pass above (dashes → bullets, capitalisation, spacing,
-  nesting fixes) which always runs first on the focused week. Beyond that, only append
-  `✅`/`❌` marks, fill in `Reflection:` lines, and carry items across.
-- Never modify the recurring masters (`12k1buhgem5sguhl882be01b7d`,
-  `46gvt7r9isdp1kvv0bgve3ju3o` with no `_YYYYMMDD` suffix) — only dated instances.
+- **Preserve the user's structure with a minimal touch**: don't reorder items, don't reword. The
+  one exception is the mechanical format-normalization pass above, which always runs first on the
+  focused day. Beyond that, only append `✅`/`❌` marks and add items.
+- Never modify the recurring masters (`46gvt7r9isdp1kvv0bgve3ju3o` and
+  `12k1buhgem5sguhl882be01b7d` with no `_YYYYMMDD` suffix) — only dated instances.
 
 ## Procedures
 
 ### Populate today's `Move the Needle` (on request)
 
-1. `calendar-get --full` the current `Goals for the Week` instance (the one whose Monday starts
-   the current week).
-2. **Normalize that week's formatting first** (see Format normalization above) if needed.
-3. Pick the 1–3 items that today's effort should advance — draw from **both** Closed-Ended and
-   Open-Ended (an Open-Ended item's bare-minimum sub-action counts). Check each against the
-   outcome-verb test before adding it. If the choice isn't obvious, ask the user rather than
-   guessing.
-4. `calendar-get --full` today's `Move the Needle` instance. If it already has content, append —
-   don't replace.
-5. Write the picked items as a flat `<ul><li>` list, keeping the wording from the weekly list.
-
-### Weekly rollover (on request, typically Monday)
-
-1. `calendar-get --full` the **closing** week's instance (last Monday's).
-2. **Normalize the closing week's formatting first** (see Format normalization above) so marks
-   and nesting are readable before proposing changes; normalize the new week's description
-   too when it's read in step 5.
-3. For each unmarked Closed-Ended item, propose `✅` or `❌` and apply the marks the user confirms.
-4. For each Open-Ended item, ask the holistic question — *what tangible thing exists now that
-   didn't a week ago?* — and write the honest answer into that item's `Reflection:` line as a
-   sentence, not a done/not-done label. If the bare minimum wasn't met, the item will carry (see
-   next step).
-5. `calendar-get --full` the **new** week's instance (this Monday's).
-6. Copy every unfinished Closed-Ended item (anything without `✅`) across unchanged. For each
-   Open-Ended item whose bare minimum wasn't met, carry the goal name tagged `(carried Nx)` and
-   set a **new** bare minimum for the coming week — don't just repeat last week's unmet one
-   verbatim, since it already didn't happen. Ask the user if the new bare minimum isn't obvious.
-7. Write both descriptions back. The closing week stays as a permanent record — never delete its
-   content.
-
-### Sync dailies into the weekly (on request)
-
-The normal feed is weekly → daily; this is the inverse and only happens when asked.
-
-1. `calendar-get --full` the week's `Goals for the Week` instance (the Monday that starts the
-   week).
-2. **Normalize the week's formatting first** (see Format normalization above) if needed.
-3. Read the week's `Move the Needle` instances that have content.
-4. Merge each item into the weekly description — wording verbatim, as `<li>` items. For an
-   Open-Ended item, merge into that goal's nested sub-list, not the top-level list. Keep existing
-   `✅`/`❌` marks and `Reflection:` text intact (day marks and week marks are separate records —
-   don't strip or invent them). Skip items already present.
-5. Write the weekly back. Daily needles stay untouched.
+1. Read the current week's log, `00_Weekly_Logs/<ISO-year>-W<ISO-week>.md` in the scribbles
+   workbench (resolve the week with log-management's Melbourne-time command). If the latest log
+   isn't this week's, the week has expired: say so and stop, because log-management's weekly
+   rollover comes first.
+2. `calendar-get --full` today's `Move the Needle` instance. **Normalize its formatting first**
+   (see Format normalization above) if needed.
+3. Pick the 1–3 items that today's effort should advance. The log's `# Today` entries are the
+   first candidates; draw on the `# Weekly Goals` success lines for any goal that has no slot yet
+   this week. Check each against the outcome-verb test before adding it. If the choice isn't
+   obvious, ask the user rather than guessing.
+4. If the needle already has content, append — don't replace.
+5. Write the picked items as a flat `<ul><li>` list, keeping the wording from the log.
 
 ### End-of-day `Move the Needle` leftovers (on request)
 
@@ -246,21 +172,19 @@ The normal feed is weekly → daily; this is the inverse and only happens when a
    task wasn't done when it was supposed to be; the fresh copies in the target day are the retry.
    Only append marks and carried copies — the original description is never trimmed.
 
-### Propose a day / week summary mark (on request)
+### Propose a day summary mark (on request)
 
-`Move the Needle` and `Goals for the Week` summaries can take a trailing `✅` or `❌`. Suggest one
-based on how the description's items resolved, state your reasoning, and only apply it via
+A `Move the Needle` summary can take a trailing `✅` or `❌`. Suggest one based on how the
+description's items resolved, state your reasoning, and only apply it via
 `calendar-update --summary` after the user confirms. Never set it unprompted.
 
 ## What not to do
 
 - Don't fold the Goals calendar into routine triage — explicit requests only.
+- Don't write to `Goals for the Week` instances (see "Retired" above).
 - Don't blank or overwrite past instances; they are the historical record.
 - Don't modify the recurring masters.
 - Don't invent, import, or unprompted-suggest goal content.
 - Don't write plain `- ` dashes for new content — use real `<ul><li>` bullets (see Formatting).
 - Don't reorder items or reword existing content. The sole exception: the mechanical
-  format-normalization pass (dashes → bullets, capitalisation, spacing, nesting) which runs
-  first on the focused week before any other content edit.
-- Don't add a "Bonus"/stretch slot to Open-Ended items — mention stretch progress in the
-  Reflection line instead.
+  format-normalization pass, which runs first on the focused day before any other content edit.

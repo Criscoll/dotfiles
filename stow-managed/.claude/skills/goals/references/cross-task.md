@@ -5,11 +5,12 @@ another can become false. When two tasks grow toward each other, the same delive
 owned twice. This file finds both. Every fix is a question, as with every other write.
 
 **Inputs:**
-- Every active outline, already read in run step 3.
+- Every active outline, read in full. The full sweep's step 3 already did this; `overlap`
+  alone reads them first.
 - The `TASKS: backlog entries` names from the snapshot. Read a backlog outline only when its
   name suggests an overlap.
 
-## Implication sweep (every run)
+## Implication sweep (every `check`)
 
 1. **Seed set.** Start with:
    - tasks changed this run, or about to change from confirmed fixes;
