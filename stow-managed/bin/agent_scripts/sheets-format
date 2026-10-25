@@ -1,0 +1,223 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Format a spreadsheet: cell style, borders, merges, column/row sizes, frozen panes.
+
+RANGE is 1-based inclusive A1 notation WITH a tab, e.g. "Data!A1:D1", "'My Tab'!B:C"
+(whole columns), "Data!2:5" (whole rows) or "Data!A2:C" (down to the last row).
+This differs from sheets-structure, which takes 0-based end-exclusive indexes.
+Colours are #RGB or #RRGGBB.
+
+Each change prints the current state first (via sheets-inspect) so it can be undone;
+merge prints the cell values that merging will discard. Read results back with
+sheets-inspect.
+
+Ops:
+  style RANGE [--bold|--no-bold] [--italic|--no-italic] [--underline|--no-underline]
+              [--strikethrough|--no-strikethrough] [--font F] [--size N] [--fg H]
+              [--bg H] [--h-align LEFT|CENTER|RIGHT] [--v-align TOP|MIDDLE|BOTTOM]
+              [--wrap OVERFLOW_CELL|CLIP|WRAP] [--number-format PATTERN]
+  borders RANGE [--top] [--bottom] [--left] [--right] [--inner-h] [--inner-v] [--all]
+                [--color H] [--style S] [--width 1|2|3]
+  merge RANGE [--type MERGE_ALL|MERGE_COLUMNS|MERGE_ROWS]
+  unmerge RANGE
+  col-width RANGE PX            width of the columns RANGE covers
+  row-height RANGE PX           height of the rows RANGE covers
+  auto-resize RANGE             fit the columns RANGE covers to their content
+  freeze --tab T [--rows N] [--cols N]     0 unfreezes
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import (
+    check_hex,
+    die,
+    grid_to_a1,
+    print_inspect_before,
+    read_values,
+    resolve_range,
+    resolve_tab,
+    run_gws,
+)
+
+BOOLEANS = ("bold", "italic", "underline", "strikethrough")
+VALUE_OPTIONS = (
+    ("--font", "font"),
+    ("--size", "size"),
+    ("--fg-color", "fg"),
+    ("--bg-color", "bg"),
+    ("--h-align", "h_align"),
+    ("--v-align", "v_align"),
+    ("--wrap", "wrap"),
+    ("--number-format", "number_format"),
+)
+BORDER_SIDES = ("top", "bottom", "left", "right", "inner_h", "inner_v", "all")
+
+
+def checked_colour(value):
+    try:
+        return check_hex(value)
+    except ValueError as e:
+        die(str(e), 2)
+
+
+def style_options(args):
+    """The format-extended options for the flags that were given, as (cli_args, summary)."""
+    cli, summary = [], []
+    for name in BOOLEANS:
+        value = getattr(args, name)
+        if value is not None:
+            cli.append(f"--{name}" if value else f"--no-{name}")
+            summary.append(name if value else f"not {name}")
+    for flag, attr in VALUE_OPTIONS:
+        value = getattr(args, attr)
+        if value is not None:
+            if attr in ("fg", "bg"):
+                value = checked_colour(value)
+            cli += [flag, str(value)]
+            summary.append(f"{attr.replace('_', '-')} {value}")
+    return cli, summary
+
+
+def lost_by_merge(values, merge_type):
+    """(row, col) offsets and text of the non-empty cells a merge of `values` discards."""
+    lost = []
+    for r, row in enumerate(values):
+        for c, text in enumerate(row):
+            kept = {"MERGE_ALL": (0, 0), "MERGE_COLUMNS": (0, c), "MERGE_ROWS": (r, 0)}[merge_type]
+            if text != "" and (r, c) != kept:
+                lost.append((r, c, text))
+    return lost
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    sub = p.add_subparsers(dest="op", required=True, metavar="OP")
+
+    def op(name, range_arg=True):
+        sp = sub.add_parser(name, help=f"{name} (see top-level --help)")
+        if range_arg:
+            sp.add_argument("range", help='A1 range with a tab, e.g. "Data!A1:D1"')
+        return sp
+
+    sp = op("style")
+    for name in BOOLEANS:
+        sp.add_argument(f"--{name}", action=argparse.BooleanOptionalAction, default=None)
+    sp.add_argument("--font")
+    sp.add_argument("--size", type=int)
+    sp.add_argument("--fg", help="text colour")
+    sp.add_argument("--bg", help="background colour")
+    sp.add_argument("--h-align", choices=["LEFT", "CENTER", "RIGHT"])
+    sp.add_argument("--v-align", choices=["TOP", "MIDDLE", "BOTTOM"])
+    sp.add_argument("--wrap", choices=["OVERFLOW_CELL", "CLIP", "WRAP"])
+    sp.add_argument("--number-format", help='pattern, e.g. "0.00" or "yyyy-mm-dd"')
+
+    sp = op("borders")
+    for side in BORDER_SIDES:
+        sp.add_argument(f"--{side.replace('_', '-')}", action="store_true")
+    sp.add_argument("--color")
+    sp.add_argument("--style", choices=["SOLID", "DOTTED", "DASHED", "SOLID_MEDIUM", "SOLID_THICK", "DOUBLE"])
+    sp.add_argument("--width", type=int, choices=[1, 2, 3])
+
+    sp = op("merge")
+    sp.add_argument("--type", choices=["MERGE_ALL", "MERGE_COLUMNS", "MERGE_ROWS"])
+    op("unmerge")
+    sp = op("col-width")
+    sp.add_argument("px", type=int)
+    sp = op("row-height")
+    sp.add_argument("px", type=int)
+    op("auto-resize")
+    sp = op("freeze", range_arg=False)
+    sp.add_argument("--tab", required=True, help="tab title")
+    sp.add_argument("--rows", type=int, help="rows to freeze (0 unfreezes)")
+    sp.add_argument("--cols", type=int, help="columns to freeze (0 unfreezes)")
+    args = p.parse_args()
+    sid = args.spreadsheet_id
+
+    if args.op == "freeze":
+        if args.rows is None and args.cols is None:
+            die("Give --rows and/or --cols (0 unfreezes)", 2)
+        if any(n is not None and n < 0 for n in (args.rows, args.cols)):
+            die("--rows/--cols must be >= 0", 2)
+        tab = resolve_tab(sid, args.tab)
+        tid = str(tab["sheet_id"])
+        print_inspect_before(sid, ["--tab", args.tab])
+        if args.rows is not None:
+            run_gws(["sheets", "freeze-rows", sid, tid, str(args.rows)])
+            print(f"Froze {args.rows} row(s) in {args.tab!r}")
+        if args.cols is not None:
+            run_gws(["sheets", "freeze-columns", sid, tid, str(args.cols)])
+            print(f"Froze {args.cols} column(s) in {args.tab!r}")
+        return
+
+    tab, r0, r1, c0, c1 = resolve_range(sid, args.range)
+    tid = str(tab["sheet_id"])
+    bounds = [str(n) for n in (r0, r1, c0, c1)]
+    shown = grid_to_a1(tab["title"], r0, r1, c0, c1)
+
+    if args.op == "style":
+        cli, summary = style_options(args)
+        if not cli:
+            die("Give at least one style option (--bold, --bg, --size, ...)", 2)
+        print_inspect_before(sid, ["--format", args.range])
+        run_gws(["sheets", "format-extended", sid, tid, *bounds, *cli])
+        print(f"Styled {shown}: {', '.join(summary)}")
+    elif args.op == "borders":
+        sides = [s for s in BORDER_SIDES if getattr(args, s)]
+        if not sides:
+            die("Give at least one of --top --bottom --left --right --inner-h --inner-v --all", 2)
+        cli = [f"--{s.replace('_', '-')}" for s in sides]
+        if args.color:
+            cli += ["--color", checked_colour(args.color)]
+        if args.style:
+            cli += ["--style", args.style]
+        if args.width:
+            cli += ["--width", str(args.width)]
+        print_inspect_before(sid, ["--format", args.range])
+        run_gws(["sheets", "set-borders", sid, tid, *bounds, *cli])
+        print(f"Set borders on {shown}: {', '.join(cli)}")
+    elif args.op == "merge":
+        merge_type = args.type or "MERGE_ALL"
+        _, values = read_values(sid, args.range)
+        lost = lost_by_merge(values, merge_type)
+        if lost:
+            print(f"Before (values that {merge_type} will discard):")
+            for r, c, text in lost:
+                print(f"  {grid_to_a1(tab['title'], r0 + r, r0 + r + 1, c0 + c, c0 + c + 1)}: {text!r}")
+        else:
+            print("Before: merging discards no values")
+        extra = ["--type", args.type] if args.type else []
+        run_gws(["sheets", "merge-cells", sid, tid, *bounds, *extra])
+        print(f"Merged {shown} ({merge_type})")
+    elif args.op == "unmerge":
+        print_inspect_before(sid, ["--tab", tab["title"]])
+        run_gws(["sheets", "unmerge-cells", sid, tid, *bounds])
+        print(f"Unmerged {shown}")
+    elif args.op == "col-width":
+        if args.px < 1:
+            die("PX must be >= 1", 2)
+        print_inspect_before(sid, ["--sizes", "--tab", tab["title"]])
+        run_gws(["sheets", "set-column-width", sid, tid, bounds[2], bounds[3], str(args.px)])
+        print(f"Set width of columns {bounds[2]}-{bounds[3]} (0-based, end exclusive) of {tab['title']!r} to {args.px}px")
+    elif args.op == "row-height":
+        if args.px < 1:
+            die("PX must be >= 1", 2)
+        print_inspect_before(sid, ["--sizes", "--tab", tab["title"]])
+        run_gws(["sheets", "set-row-height", sid, tid, bounds[0], bounds[1], str(args.px)])
+        print(f"Set height of rows {bounds[0]}-{bounds[1]} (0-based, end exclusive) of {tab['title']!r} to {args.px}px")
+    elif args.op == "auto-resize":
+        print_inspect_before(sid, ["--sizes", "--tab", tab["title"]])
+        run_gws(["sheets", "auto-resize-columns", sid, tid, bounds[2], bounds[3]])
+        print(f"Auto-resized columns {bounds[2]}-{bounds[3]} (0-based, end exclusive) of {tab['title']!r}")
+
+
+if __name__ == "__main__":
+    main()

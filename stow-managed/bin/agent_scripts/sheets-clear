@@ -1,0 +1,47 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Clear the VALUES in a spreadsheet range, printing what was there first.
+
+Only values are removed: formatting, validation, merges and filters stay. The range
+is read first (formulas shown as formulas) and printed as `Before:`. RANGE needs a
+tab, e.g. "Data!A2:D6" or "'My Tab'!A:B".
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import cell_text, die, read_values, run_gws, split_a1
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    p.add_argument("range", help="A1 notation with a tab, e.g. Sheet1!A1:B2")
+    args = p.parse_args()
+
+    try:
+        split_a1(args.range)
+    except ValueError as e:
+        die(str(e), 2)
+
+    _, before = read_values(args.spreadsheet_id, args.range, formulas=True)
+    if any(any(c != "" for c in row) for row in before):
+        print("Before:")
+        for row in before:
+            print("\t".join(cell_text(c) for c in row))
+    else:
+        print("Before: (empty)")
+
+    outer = run_gws(["sheets", "clear", args.spreadsheet_id, args.range])
+    print(f"Cleared: {outer.get('cleared_range', args.range)} (values only; formatting kept)")
+
+
+if __name__ == "__main__":
+    main()

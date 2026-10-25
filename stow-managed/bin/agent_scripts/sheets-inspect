@@ -1,0 +1,347 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["gws-cli==1.3.1"]
+# ///
+"""Read back a spreadsheet's non-value state: structure, formatting, validation, sizes. Read-only.
+
+With no flag, prints a summary for every tab (or just --tab): frozen rows/columns,
+the basic filter, filter views, merges, conditional-format rules (with the 0-based
+index = priority, 0 is highest), charts and protected ranges.
+
+  --format RANGE      per non-default cell: bold/italic, font, size, fg/bg colour,
+                      alignment, wrap, number format, borders (first 200 cells)
+  --validation RANGE  cells with a data-validation rule, identical rules grouped
+  --sizes             column widths and row heights as runs of equal pixel size
+                      (needs --tab)
+
+RANGE is 1-based inclusive A1 notation with a tab, e.g. "Data!A1:D6" or "'My Tab'!A:C".
+"""
+
+import argparse
+import os
+import sys
+
+from googleapiclient.errors import HttpError
+from gws.services.sheets import SheetsService
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import (
+    a1_to_grid,
+    col_letters,
+    describe_chart,
+    die,
+    grid_to_a1,
+    rgb_to_hex,
+)
+
+PROPS_FIELDS = "properties(title),sheets(properties(sheetId,title,index,gridProperties))"
+SUMMARY_FIELDS = (
+    "properties(title),sheets(properties(sheetId,title,index,gridProperties),merges,basicFilter,"
+    "filterViews,conditionalFormats,charts,protectedRanges)"
+)
+FORMAT_FIELDS = (
+    "sheets(properties(sheetId,title),data(startRow,startColumn,rowData(values(userEnteredFormat("
+    "textFormat,backgroundColor,horizontalAlignment,verticalAlignment,wrapStrategy,numberFormat,borders)))))"
+)
+VALIDATION_FIELDS = (
+    "sheets(properties(sheetId,title),data(startRow,startColumn,rowData(values(dataValidation))))"
+)
+SIZES_FIELDS = "sheets(properties(title),data(columnMetadata(pixelSize),rowMetadata(pixelSize)))"
+MAX_CELLS = 200
+
+
+def quoted(title):
+    return "'" + title.replace("'", "''") + "'"
+
+
+def fetch(svc, sid, fields, ranges=None):
+    request = svc.service.spreadsheets().get(
+        spreadsheetId=sid, fields=fields, ranges=ranges or [], includeGridData=bool(ranges)
+    )
+    return svc.execute(request)
+
+
+def tabs_of(resp):
+    """Tab dicts in the shape sheet_tabs returns; the API omits sheetId 0 and zero counts."""
+    tabs = []
+    for sheet in resp.get("sheets", []):
+        props = sheet.get("properties", {})
+        grid = props.get("gridProperties", {})
+        tabs.append({
+            "title": props.get("title", ""),
+            "sheet_id": props.get("sheetId", 0),
+            "index": props.get("index", 0),
+            "row_count": grid.get("rowCount", 0),
+            "column_count": grid.get("columnCount", 0),
+        })
+    return tabs
+
+
+def range_text(grid, tabs_by_id):
+    """A1 text for an API GridRange; an absent end index means unbounded (the tab's edge)."""
+    sheet_id = grid.get("sheetId", 0)
+    tab = tabs_by_id.get(sheet_id, {})
+    return grid_to_a1(
+        tab.get("title", str(sheet_id)),
+        grid.get("startRowIndex", 0),
+        grid.get("endRowIndex", tab.get("row_count", 1)),
+        grid.get("startColumnIndex", 0),
+        grid.get("endColumnIndex", tab.get("column_count", 1)),
+    )
+
+
+def cell_rects(cells):
+    """Cluster (row, col) cells into rectangles (r0, r1, c0, c1), end-exclusive.
+
+    Cells become row runs per column; adjacent columns with identical runs merge.
+    """
+    runs_by_col = {}
+    for row, col in sorted(cells, key=lambda rc: (rc[1], rc[0])):
+        runs = runs_by_col.setdefault(col, [])
+        if runs and runs[-1][1] == row:
+            runs[-1][1] = row + 1
+        else:
+            runs.append([row, row + 1])
+    rects, current = [], None
+    for col in sorted(runs_by_col):
+        runs = tuple(map(tuple, runs_by_col[col]))
+        if current and current[1] == col and current[2] == runs:
+            current[1] = col + 1
+        else:
+            if current:
+                rects.append(current)
+            current = [col, col + 1, runs]
+    if current:
+        rects.append(current)
+    return sorted(
+        ((r0, r1, c0, c1) for c0, c1, runs in rects for r0, r1 in runs),
+        key=lambda rect: (rect[0], rect[2]),
+    )
+
+
+def grid_cells(sheet):
+    """Yield (row, col, cell) with absolute 0-based indices from a sheet's grid data."""
+    for block in sheet.get("data", []):
+        row0, col0 = block.get("startRow", 0), block.get("startColumn", 0)
+        for dr, row in enumerate(block.get("rowData", [])):
+            for dc, cell in enumerate(row.get("values", [])):
+                yield row0 + dr, col0 + dc, cell
+
+
+def describe_format(fmt):
+    parts = []
+    text = fmt.get("textFormat", {})
+    parts += [name for name in ("bold", "italic", "underline", "strikethrough") if text.get(name)]
+    if "fontFamily" in text:
+        parts.append(f"font {text['fontFamily']}")
+    if "fontSize" in text:
+        parts.append(f"size {text['fontSize']}")
+    if "foregroundColor" in text:
+        parts.append(f"fg {rgb_to_hex(text['foregroundColor'])}")
+    if "backgroundColor" in fmt:
+        parts.append(f"bg {rgb_to_hex(fmt['backgroundColor'])}")
+    for key, label in (("horizontalAlignment", "h-align"), ("verticalAlignment", "v-align"), ("wrapStrategy", "wrap")):
+        if key in fmt:
+            parts.append(f"{label} {fmt[key]}")
+    number = fmt.get("numberFormat")
+    if number:
+        parts.append(f"number-format {number.get('type', '?')} '{number.get('pattern', '')}'")
+    sides = []
+    for side in ("top", "bottom", "left", "right"):
+        border = fmt.get("borders", {}).get(side)
+        if border and border.get("style", "NONE") != "NONE":
+            colour = f" {rgb_to_hex(border['color'])}" if "color" in border else ""
+            sides.append(f"{side} {border['style']}{colour}")
+    if sides:
+        parts.append("borders " + ", ".join(sides))
+    return ", ".join(parts)
+
+
+def describe_rule(validation):
+    condition = validation.get("condition", {})
+    values = [str(v.get("userEnteredValue", v.get("relativeDate", "?"))) for v in condition.get("values", [])]
+    kind = condition.get("type", "?")
+    text = f"{kind} [{', '.join(values)}]"
+    text += " strict" if validation.get("strict") else " allow-invalid"
+    if kind in ("ONE_OF_LIST", "ONE_OF_RANGE") and not validation.get("showCustomUi"):
+        text += " no-dropdown"
+    return text
+
+
+def print_grouped(sheet, title, describe, empty_message, limit=None):
+    """Group cells with identical descriptions into rectangles and print `range: description`."""
+    described = {}
+    for row, col, cell in grid_cells(sheet):
+        text = describe(cell)
+        if text:
+            described[(row, col)] = text
+    if not described:
+        print(empty_message)
+        return
+    keep = sorted(described)[:limit]
+    groups = {}
+    for key in keep:
+        groups.setdefault(described[key], []).append(key)
+    lines = []
+    for text, cells in groups.items():
+        for r0, r1, c0, c1 in cell_rects(cells):
+            lines.append(((r0, c0), f"{grid_to_a1(title, r0, r1, c0, c1)}: {text}"))
+    for _, line in sorted(lines):
+        print(line)
+    if len(keep) < len(described):
+        print(f"... truncated: showing the first {len(keep)} of {len(described)} cells")
+
+
+def run_cell_report(svc, sid, a1, tabs, fields, describe, header, empty_message, limit=None):
+    try:
+        tab, r0, r1, c0, c1 = a1_to_grid(a1, tabs)
+    except ValueError as e:
+        die(str(e), 2)
+    canonical = grid_to_a1(tab["title"], r0, r1, c0, c1)
+    sheet = fetch(svc, sid, fields, [canonical])["sheets"][0]
+    print(f"{header} {canonical}:")
+    print_grouped(sheet, tab["title"], describe, empty_message, limit)
+
+
+def describe_condition_rule(rule):
+    if "booleanRule" in rule:
+        boolean = rule["booleanRule"]
+        condition = boolean.get("condition", {})
+        values = [str(v.get("userEnteredValue", "?")) for v in condition.get("values", [])]
+        fmt = boolean.get("format", {})
+        style = []
+        if "backgroundColor" in fmt:
+            style.append(f"bg {rgb_to_hex(fmt['backgroundColor'])}")
+        text = fmt.get("textFormat", {})
+        if "foregroundColor" in text:
+            style.append(f"fg {rgb_to_hex(text['foregroundColor'])}")
+        if "bold" in text:
+            style.append("bold" if text["bold"] else "not bold")
+        return f"{condition.get('type', '?')} [{', '.join(values)}] -> {', '.join(style) or '(no format)'}"
+    gradient = rule.get("gradientRule", {})
+    points = [
+        f"{name} {rgb_to_hex(gradient[key].get('color', {}))}"
+        for name, key in (("min", "minpoint"), ("mid", "midpoint"), ("max", "maxpoint"))
+        if key in gradient
+    ]
+    return "color scale: " + ", ".join(points)
+
+
+def print_summary(sheet, tabs_by_id):
+    props = sheet.get("properties", {})
+    grid = props.get("gridProperties", {})
+    sheet_id = props.get("sheetId", 0)
+    print(f"Tab {props.get('title')!r} (sheet_id {sheet_id}): {grid.get('rowCount', 0)} x {grid.get('columnCount', 0)}")
+    print(f"  Frozen: {grid.get('frozenRowCount', 0)} row(s), {grid.get('frozenColumnCount', 0)} column(s)")
+
+    basic = sheet.get("basicFilter")
+    if basic:
+        criteria = len(basic.get("criteria", {})) + len(basic.get("filterSpecs", []))
+        print(f"  Basic filter: {range_text(basic.get('range', {}), tabs_by_id)} ({criteria} criteria)")
+    else:
+        print("  Basic filter: none")
+
+    views = sheet.get("filterViews", [])
+    print(f"  Filter views: {len(views) or 'none'}")
+    for view in views:
+        print(f"    {view.get('filterViewId')} | {view.get('title')} | {range_text(view.get('range', {}), tabs_by_id)}")
+
+    merges = sheet.get("merges", [])
+    print(f"  Merges: {', '.join(range_text(m, tabs_by_id) for m in merges) or 'none'}")
+
+    rules = sheet.get("conditionalFormats", [])
+    print(f"  Conditional formats: {len(rules) or 'none'}")
+    for index, rule in enumerate(rules):
+        ranges = ", ".join(range_text(r, tabs_by_id) for r in rule.get("ranges", []))
+        print(f"    [{index}] {ranges} | {describe_condition_rule(rule)}")
+
+    charts = sheet.get("charts", [])
+    print(f"  Charts: {len(charts) or 'none'}")
+    titles = {sid: t["title"] for sid, t in tabs_by_id.items()}
+    for chart in charts:
+        print(f"    {describe_chart(chart, titles)}")
+
+    protected = sheet.get("protectedRanges", [])
+    print(f"  Protected ranges: {len(protected) or 'none'}")
+    for item in protected:
+        scope = range_text(item["range"], tabs_by_id) if "range" in item else f"named range {item.get('namedRangeId')}"
+        warn = " (warning only)" if item.get("warningOnly") else ""
+        print(f"    {item.get('protectedRangeId')} | {scope} | {item.get('description', '-')}{warn}")
+
+
+def size_runs(metadata, label):
+    sizes = [m.get("pixelSize") for m in metadata]
+    out, start = [], 0
+    for i in range(1, len(sizes) + 1):
+        if i == len(sizes) or sizes[i] != sizes[start]:
+            first, last = label(start), label(i - 1)
+            span = first if start == i - 1 else f"{first}-{last}"
+            out.append(f"{span}: {sizes[start] if sizes[start] is not None else '?'}px")
+            start = i
+    return out
+
+
+def print_sizes(svc, sid, tab):
+    sheet = fetch(svc, sid, SIZES_FIELDS, [quoted(tab["title"])])["sheets"][0]
+    block = (sheet.get("data") or [{}])[0]
+    print(f"Sizes in {tab['title']!r}:")
+    print("  Columns: " + "; ".join(size_runs(block.get("columnMetadata", []), col_letters)))
+    print("  Rows: " + "; ".join(size_runs(block.get("rowMetadata", []), lambda i: str(i + 1))))
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    p.add_argument("--tab", help="tab title (summary: only this tab; required for --sizes)")
+    p.add_argument("--format", dest="fmt", metavar="RANGE", help="show cell formatting in RANGE")
+    p.add_argument("--validation", metavar="RANGE", help="show data validation in RANGE")
+    p.add_argument("--sizes", action="store_true", help="show column widths and row heights of --tab")
+    args = p.parse_args()
+    sid = args.spreadsheet_id
+    if args.sizes and not args.tab:
+        die("--sizes needs --tab", 2)
+
+    svc = SheetsService()
+    try:
+        if args.fmt or args.validation or args.sizes:
+            tabs = tabs_of(fetch(svc, sid, PROPS_FIELDS))
+            if args.fmt:
+                run_cell_report(
+                    svc, sid, args.fmt, tabs, FORMAT_FIELDS,
+                    lambda cell: describe_format(cell.get("userEnteredFormat", {})),
+                    "Formatting in", "(no formatting set in range)", MAX_CELLS,
+                )
+            if args.validation:
+                run_cell_report(
+                    svc, sid, args.validation, tabs, VALIDATION_FIELDS,
+                    lambda cell: describe_rule(cell["dataValidation"]) if "dataValidation" in cell else "",
+                    "Data validation in", "(no data validation in range)",
+                )
+            if args.sizes:
+                tab = next((t for t in tabs if t["title"] == args.tab), None)
+                if tab is None:
+                    die(f"No tab titled {args.tab!r}. Existing tabs: {', '.join(repr(t['title']) for t in tabs)}")
+                print_sizes(svc, sid, tab)
+            return
+
+        resp = fetch(svc, sid, SUMMARY_FIELDS)
+        tabs = tabs_of(resp)
+        sheets = resp.get("sheets", [])
+        if args.tab:
+            sheets = [s for s in sheets if s.get("properties", {}).get("title") == args.tab]
+            if not sheets:
+                die(f"No tab titled {args.tab!r}. Existing tabs: {', '.join(repr(t['title']) for t in tabs)}")
+        print(f"Spreadsheet: {resp.get('properties', {}).get('title')}")
+        tabs_by_id = {t["sheet_id"]: t for t in tabs}
+        for sheet in sheets:
+            print_summary(sheet, tabs_by_id)
+    except HttpError as e:
+        print(f"Sheets API error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

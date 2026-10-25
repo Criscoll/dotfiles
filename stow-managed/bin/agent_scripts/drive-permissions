@@ -1,0 +1,40 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""List who a Drive file or folder is shared with. Read-only: nothing is changed.
+
+Prints one line per permission:
+  permission_id | type | role | email | display_name | domain | expires
+
+Empty fields print as '-'. There is no wrapper to add, change or remove permissions.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import json_field, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("file_id")
+    args = p.parse_args()
+
+    outer = run_gws(["drive", "list-permissions", args.file_id])
+    permissions = json_field(outer, "permissions") or []
+    if not permissions:
+        print("(no permissions returned)")
+        return
+    keys = ("permission_id", "type", "role", "email_address", "display_name", "domain", "expiration_time")
+    for perm in permissions:
+        print(" | ".join(str(perm.get(k) or "-") for k in keys))
+
+
+if __name__ == "__main__":
+    main()

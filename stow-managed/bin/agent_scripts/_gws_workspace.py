@@ -7,6 +7,7 @@ the gws-cli subprocess call, plus a scratch temp dir for `docs export`.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -295,6 +296,172 @@ def col_letters(index):
         index, rem = divmod(index - 1, 26)
         letters = chr(65 + rem) + letters
     return letters
+
+
+def col_index(letters):
+    """A1 column letters -> 0-based index (A -> 0, AA -> 26); inverse of col_letters."""
+    if not letters.isascii() or not letters.isalpha():
+        raise ValueError(f"bad column letters: {letters!r}")
+    index = 0
+    for ch in letters.upper():
+        index = index * 26 + ord(ch) - 64
+    return index - 1
+
+
+def split_a1(a1):
+    """Split 'Tab!A1:B2' into (tab_title, 'A1:B2'); the tab prefix is required.
+
+    A quoted title ('My Tab'!A1) may hold spaces, '!' and '' (an escaped apostrophe).
+    """
+    no_tab = ValueError("range needs a tab: Tab!A1:B2")
+    if a1.startswith("'"):
+        title, i = [], 1
+        while i < len(a1):
+            if a1[i] == "'":
+                if a1[i + 1 : i + 2] == "'":
+                    title.append("'")
+                    i += 2
+                    continue
+                break
+            title.append(a1[i])
+            i += 1
+        if i >= len(a1) or a1[i + 1 : i + 2] != "!":
+            raise no_tab
+        title, cells = "".join(title), a1[i + 2 :]
+    else:
+        title, sep, cells = a1.rpartition("!")
+        if not sep:
+            raise no_tab
+    if not title or not cells:
+        raise no_tab
+    return title, cells
+
+
+def _a1_part(part, whole):
+    """Parse one side of a range ('B2', 'B', '2', '$B$2') into (col_index|None, row_number|None)."""
+    m = re.fullmatch(r"\$?([A-Za-z]*)\$?([0-9]*)", part)
+    if not m or not (m.group(1) or m.group(2)):
+        raise ValueError(f"bad range {whole!r}")
+    col = col_index(m.group(1)) if m.group(1) else None
+    row = int(m.group(2)) if m.group(2) else None
+    if row == 0:
+        raise ValueError(f"rows start at 1 in {whole!r}")
+    return col, row
+
+
+def a1_to_grid(a1, tabs):
+    """Convert 'Tab!A1:C3' to (tab_dict, r0, r1, c0, c1): 0-based, end-exclusive.
+
+    `tabs` is the tab list from sheet_tabs. Accepts B2, A1:C3, whole columns A:C,
+    whole rows 2:5 and open-ended A2:C (down to the tab's last row).
+    """
+    title, cells = split_a1(a1)
+    tab = next((t for t in tabs if t.get("title") == title), None)
+    if tab is None:
+        names = ", ".join(repr(t.get("title")) for t in tabs)
+        raise ValueError(f"No tab titled {title!r}. Existing tabs: {names}")
+    rows, cols = int(tab.get("row_count", 0)), int(tab.get("column_count", 0))
+
+    sides = cells.split(":")
+    if len(sides) > 2:
+        raise ValueError(f"bad range {cells!r}")
+    first = _a1_part(sides[0], cells)
+    if len(sides) == 1:
+        if None in first:
+            raise ValueError(f"single cell needs a column and a row: {cells!r}")
+        (c0, r0), (c1, r1) = first, first
+    else:
+        last = _a1_part(sides[1], cells)
+        has = [(c is not None, r is not None) for c, r in (first, last)]
+        if has == [(True, True), (True, True)]:
+            (c0, r0), (c1, r1) = first, last
+        elif has == [(True, False), (True, False)]:
+            (c0, _), (c1, _) = first, last
+            r0, r1 = 1, rows
+        elif has == [(False, True), (False, True)]:
+            (_, r0), (_, r1) = first, last
+            c0, c1 = 0, cols - 1
+        elif has == [(True, True), (True, False)]:
+            (c0, r0), (c1, _) = first, last
+            r1 = rows
+        else:
+            raise ValueError(f"unsupported range {cells!r}: use A1:C3, A:C, 2:5 or A2:C")
+    r0 -= 1
+    if r1 <= r0 or c1 < c0:
+        raise ValueError(f"empty or reversed range {cells!r}")
+    return tab, r0, r1, c0, c1 + 1
+
+
+def resolve_range(sheet_id, a1):
+    """Fetch the tabs and convert `a1` to (tab_dict, r0, r1, c0, c1); exit on a bad range."""
+    _, tabs = sheet_tabs(sheet_id)
+    try:
+        return a1_to_grid(a1, tabs)
+    except ValueError as e:
+        die(str(e), 2)
+
+
+def check_hex(color):
+    """Validate '#RGB'/'#RRGGBB' (the '#' is optional); return it with the '#'."""
+    m = re.fullmatch(r"#?([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})", color)
+    if not m:
+        raise ValueError(f"bad colour {color!r}: use #RGB or #RRGGBB")
+    return "#" + m.group(1)
+
+
+def rgb_to_hex(color):
+    """API colour (floats 0..1, zero channels omitted) -> '#RRGGBB'."""
+    channels = (round(min(max(color.get(k, 0), 0), 1) * 255) for k in ("red", "green", "blue"))
+    return "#" + "".join(f"{c:02X}" for c in channels)
+
+
+def grid_to_a1(tab_title, r0, r1, c0, c1):
+    """Display form of a 0-based end-exclusive grid range: 'Tab'!A1:C3 (tab quoted if needed)."""
+    tab = tab_title if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tab_title) else "'" + tab_title.replace("'", "''") + "'"
+    start = f"{col_letters(c0)}{r0 + 1}"
+    if (r1 - r0, c1 - c0) == (1, 1):
+        return f"{tab}!{start}"
+    return f"{tab}!{start}:{col_letters(c1 - 1)}{r1}"
+
+
+def describe_chart(chart, tab_titles_by_id):
+    """One line for an embedded chart: id | tab | type | title | anchor | WxH | N series."""
+    spec = chart.get("spec", {})
+    position = chart.get("position", {})
+    overlay = position.get("overlayPosition")
+    if overlay:
+        anchor_cell = overlay.get("anchorCell", {})
+        tab = tab_titles_by_id.get(anchor_cell.get("sheetId", 0), "?")
+        anchor = f"{col_letters(anchor_cell.get('columnIndex', 0))}{anchor_cell.get('rowIndex', 0) + 1}"
+        size = f"{overlay.get('widthPixels', '?')}x{overlay.get('heightPixels', '?')}"
+    else:
+        tab = tab_titles_by_id.get(position.get("sheetId", 0), "?")
+        anchor, size = "-", "-"
+    if "basicChart" in spec:
+        kind, count = spec["basicChart"].get("chartType", "?"), len(spec["basicChart"].get("series", []))
+    elif "pieChart" in spec:
+        kind, count = "PIE", 1 if spec["pieChart"].get("series") else 0
+    else:
+        kind = next((k[:-5].upper() for k in spec if k.endswith("Chart")), "?")
+        count = "?"
+    title = spec.get("title") or "(untitled)"
+    return f"{chart.get('chartId')} | {tab} | {kind} | {title} | {anchor} | {size} | {count} series"
+
+
+def print_inspect_before(spreadsheet_id, inspect_args):
+    """Print the sibling sheets-inspect output under 'Before:'; exit if it fails.
+
+    Destructive wrappers call this first so nothing is changed when the current
+    state cannot be shown.
+    """
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sheets-inspect")
+    result = subprocess.run(
+        [script, spreadsheet_id, *inspect_args], check=False, capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        die(f"sheets-inspect failed, nothing changed: {result.stderr.strip()}", result.returncode)
+    print("Before:")
+    print(result.stdout.rstrip())
 
 
 def range_preview(content, start, end):

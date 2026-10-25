@@ -5,14 +5,19 @@ description: >-
   (create/rename labels), list existing Gmail filters (creating filters is
   blocked by a gws-cli OAuth scope gap), backfill label actions onto
   existing messages matching a query, download and view email attachments
-  (PDFs, etc.), manage Calendar (list/get/create/update), and search/download
-  Google Drive files (list/search/get/download/export), and read, create and
-  edit native Google Docs and Sheets content (read text/cells, append, insert,
-  replace sections, delete ranges, headings, bullets, text styles, Doc tables,
-  write/append rows, find-replace, add/rename/delete tabs, sort) via gws-cli wrapper scripts in `~/bin/agent_scripts/`.
+  (PDFs, etc.), manage Calendar (list/get/create/update), search/download
+  Google Drive files (list/search/get/download/export), organise them (list
+  permissions, trash/restore, move, rename), and read, create and edit native
+  Google Docs and Sheets content (read text/cells, append, insert, replace
+  sections, delete ranges, headings, bullets, text styles, Doc tables,
+  write/append/clear rows, find-replace, add/rename/delete tabs, sort, cell
+  formatting, borders, merges, column widths, frozen rows, dropdown/data
+  validation, filters, conditional formatting, charts, and reading all that back)
+  via gws-cli wrapper scripts in `~/bin/agent_scripts/`.
   Enforced at the harness layer by a deny-by-default allow-list hook —
-  send, delete, and destructive Calendar/Drive operations are structurally blocked
-  and cannot be invoked regardless of how the command is phrased.
+  send, permanent delete, share/unshare and other destructive Gmail/Calendar/Drive
+  operations are structurally blocked and cannot be invoked regardless of how the
+  command is phrased.
   Trigger phrases: "check email", "search gmail", "list emails", "read email",
   "archive email", "label email", "mark as read", "create label", "rename label",
   "create filter", "gmail filters", "backfill", "organize inbox",
@@ -21,13 +26,17 @@ description: >-
   "has attachment", "search drive", "find file", "download file",
   "google drive", "drive file", "google doc", "read doc", "edit doc",
   "update doc", "spreadsheet", "google sheet", "read sheet", "edit sheet",
-  "append row", "docs-", "sheets-".
+  "append row", "trash file", "restore file", "move file", "rename file",
+  "who has access", "drive permissions", "format cells", "freeze row",
+  "dropdown", "data validation", "conditional formatting", "sheet chart",
+  "filter view", "clear range", "docs-", "sheets-".
 disable-model-invocation: false
 ---
 
 You are running the google-workspace skill. Drive `gws-cli` for Gmail, Calendar,
-Drive, Docs, and Sheets work. **Send, delete, and destructive calendar/Drive operations are structurally
-unavailable — the harness hook blocks them even if attempted.**
+Drive, Docs, and Sheets work. **Send, permanent delete, share/unshare, copy, upload and other destructive
+operations are structurally unavailable — the harness hook blocks them even if attempted.** Trashing, restoring,
+moving and renaming Drive files is available (reversible; see drive.md).
 
 Always pin the exact version: `uvx gws-cli@1.3.1 <service> <subcommand> [flags]`
 
@@ -43,8 +52,8 @@ If this errors with an auth/token error, point the user to the per-machine setup
 section below rather than continuing.
 
 For Gmail list, search, and read operations, Calendar list, get, create, and update
-operations, Drive list, search, get, download, and export operations, and Docs/Sheets
-read, create, and edit operations, always use the wrapper scripts in `~/bin/agent_scripts/` rather than raw `gws-cli`. The wrappers
+operations, Drive list, search, get, download, export, permissions, trash, restore, move and rename operations,
+and Docs/Sheets read, create, and edit operations (Sheets formatting, validation, filters, conditional formats and charts included), always use the wrapper scripts in `~/bin/agent_scripts/` rather than raw `gws-cli`. The wrappers
 unwrap the outer JSON envelope, truncate long bodies, and format output as compact
 one-line-per-item listings, cutting token usage by an order of magnitude.
 
@@ -92,22 +101,25 @@ even if you attempt them. Do not suggest or attempt these:
 Exception: `calendar-delete` is now wrapped and allowed for single events. Recurring
 series masters are refused by the wrapper unless `--force` is passed.
 
-**Drive:** `upload`, `delete`, `share`, `unshare`, `move`, `copy`, `rename`, `update`,
-`create-folder`, `trash`, `untrash`, `empty-trash`, `add-comment`, `update-comment`,
-`delete-comment`, `list-comments`, `get-comment`, `add-permission`, `update-permission`,
-`remove-permission`, `list-permissions`, `list-revisions`, `get-revision`,
-`delete-revision`, `transfer-ownership`, `list-changes`, `watch-changes`
+**Drive:** `upload`, permanent `delete` (the wrapper `drive-trash` only trashes),
+`share`, `unshare`, `copy`, `update` (re-uploads content), `create-folder`, `empty-trash`,
+`add-comment`, `update-comment`, `delete-comment`, `list-comments`, `get-comment`,
+`add-permission`, `update-permission`, `remove-permission`, `list-revisions`,
+`get-revision`, `delete-revision`, `transfer-ownership`, `list-changes`, `watch-changes`.
+Permissions can be *listed* (`drive-permissions`) but never changed; sharing is the user's job.
 
 **Docs:** no wrapper for tab create/delete/rename/reorder, table row/column edits,
 cell merge/styling, images, headers/footers, footnotes, named ranges, suggestions
 (accept/reject), page or document style, or nested list levels (headings, bullets,
 text style and tables do have wrappers — see docs.md). Docs/Sheets creation is
-available, but there is no delete/trash wrapper for either — the user deletes
-files manually.
+available, and `drive-trash` / `drive-restore` can trash and restore either; permanent
+deletion and emptying the trash are the user's job.
 
-**Sheets:** no wrapper for `clear`, formatting, charts, pivots, protected or named
-ranges, conditional formats, validation, merges, filters, banding, copy-paste,
-auto-fill, move, duplicate-sheet, text-to-columns, or trim-whitespace.
+**Sheets:** no wrapper for pivots, protected or named ranges, banding, copy-paste,
+auto-fill, move rows/columns, duplicate-sheet, text-to-columns, trim-whitespace,
+`batch-get`, raw `batchUpdate`, or updating a chart in place (delete and re-add).
+Value clear, cell formatting, borders, merges, sizes, freeze, validation, filters,
+conditional formats and charts do have wrappers — see sheets.md.
 
 This list is not hook-structurally-enforced the way `.enc` file access is — it's
 enforced by which wrapper scripts exist. Do not attempt these via raw `gws-cli` even

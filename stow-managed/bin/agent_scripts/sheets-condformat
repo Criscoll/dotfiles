@@ -1,0 +1,121 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Add conditional-format rules (highlight rules, colour scales) or clear a tab's rules.
+
+RANGE is 1-based inclusive A1 notation WITH a tab, e.g. "Data!C2:C6". Colours are
+#RGB or #RRGGBB. A new rule goes in at index 0 = HIGHEST priority, pushing existing
+rules down. Read the rules back (with their 0-based index) via
+`sheets-inspect <id> --tab T`.
+
+Ops:
+  add RANGE --condition T [--value V ...] [--bg H] [--fg H] [--bold|--no-bold]
+      T: NUMBER_GREATER NUMBER_GREATER_THAN_EQ NUMBER_LESS NUMBER_LESS_THAN_EQ
+         NUMBER_EQ NUMBER_NOT_EQ NUMBER_BETWEEN NUMBER_NOT_BETWEEN TEXT_CONTAINS
+         TEXT_NOT_CONTAINS TEXT_STARTS_WITH TEXT_ENDS_WITH TEXT_EQ BLANK NOT_BLANK
+         CUSTOM_FORMULA
+      At least one of --bg/--fg/--bold is required. NUMBER_BETWEEN takes two --value.
+  scale RANGE --min-color H --max-color H [--mid-color H]
+  clear --tab T       removes ALL rules on the tab (there is no per-rule delete);
+                      the rules are printed first
+
+Limit: gws-cli splits its value list on commas, so a --value containing a comma
+(including a CUSTOM_FORMULA like =AND(A1>1,B1<2)) is rejected.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import (
+    check_hex,
+    die,
+    grid_to_a1,
+    print_inspect_before,
+    resolve_range,
+    resolve_tab,
+    run_gws,
+)
+
+CONDITIONS = [
+    "NUMBER_GREATER", "NUMBER_GREATER_THAN_EQ", "NUMBER_LESS", "NUMBER_LESS_THAN_EQ",
+    "NUMBER_EQ", "NUMBER_NOT_EQ", "NUMBER_BETWEEN", "NUMBER_NOT_BETWEEN",
+    "TEXT_CONTAINS", "TEXT_NOT_CONTAINS", "TEXT_STARTS_WITH", "TEXT_ENDS_WITH", "TEXT_EQ",
+    "BLANK", "NOT_BLANK", "CUSTOM_FORMULA",
+]  # fmt: skip
+
+
+def checked_colour(value):
+    try:
+        return check_hex(value)
+    except ValueError as e:
+        die(str(e), 2)
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    sub = p.add_subparsers(dest="op", required=True, metavar="OP")
+    sp = sub.add_parser("add", help="add a highlight rule")
+    sp.add_argument("range", help='A1 range with a tab, e.g. "Data!C2:C6"')
+    sp.add_argument("--condition", required=True, choices=CONDITIONS)
+    sp.add_argument("--value", action="append", default=[], help="a condition value (repeatable)")
+    sp.add_argument("--bg", help="background colour")
+    sp.add_argument("--fg", help="text colour")
+    sp.add_argument("--bold", action=argparse.BooleanOptionalAction, default=None)
+    sp = sub.add_parser("scale", help="add a colour scale")
+    sp.add_argument("range", help='A1 range with a tab, e.g. "Data!C2:C6"')
+    sp.add_argument("--min-color", required=True)
+    sp.add_argument("--max-color", required=True)
+    sp.add_argument("--mid-color")
+    sp = sub.add_parser("clear", help="remove ALL rules on a tab")
+    sp.add_argument("--tab", required=True, help="tab title")
+    args = p.parse_args()
+    sid = args.spreadsheet_id
+
+    if args.op == "clear":
+        tab = resolve_tab(sid, args.tab)
+        print(f"Warning: this removes ALL conditional-format rules on {args.tab!r}")
+        print_inspect_before(sid, ["--tab", args.tab])
+        run_gws(["sheets", "clear-conditional-formats", sid, str(tab["sheet_id"])])
+        print(f"Cleared all conditional formats on {args.tab!r}")
+        return
+
+    tab, r0, r1, c0, c1 = resolve_range(sid, args.range)
+    base = ["sheets", "", sid, str(tab["sheet_id"]), *map(str, (r0, r1, c0, c1))]
+    shown = grid_to_a1(tab["title"], r0, r1, c0, c1)
+
+    if args.op == "add":
+        if args.bg is None and args.fg is None and args.bold is None:
+            die("Give at least one format option: --bg, --fg or --bold/--no-bold", 2)
+        for text in args.value:
+            if "," in text:
+                die(f"{text!r} contains a comma, which gws-cli cannot pass through; pick a value without one", 2)
+        extra = ["--condition", args.condition]
+        if args.value:
+            extra += ["--values", ",".join(args.value)]
+        if args.bg is not None:
+            extra += ["--bg-color", checked_colour(args.bg)]
+        if args.fg is not None:
+            extra += ["--fg-color", checked_colour(args.fg)]
+        if args.bold is not None:
+            extra.append("--bold" if args.bold else "--no-bold")
+        base[1] = "add-conditional-format"
+        run_gws([*base, *extra])
+        print(f"Added rule on {shown}: {' '.join(extra)} (index 0 = highest priority)")
+    else:
+        extra = ["--min-color", checked_colour(args.min_color), "--max-color", checked_colour(args.max_color)]
+        if args.mid_color is not None:
+            extra += ["--mid-color", checked_colour(args.mid_color)]
+        base[1] = "add-color-scale"
+        run_gws([*base, *extra])
+        print(f"Added colour scale on {shown}: {' '.join(extra)} (index 0 = highest priority)")
+
+
+if __name__ == "__main__":
+    main()

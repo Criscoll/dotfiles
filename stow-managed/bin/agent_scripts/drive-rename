@@ -1,0 +1,49 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["gws-cli==1.3.1"]
+# ///
+"""Rename a Drive file or folder; its content is not touched.
+
+For a native Google Doc/Sheet the Drive name is the document's title. Prints the
+old and new name, so the rename can be undone by running it again with the old name.
+"""
+
+import argparse
+import sys
+
+from googleapiclient.errors import HttpError
+from gws.services.drive import DriveService
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("file_id")
+    p.add_argument("new_name")
+    args = p.parse_args()
+
+    new_name = args.new_name.strip()
+    if not new_name:
+        print("New name must not be empty.", file=sys.stderr)
+        sys.exit(2)
+
+    svc = DriveService()
+    try:
+        old = svc.execute(
+            svc.service.files().get(fileId=args.file_id, fields="id,name,mimeType", supportsAllDrives=True)
+        )
+        svc.execute(
+            svc.service.files().update(
+                fileId=args.file_id, body={"name": new_name}, fields="id,name", supportsAllDrives=True
+            )
+        )
+    except HttpError as e:
+        print(f"Drive API error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Renamed: '{old.get('name')}' -> '{new_name}'")
+
+
+if __name__ == "__main__":
+    main()

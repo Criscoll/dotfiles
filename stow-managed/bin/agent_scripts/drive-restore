@@ -1,0 +1,38 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Restore a Drive file from the trash (undo for drive-trash).
+
+Exits non-zero if the file is not currently trashed.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, json_field, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("file_id")
+    args = p.parse_args()
+
+    meta = json_field(run_gws(["drive", "get", args.file_id]), "file")
+    if not meta:
+        die("No file metadata returned.")
+    name = meta.get("name", "?")
+    if not meta.get("trashed"):
+        die(f"{name!r} is not in the trash; nothing to restore.")
+
+    run_gws(["drive", "restore", args.file_id])
+    print(f"Restored: {name}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,80 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Set or clear data validation (dropdowns, number/date/text rules) on a range.
+
+RANGE is 1-based inclusive A1 notation WITH a tab, e.g. "Data!B2:B6" or "'My Tab'!C:C".
+The existing validation on RANGE is printed first (via sheets-inspect). Read the result
+back with `sheets-inspect <id> --validation RANGE`.
+
+Ops:
+  set RANGE --type T [--value V ...] [--formula F] [--allow-invalid] [--no-dropdown]
+  clear RANGE
+
+--type is a gws-cli validation type: ONE_OF_LIST, ONE_OF_RANGE, NUMBER_GREATER,
+NUMBER_BETWEEN, TEXT_CONTAINS, DATE_AFTER, CUSTOM_FORMULA, BOOLEAN, ... (an unknown
+type makes the CLI list them all). Give each dropdown option as its own --value.
+Rejected input is refused by default; --allow-invalid only warns. --no-dropdown hides
+the arrow of a list rule.
+
+Limit: gws-cli splits its value list on commas, so a --value or --formula that
+contains a comma (an option like "a,b", a formula like =AND(A1>1,B1<2)) is rejected.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, grid_to_a1, print_inspect_before, resolve_range, run_gws
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    sub = p.add_subparsers(dest="op", required=True, metavar="OP")
+    sp = sub.add_parser("set", help="set a validation rule")
+    sp.add_argument("range", help='A1 range with a tab, e.g. "Data!B2:B6"')
+    sp.add_argument("--type", required=True, help="validation type, e.g. ONE_OF_LIST")
+    sp.add_argument("--value", action="append", default=[], help="a rule value (repeatable)")
+    sp.add_argument("--formula", help="formula for CUSTOM_FORMULA")
+    sp.add_argument("--allow-invalid", action="store_true", help="warn instead of rejecting bad input")
+    sp.add_argument("--no-dropdown", action="store_true", help="hide the dropdown arrow")
+    sp = sub.add_parser("clear", help="remove validation from a range")
+    sp.add_argument("range", help='A1 range with a tab, e.g. "Data!B2:B6"')
+    args = p.parse_args()
+    sid = args.spreadsheet_id
+
+    if args.op == "set":
+        for text in [*args.value, *([args.formula] if args.formula else [])]:
+            if "," in text:
+                die(f"{text!r} contains a comma, which gws-cli cannot pass through; pick a value without one", 2)
+        extra = ["--type", args.type.upper()]
+        if args.value:
+            extra += ["--values", ",".join(args.value)]
+        if args.formula:
+            extra += ["--formula", args.formula]
+        if args.allow_invalid:
+            extra.append("--allow-invalid")
+        if args.no_dropdown:
+            extra.append("--no-dropdown")
+
+    tab, r0, r1, c0, c1 = resolve_range(sid, args.range)
+    bounds = [str(n) for n in (r0, r1, c0, c1)]
+    shown = grid_to_a1(tab["title"], r0, r1, c0, c1)
+    print_inspect_before(sid, ["--validation", args.range])
+
+    if args.op == "set":
+        run_gws(["sheets", "set-validation", sid, str(tab["sheet_id"]), *bounds, *extra])
+        print(f"Set validation on {shown}: {' '.join(extra)}")
+    else:
+        run_gws(["sheets", "clear-validation", sid, str(tab["sheet_id"]), *bounds])
+        print(f"Cleared validation on {shown}")
+
+
+if __name__ == "__main__":
+    main()

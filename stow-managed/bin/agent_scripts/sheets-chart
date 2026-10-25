@@ -1,0 +1,203 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["gws-cli==1.3.1"]
+# ///
+"""Add, list or delete embedded charts in a spreadsheet.
+
+Note the argument order: the op comes FIRST here, then the spreadsheet id.
+
+  add <id> --tab T --type BAR|COLUMN|LINE|AREA|SCATTER|PIE
+      --domain RANGE --series RANGE [--series RANGE ...]
+      [--headers] [--title S] [--anchor CELL] [--width PX] [--height PX]
+  list <id> [--tab T]
+  delete <id> CHART_ID
+
+Ranges are 1-based inclusive A1 notation WITH a tab, each a single column, e.g.
+--domain "Data!A1:A6" --series "Data!C1:C6" --series "Data!D1:D6" (series may be
+non-adjacent columns). Every range must cover the same rows. With --headers each
+range includes its header cell as its first row (used as the series name; a PIE
+chart has no header notion, so the first row is dropped from it). PIE takes exactly
+one --series. --tab is the tab the chart is placed on; --anchor is the cell of its
+top-left corner (default: row 1, one column right of the widest source range).
+
+There is no chart update: delete the chart and add it again. `delete` shows the
+chart first and refuses an id that is not a chart in the spreadsheet.
+"""
+
+import argparse
+import os
+import sys
+
+from googleapiclient.errors import HttpError
+from gws.services.sheets import SheetsService
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import a1_to_grid, describe_chart, die, sheet_tabs
+
+TYPES = ["BAR", "COLUMN", "LINE", "AREA", "SCATTER", "PIE"]
+
+
+def quoted(title):
+    return "'" + title.replace("'", "''") + "'"
+
+
+def find_tab(tabs, title):
+    for tab in tabs:
+        if tab["title"] == title:
+            return tab
+    die(f"No tab titled {title!r}. Existing tabs: {', '.join(repr(t['title']) for t in tabs)}")
+
+
+def source(a1, tabs, flag):
+    """Resolve a single-column A1 range to (grid_range_dict, (r0, r1, c0, c1))."""
+    try:
+        tab, r0, r1, c0, c1 = a1_to_grid(a1, tabs)
+    except ValueError as e:
+        die(f"{flag}: {e}", 2)
+    if c1 - c0 != 1:
+        die(f"{flag} {a1!r} must be a single column", 2)
+    grid = {
+        "sheetId": tab["sheet_id"],
+        "startRowIndex": r0,
+        "endRowIndex": r1,
+        "startColumnIndex": c0,
+        "endColumnIndex": c1,
+    }
+    return grid, (r0, r1, c0, c1)
+
+
+def all_charts(svc, sid):
+    """Return (tab_titles_by_id, [chart dicts]) for the whole spreadsheet."""
+    resp = svc.execute(
+        svc.service.spreadsheets().get(
+            spreadsheetId=sid, fields="sheets(properties(sheetId,title),charts)"
+        )
+    )
+    titles, charts = {}, []
+    for sheet in resp.get("sheets", []):
+        props = sheet.get("properties", {})
+        titles[props.get("sheetId", 0)] = props.get("title", "")
+        charts += [(props.get("title"), chart) for chart in sheet.get("charts", [])]
+    return titles, charts
+
+
+def add_chart(svc, args):
+    sid = args.spreadsheet_id
+    _, tabs = sheet_tabs(sid)
+    tab = find_tab(tabs, args.tab)
+    if args.type == "PIE" and len(args.series) != 1:
+        die("A PIE chart takes exactly one --series", 2)
+
+    domain, domain_box = source(args.domain, tabs, "--domain")
+    series = [source(a1, tabs, "--series") for a1 in args.series]
+    spans = {(box[0], box[1]) for _, box in [(domain, domain_box), *series]}
+    if len(spans) != 1:
+        die("--domain and every --series must cover the same rows", 2)
+    if args.headers and args.type == "PIE":
+        for grid, _ in [(domain, domain_box), *series]:
+            grid["startRowIndex"] += 1
+        if domain["startRowIndex"] >= domain["endRowIndex"]:
+            die("Nothing left to chart once the header row is dropped", 2)
+
+    if args.anchor:
+        try:
+            _, ar0, _, ac0, _ = a1_to_grid(f"{quoted(tab['title'])}!{args.anchor}", tabs)
+        except ValueError as e:
+            die(f"--anchor: {e}", 2)
+    else:
+        ar0, ac0 = 0, max(box[3] for _, box in [(domain, domain_box), *series]) + 1
+
+    def ref(grid):
+        return {"sourceRange": {"sources": [grid]}}
+
+    if args.type == "PIE":
+        spec = {
+            "pieChart": {
+                "legendPosition": "BOTTOM_LEGEND",
+                "domain": ref(domain),
+                "series": ref(series[0][0]),
+            }
+        }
+    else:
+        value_axis = "BOTTOM_AXIS" if args.type == "BAR" else "LEFT_AXIS"
+        spec = {
+            "basicChart": {
+                "chartType": args.type,
+                "legendPosition": "BOTTOM_LEGEND",
+                "headerCount": 1 if args.headers else 0,
+                "axis": [{"position": "BOTTOM_AXIS"}, {"position": "LEFT_AXIS"}],
+                "domains": [{"domain": ref(domain)}],
+                "series": [{"series": ref(grid), "targetAxis": value_axis} for grid, _ in series],
+            }
+        }
+    if args.title:
+        spec["title"] = args.title
+    position = {
+        "overlayPosition": {
+            "anchorCell": {"sheetId": tab["sheet_id"], "rowIndex": ar0, "columnIndex": ac0},
+            "widthPixels": args.width,
+            "heightPixels": args.height,
+        }
+    }
+    body = {"requests": [{"addChart": {"chart": {"spec": spec, "position": position}}}]}
+    reply = svc.execute(svc.service.spreadsheets().batchUpdate(spreadsheetId=sid, body=body))
+    chart = reply["replies"][0]["addChart"]["chart"]
+    titles = {t["sheet_id"]: t["title"] for t in tabs}
+    print(f"Added chart: {describe_chart(chart, titles)}")
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    sub = p.add_subparsers(dest="op", required=True, metavar="OP")
+    sp = sub.add_parser("add", help="add a chart")
+    sp.add_argument("spreadsheet_id")
+    sp.add_argument("--tab", required=True, help="tab the chart is placed on")
+    sp.add_argument("--type", required=True, choices=TYPES)
+    sp.add_argument("--domain", required=True, help="category/X range, single column")
+    sp.add_argument("--series", action="append", required=True, help="value range (repeatable)")
+    sp.add_argument("--headers", action="store_true", help="first row of each range is a header")
+    sp.add_argument("--title")
+    sp.add_argument("--anchor", help="top-left cell on --tab, e.g. F2")
+    sp.add_argument("--width", type=int, default=600)
+    sp.add_argument("--height", type=int, default=400)
+    sp = sub.add_parser("list", help="list charts")
+    sp.add_argument("spreadsheet_id")
+    sp.add_argument("--tab", help="only charts on this tab")
+    sp = sub.add_parser("delete", help="delete one chart")
+    sp.add_argument("spreadsheet_id")
+    sp.add_argument("chart_id", type=int)
+    args = p.parse_args()
+
+    svc = SheetsService()
+    try:
+        if args.op == "add":
+            add_chart(svc, args)
+            return
+        titles, charts = all_charts(svc, args.spreadsheet_id)
+        if args.op == "list":
+            if args.tab and args.tab not in titles.values():
+                die(f"No tab titled {args.tab!r}. Existing tabs: {', '.join(repr(t) for t in titles.values())}")
+            shown = [c for tab, c in charts if not args.tab or tab == args.tab]
+            if not shown:
+                print("(no charts)")
+            for chart in shown:
+                print(describe_chart(chart, titles))
+            return
+        match = [c for _, c in charts if c.get("chartId") == args.chart_id]
+        if not match:
+            known = ", ".join(str(c.get("chartId")) for _, c in charts) or "none"
+            die(f"No chart with id {args.chart_id}; nothing deleted. Charts present: {known}")
+        print(f"Deleting: {describe_chart(match[0], titles)}")
+        body = {"requests": [{"deleteEmbeddedObject": {"objectId": args.chart_id}}]}
+        svc.execute(svc.service.spreadsheets().batchUpdate(spreadsheetId=args.spreadsheet_id, body=body))
+        print(f"Deleted chart {args.chart_id}")
+    except HttpError as e:
+        print(f"Sheets API error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

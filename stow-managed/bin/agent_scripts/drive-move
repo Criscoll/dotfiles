@@ -1,0 +1,60 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Move a Drive file into a folder.
+
+The move REPLACES all of the file's existing parents with the one folder. The old
+parents are printed first, together with the command that moves it back, so the
+move is reversible. The destination must be a folder.
+"""
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import die, json_field, run_gws
+
+FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+def get_file(file_id):
+    meta = json_field(run_gws(["drive", "get", file_id]), "file")
+    if not meta:
+        die(f"No file metadata returned for {file_id}.")
+    return meta
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("file_id")
+    p.add_argument("folder_id", help="destination folder id")
+    args = p.parse_args()
+    if args.file_id == args.folder_id:
+        die("A folder cannot be moved into itself.", 2)
+
+    meta = get_file(args.file_id)
+    folder = get_file(args.folder_id)
+    if folder.get("mime_type") != FOLDER_MIME:
+        die(f"Destination {folder.get('name')!r} is not a folder ({folder.get('mime_type')}).", 2)
+
+    old_parents = meta.get("parents") or []
+    print(
+        f"Moving: {meta.get('name')} from [{', '.join(old_parents) or 'no parent'}] "
+        f"to [{folder.get('name')} ({args.folder_id})]"
+    )
+    if len(old_parents) == 1:
+        print(f"Undo: drive-move {args.file_id} {old_parents[0]}")
+    else:
+        print(f"Undo: not a single command — the file had {len(old_parents)} parents and a move keeps only one")
+
+    run_gws(["drive", "move", args.file_id, args.folder_id])
+    print(f"Now in: {', '.join(get_file(args.file_id).get('parents') or []) or 'no parent'}")
+
+
+if __name__ == "__main__":
+    main()

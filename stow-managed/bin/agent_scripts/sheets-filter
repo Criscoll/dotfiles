@@ -1,0 +1,109 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Manage a tab's basic filter and its saved filter views.
+
+RANGE is 1-based inclusive A1 notation WITH a tab, e.g. "Data!A1:D6". Include the
+header row: the filter's dropdowns sit on the first row of RANGE. These ops create
+the filter only; they set no criteria. Read results back with sheets-inspect.
+
+A tab has ONE basic filter: `set` REPLACES the tab's existing one, and the current
+filter is printed first (via sheets-inspect).
+
+Ops:
+  set RANGE                    set the tab's basic filter
+  clear --tab T                remove the tab's basic filter
+  view-create TITLE RANGE      add a saved filter view
+  view-list                    list filter views (id | title | range)
+  view-delete FILTER_VIEW_ID   delete one filter view (the list is printed first)
+"""
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import (
+    die,
+    grid_to_a1,
+    print_inspect_before,
+    resolve_range,
+    resolve_tab,
+    run_gws,
+)
+
+
+def list_views(sid):
+    """Print `id | title | range` per filter view and return the views."""
+    views = run_gws(["sheets", "list-filter-views", sid]).get("filter_views") or []
+    if not views:
+        print("(no filter views)")
+    for view in views:
+        grid = view.get("range", {})
+        if "endRowIndex" in grid and "endColumnIndex" in grid:
+            where = grid_to_a1(
+                view.get("sheet_title", "?"),
+                grid.get("startRowIndex", 0),
+                grid["endRowIndex"],
+                grid.get("startColumnIndex", 0),
+                grid["endColumnIndex"],
+            )
+        else:
+            where = f"{view.get('sheet_title', '?')} (unbounded: {json.dumps(grid)})"
+        print(f"{view.get('filter_view_id')} | {view.get('title')} | {where}")
+    return views
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("spreadsheet_id")
+    sub = p.add_subparsers(dest="op", required=True, metavar="OP")
+    sp = sub.add_parser("set", help="set the tab's basic filter")
+    sp.add_argument("range", help='A1 range with a tab, e.g. "Data!A1:D6"')
+    sp = sub.add_parser("clear", help="remove the tab's basic filter")
+    sp.add_argument("--tab", required=True, help="tab title")
+    sp = sub.add_parser("view-create", help="add a saved filter view")
+    sp.add_argument("title")
+    sp.add_argument("range", help='A1 range with a tab, e.g. "Data!A1:D6"')
+    sub.add_parser("view-list", help="list filter views")
+    sp = sub.add_parser("view-delete", help="delete a filter view")
+    sp.add_argument("filter_view_id")
+    args = p.parse_args()
+    sid = args.spreadsheet_id
+
+    if args.op == "set":
+        tab, r0, r1, c0, c1 = resolve_range(sid, args.range)
+        print_inspect_before(sid, ["--tab", tab["title"]])
+        run_gws(["sheets", "set-basic-filter", sid, str(tab["sheet_id"]), *map(str, (r0, r1, c0, c1))])
+        print(f"Set basic filter on {grid_to_a1(tab['title'], r0, r1, c0, c1)}")
+    elif args.op == "clear":
+        tab = resolve_tab(sid, args.tab)
+        print_inspect_before(sid, ["--tab", args.tab])
+        run_gws(["sheets", "clear-basic-filter", sid, str(tab["sheet_id"])])
+        print(f"Cleared basic filter on {args.tab!r}")
+    elif args.op == "view-create":
+        title = args.title.strip()
+        if not title:
+            die("Filter view title must not be empty", 2)
+        tab, r0, r1, c0, c1 = resolve_range(sid, args.range)
+        bounds = [str(n) for n in (r0, r1, c0, c1)]
+        run_gws(["sheets", "create-filter-view", sid, str(tab["sheet_id"]), "--", title, *bounds])
+        print(f"Created filter view {title!r} on {grid_to_a1(tab['title'], r0, r1, c0, c1)}")
+    elif args.op == "view-list":
+        list_views(sid)
+    elif args.op == "view-delete":
+        print("Before:")
+        views = list_views(sid)
+        if str(args.filter_view_id) not in {str(v.get("filter_view_id")) for v in views}:
+            die(f"No filter view with id {args.filter_view_id}; nothing deleted.")
+        run_gws(["sheets", "delete-filter-view", sid, args.filter_view_id])
+        print(f"Deleted filter view {args.filter_view_id}")
+
+
+if __name__ == "__main__":
+    main()
