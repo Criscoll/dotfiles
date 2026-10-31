@@ -95,6 +95,27 @@ def doc_find(doc_id, text, tab=None, occurrence=1):
     return run_gws(args + ["--", text])
 
 
+def batch_format(doc_id, rules, tab=None, dry_run=False):
+    """Apply styling rules to a Doc in one read + one batchUpdate; return the summary dict.
+
+    Runs _gws_batch_runner.py inside the CLI's own environment (reusing its auth)
+    because it has no batch command. See that file for the rule format.
+    """
+    runner = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_gws_batch_runner.py")
+    job = json.dumps({"doc_id": doc_id, "tab": tab, "rules": rules, "dry_run": dry_run})
+    result = subprocess.run(
+        ["uvx", "--from", GWS[1], "python", runner],
+        input=job, capture_output=True, text=True, check=False,
+    )
+    try:
+        out = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        die(result.stderr.strip() or result.stdout.strip() or "batch runner failed", result.returncode or 1)
+    if out.get("status") != "success":
+        die(out.get("message", "batch runner failed"), result.returncode or 1)
+    return out
+
+
 def doc_read_markdown(doc_id):
     """Return the Doc exported as Markdown (shows headings, lists, bold, links, tables).
 

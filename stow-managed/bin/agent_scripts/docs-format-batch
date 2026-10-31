@@ -1,0 +1,71 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Apply many character/paragraph styles to a Google Doc in one API call.
+
+Rules are a JSON array (--rules JSON, --rules-file PATH, or stdin). Each rule picks
+spans with exactly one of "text" (literal), "pattern" (regex, MULTILINE) or
+"range" ([start, end)), plus optional "occurrence" (1-based; omitted = ALL matches),
+and any style keys: bold, italic, underline, size, color ("#RRGGBB"), link (URL),
+heading (normal|title|subtitle|h1..h6), align (start|center|end|justified).
+heading/align restyle every paragraph overlapping a match.
+
+Example:
+  docs-format-batch DOC --rules '[
+    {"pattern": "^(Morning|Afternoon|Evening):", "bold": true},
+    {"pattern": "^Day \\d+ ·.*$", "heading": "h2"},
+    {"text": "Note:", "bold": true, "underline": true}]'
+
+Reads the doc once, matches locally, sends one batchUpdate (text is never changed,
+so indexes cannot go stale mid-batch). Text in tables is matched too.
+Use --dry-run to list the matches without editing.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _gws_workspace import batch_format, die
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("doc_id")
+    src = p.add_mutually_exclusive_group()
+    src.add_argument("--rules", help="JSON array of rules")
+    src.add_argument("--rules-file", help="path to a JSON file of rules (default: stdin)")
+    p.add_argument("--tab", help="tab ID (not title); default first tab")
+    p.add_argument("--dry-run", action="store_true", help="show matches, change nothing")
+    args = p.parse_args()
+
+    if args.rules:
+        raw = args.rules
+    elif args.rules_file:
+        with open(args.rules_file, encoding="utf-8") as f:
+            raw = f.read()
+    else:
+        raw = sys.stdin.read()
+    try:
+        rules = json.loads(raw)
+    except json.JSONDecodeError as e:
+        die(f"Rules are not valid JSON: {e}", 2)
+    if not isinstance(rules, list) or not all(isinstance(r, dict) for r in rules):
+        die("Rules must be a JSON array of objects", 2)
+
+    out = batch_format(args.doc_id, rules, args.tab, args.dry_run)
+    for r in out["rules"]:
+        print(f"rule {r['rule']}: {r['matches']} match(es) {r['spans']}")
+        if not r["matches"]:
+            print(f"  warning: rule {r['rule']} matched nothing", file=sys.stderr)
+    verb = "Would send" if out["dry_run"] else "Sent"
+    print(f"{verb} {out['requests']} style request(s) in one batchUpdate")
+
+
+if __name__ == "__main__":
+    main()

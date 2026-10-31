@@ -8,6 +8,10 @@
 Target with --text TEXT (the Nth case-sensitive match) or --range START END
 (end exclusive). Flags left out are not changed; --no-bold etc. turn a style off.
 --color is hex (#RRGGBB). --link URL makes the span a hyperlink.
+
+--pattern REGEX (or --text TEXT --all) styles every match in one batchUpdate
+instead of one call per span; add --occurrence N to limit --pattern to one match.
+For several different styles at once use docs-format-batch.
 """
 
 import argparse
@@ -15,7 +19,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _gws_workspace import add_target_args, die, resolve_target, run_gws
+from _gws_workspace import batch_format, die, resolve_target, run_gws
 
 
 def main():
@@ -23,7 +27,13 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("doc_id")
-    add_target_args(p)
+    where = p.add_mutually_exclusive_group(required=True)
+    where.add_argument("--range", nargs=2, type=int, metavar=("START", "END"),
+                       help="character indexes (end exclusive)")
+    where.add_argument("--text", help="the (case-sensitive) text to act on")
+    where.add_argument("--pattern", help="regex (MULTILINE) to act on; every match unless --occurrence")
+    p.add_argument("--occurrence", type=int, help="with --text/--pattern: Nth match (--text default 1)")
+    p.add_argument("--all", action="store_true", help="with --text: every match, not just the Nth")
     p.add_argument("--bold", action=argparse.BooleanOptionalAction)
     p.add_argument("--italic", action=argparse.BooleanOptionalAction)
     p.add_argument("--underline", action=argparse.BooleanOptionalAction)
@@ -38,6 +48,22 @@ def main():
         die("Provide at least one of --bold/--italic/--underline/--size/--color/--link", 2)
     if args.link and args.tab:
         die("--link does not support --tab (gws-cli limitation)", 2)
+
+    if args.pattern or args.all:
+        if args.range or (args.all and args.occurrence):
+            die("--all/--pattern cannot be combined with --range, or --all with --occurrence", 2)
+        rule = {"pattern": args.pattern} if args.pattern else {"text": args.text}
+        if args.occurrence:
+            rule["occurrence"] = args.occurrence
+        for key, value in (("bold", args.bold), ("italic", args.italic), ("underline", args.underline),
+                           ("size", args.size), ("color", args.color), ("link", args.link)):
+            if value is not None:
+                rule[key] = value
+        out = batch_format(args.doc_id, [rule], args.tab)
+        print(f"Formatted {out['rules'][0]['matches']} match(es) in one batchUpdate")
+        return
+
+    args.occurrence = args.occurrence or 1
     start, end = resolve_target(args, args.tab)
 
     if styled:

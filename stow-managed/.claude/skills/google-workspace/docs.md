@@ -105,9 +105,19 @@ These take the target as `--text TEXT [--occurrence N]` (the Nth case-sensitive 
 ~/bin/agent_scripts/docs-format <doc-id> --text "TBC" --bold --color '#CC0000'
 ~/bin/agent_scripts/docs-format <doc-id> --text "E-Proposal" --link https://example.com
 ~/bin/agent_scripts/docs-format <doc-id> --range 5 12 --italic --size 14 [--tab <tab-id>]
+
+# MANY spans: never loop single calls (~1.5 s each). These read the doc once and send one batchUpdate (~4 s total)
+~/bin/agent_scripts/docs-format <doc-id> --text "Note:" --all --bold                  # every literal match
+~/bin/agent_scripts/docs-format <doc-id> --pattern '^(Morning|Afternoon|Evening):' --bold   # every regex match (MULTILINE); --occurrence N limits it
+~/bin/agent_scripts/docs-format-batch <doc-id> --dry-run --rules '[                   # several styles at once; drop --dry-run to apply
+  {"pattern": "^(Morning|Afternoon|Evening):", "bold": true},
+  {"pattern": "^Day \\d+ ·.*$", "heading": "h2"},
+  {"text": "Note:", "bold": true, "underline": true, "color": "#CC0000"}]'
 ```
 
-`docs-format-paragraph` and `docs-bullets` work on the first tab only; in `docs-format`, `--link` does not support `--tab`. To bullet a multi-line block, target from the first line's start to the last line's end: the range may end at a line's end, it won't spill into the next paragraph.
+`docs-format-batch` rules: one of `text` / `pattern` / `range`, optional `occurrence` (omitted = all matches), style keys `bold italic underline size color link` and paragraph keys `heading align` (restyle every paragraph overlapping a match). It also accepts `--rules-file` or stdin and `--tab`, matches text inside tables, and only ever sends text-style/paragraph-style requests.
+
+`docs-format-paragraph` and `docs-bullets` work on the first tab only; in `docs-format`, `--link` does not support `--tab` (`docs-format-batch` does). To bullet a multi-line block, target from the first line's start to the last line's end: the range may end at a line's end, it won't spill into the next paragraph.
 
 ## Tables
 
