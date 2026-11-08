@@ -32,6 +32,7 @@ stow-managed/.pi/agent/sessions/
 stow-managed/.pi/agent/prompt-history.jsonl
 stow-managed/.pi/agent/trust.json
 stow-managed/.pi/agent/models-store.json
+stow-managed/.pi/plans/
 
 # Watcher runtime state and private overrides — never commit
 stow-managed/.local/share/watchers/*/config.local.json
