@@ -1,6 +1,6 @@
 # Drive — Allowed Command Surface
 
-All Drive operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.3.1 drive ...` directly.
+All Drive operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.6.1 drive ...` directly.
 
 **Read plus reversible changes only.** Of `drive`'s 30+ subcommands the wrappers cover reading
 (`list`, `search`, `get`, `download`, `export`, permission listing) and four changes that can be

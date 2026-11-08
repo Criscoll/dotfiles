@@ -6,7 +6,7 @@
 
 import argparse, json, subprocess, sys
 
-GWS = ["uvx", "gws-cli@1.3.1", "gmail"]
+GWS = ["uvx", "gws-cli@1.6.1", "gmail"]
 CHUNK_SIZE = 100
 
 

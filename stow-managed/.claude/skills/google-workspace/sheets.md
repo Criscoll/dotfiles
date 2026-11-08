@@ -1,6 +1,6 @@
 # Sheets — Allowed Command Surface
 
-All Sheets operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.3.1 sheets ...` directly. Every wrapper accepts `--help`.
+All Sheets operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.6.1 sheets ...` directly. Every wrapper accepts `--help`.
 
 Find a spreadsheet's ID with `drive-search "mimeType = 'application/vnd.google-apps.spreadsheet' and name contains '...'"` (see drive.md). Ranges are A1 notation, e.g. `Sheet1!A1:C10`; quote tab names with spaces: `"'My Tab'!A1:B2"`.
 

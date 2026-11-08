@@ -12,7 +12,7 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-GWS = ["uvx", "gws-cli@1.3.1", "calendar", "list"]
+GWS = ["uvx", "gws-cli@1.6.1", "calendar", "list"]
 
 DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TZ_MARKER_RE = re.compile(r"(Z|[+-]\d{2}:?\d{2})$")

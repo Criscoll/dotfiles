@@ -55,7 +55,7 @@ to mint a token issued post-publish:
 
 ```bash
 rm ~/.config/gws-cli/token.json.enc   # skip if the file doesn't exist yet
-OAUTHLIB_RELAX_TOKEN_SCOPE=1 uvx gws-cli@1.3.1 gmail labels
+OAUTHLIB_RELAX_TOKEN_SCOPE=1 uvx gws-cli@1.6.1 gmail labels
 ```
 
 **The "Google hasn't verified this app" warning is expected and permanent** —
@@ -103,8 +103,8 @@ address them, no matter how many times you re-consent.
 ### Case A: generic incremental-authorization mismatch (one-off, self-resolving)
 
 **Cause:** the token currently cached on this machine was originally granted for
-a *narrower* scope set than what `gws-cli@1.3.1` now requests on every call (the
-full list: `gmail.modify`, `calendar`, `drive`, `spreadsheets`, `presentations`,
+a *narrower* scope set than what `gws-cli@1.6.1` now requests on every call (the
+full list: `gmail.modify`, `gmail.settings.basic`, `calendar`, `drive`, `spreadsheets`, `presentations`,
 `documents`, `contacts`, `directory.readonly`). Google's OAuth server rejects
 refreshing a token when the request asks for scopes beyond what was originally
 granted — this is documented, intentional behavior
@@ -117,7 +117,7 @@ when the pinned `gws-cli` version changes, or the token predates an
 refresh fails. Just complete it:
 
 ```bash
-OAUTHLIB_RELAX_TOKEN_SCOPE=1 uvx gws-cli@1.3.1 gmail labels
+OAUTHLIB_RELAX_TOKEN_SCOPE=1 uvx gws-cli@1.6.1 gmail labels
 ```
 
 Open the printed URL, approve, click through **Advanced → Go to [app] (unsafe)**.
@@ -127,14 +127,18 @@ screen, not a duplicate or a sign something is broken.
 
 **Why this is a one-off, not recurring** — *conditional on every requested scope
 actually being grantable to this account* (see Case B if it isn't):
-- The skill pins `gws-cli@1.3.1` exactly, so the scope list the client requests
+- The skill pins `gws-cli@1.6.1` exactly, so the scope list the client requests
   is fixed — nothing will silently ask for *more* scopes later on its own.
 - Once a token is minted covering the full current scope set, refreshes keep
   matching it indefinitely (Published/External tokens aren't time-boxed).
 
 **What would trigger it again** (all avoidable, none automatic):
 1. Bumping the pinned `gws-cli` version to one that requests a different/larger
-   scope set — expect one more re-auth pass whenever the pin changes.
+   scope set — expect one more re-auth pass whenever the pin changes. The flow
+   won't start by itself while the old, narrower access token is still valid
+   (calls needing the new scope just 403 with "insufficient authentication
+   scopes"); force it with `uvx gws-cli@1.6.1 auth logout`, then the command
+   above. Seen on the 1.3.1 → 1.6.1 bump (2026-11-08).
 2. Editing `enabled_services` in `~/.config/gws-cli/gws_config.json` (or
    running `gws-cli config enable <service>` / `config reset`) to add a service
    whose scope the current token doesn't have yet.
@@ -192,9 +196,9 @@ scopes (losing `gws-cli`'s Contacts features — not used by any wrapper script
 in this skill, so no functional loss here):
 
 ```bash
-uvx gws-cli@1.3.1 config disable contacts
+uvx gws-cli@1.6.1 config disable contacts
 rm ~/.config/gws-cli/token.json.enc   # only if the next command still fails without it
-OAUTHLIB_RELAX_TOKEN_SCOPE=1 uvx gws-cli@1.3.1 gmail labels
+OAUTHLIB_RELAX_TOKEN_SCOPE=1 uvx gws-cli@1.6.1 gmail labels
 ```
 
 **You may not even need a new consent screen.** If the existing refresh token

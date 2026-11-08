@@ -1,6 +1,6 @@
 # Docs — Allowed Command Surface
 
-All Docs operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.3.1 docs ...` directly. Every wrapper accepts `--help`.
+All Docs operations use wrapper scripts in `~/bin/agent_scripts/`. Direct gws-cli calls are blocked by the guard — do not call `uvx gws-cli@1.6.1 docs ...` directly. Every wrapper accepts `--help`.
 
 Find a doc's ID with `drive-search "mimeType = 'application/vnd.google-apps.document' and name contains '...'"` (see drive.md). `--tab` always takes a tab **ID**, not a tab title; omit it for single-tab docs.
 

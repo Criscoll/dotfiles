@@ -290,13 +290,13 @@ gws_secret="$HOME/.config/gws-cli/client_secret.json.enc"
 gws_token="$HOME/.config/gws-cli/token.json.enc"
 
 if [[ ! -e "$gws_secret" ]]; then
-  fail "gws-cli credentials not imported (run: uvx gws-cli@1.3.1 auth import-credentials <client_secret.json>)"
+  fail "gws-cli credentials not imported (run: uvx gws-cli@1.6.1 auth import-credentials <client_secret.json>)"
 else
   pass "gws-cli client_secret.json.enc present"
 fi
 
 if [[ ! -e "$gws_token" ]]; then
-  fail "gws-cli token missing (run: uvx gws-cli@1.3.1 auth)"
+  fail "gws-cli token missing (run: uvx gws-cli@1.6.1 auth)"
 else
   pass "gws-cli token.json.enc present"
 fi

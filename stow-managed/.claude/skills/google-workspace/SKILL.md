@@ -38,7 +38,7 @@ Drive, Docs, and Sheets work. **Send, permanent delete, share/unshare, copy, upl
 operations are structurally unavailable — the harness hook blocks them even if attempted.** Trashing, restoring,
 moving and renaming Drive files is available (reversible; see drive.md).
 
-Always pin the exact version: `uvx gws-cli@1.3.1 <service> <subcommand> [flags]`
+Always pin the exact version: `uvx gws-cli@1.6.1 <service> <subcommand> [flags]`
 
 ## Verify auth first
 
@@ -151,7 +151,7 @@ the plaintext credential file.
 
 Import it (this encrypts it for storage on *this* machine):
 ```bash
-uvx gws-cli@1.3.1 auth import-credentials /path/to/client_secret.json
+uvx gws-cli@1.6.1 auth import-credentials /path/to/client_secret.json
 ```
 
 ### 2. Trigger the OAuth flow directly — not through a wrapper script
@@ -164,7 +164,7 @@ the wrapper scripts capture stdout/stderr, so the authorization URL never reache
 terminal and the process just looks silently stuck:
 
 ```bash
-OAUTHLIB_RELAX_TOKEN_SCOPE=1 uvx gws-cli@1.3.1 gmail labels
+OAUTHLIB_RELAX_TOKEN_SCOPE=1 uvx gws-cli@1.6.1 gmail labels
 ```
 
 Set `OAUTHLIB_RELAX_TOKEN_SCOPE=1`: your OAuth client's configured "Data access" scopes
@@ -220,8 +220,8 @@ scripts handle both formats; raw `gws-cli` consumers must do the same.
 ### 4. Verify
 
 ```bash
-uvx gws-cli@1.3.1 gmail labels
-uvx gws-cli@1.3.1 calendar list
+uvx gws-cli@1.6.1 gmail labels
+uvx gws-cli@1.6.1 calendar list
 ```
 
 The token is stored encrypted under `~/.config/gws-cli/`. It is never committed to

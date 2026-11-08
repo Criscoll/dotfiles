@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 
-GWS = ["uvx", "gws-cli@1.3.1"]
+GWS = ["uvx", "gws-cli@1.6.1"]
 
 
 def eprint(*args, **kwargs):
