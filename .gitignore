@@ -34,6 +34,9 @@ stow-managed/.pi/agent/trust.json
 stow-managed/.pi/agent/models-store.json
 stow-managed/.pi/plans/
 
+# Pi harness session state at the repo root — never commit
+.pi/todos/
+
 # Watcher runtime state and private overrides — never commit
 stow-managed/.local/share/watchers/*/config.local.json
 stow-managed/.local/share/watchers/*/state.json
