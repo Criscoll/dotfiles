@@ -81,8 +81,12 @@ Structure follows this order (only `# Brief` and `# Outline` are required):
 3. **`# Outline`** — the recursive todo list (see format below).
 4. **`# Notes`** (required if `01_Notes/` contains files, placeholder otherwise) — a routing table indexing files in `01_Notes/`. This exists primarily for agent use: scanning the summary column lets an agent decide whether a supporting file is worth reading without opening every file in the directory.
 
+   Always include the read-on-demand line directly under the heading — any agent reading the outline should get the rule without loading this skill:
+
    ```markdown
    # Notes
+
+   *Note references are read-on-demand — open a linked note only if its summary suggests it's relevant to the current question; never bulk-read `01_Notes/` preemptively.*
 
    | File | Summary |
    |------|--------|
