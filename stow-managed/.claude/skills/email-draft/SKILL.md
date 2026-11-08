@@ -14,8 +14,8 @@ Draft an email in Cristian's voice. The style guide below is authoritative.
 1. Read any context provided: recipient, relationship, topic, thread history.
 2. If the recipient's first name, core ask, or key facts are missing and can't be inferred, ask before drafting — one question at a time.
 3. Draft using the style guide below.
-4. Present the draft plainly — no "Here is a draft:" preamble, just the email.
-5. On revision requests, apply the change and re-present the full email.
+4. Present each draft inside its own fenced code block (plain, no language tag) so it copies with clean formatting. Put To/Cc/Subject lines at the top of the block, then the body. When there are several emails, give each its own block with a short bold label above it. No "Here is a draft:" preamble.
+5. On revision requests, apply the change and re-present the full email in a code block.
 
 ## Style Guide
 
