@@ -25,6 +25,8 @@ def unwrap(obj):
                 return item
         return None
     if isinstance(obj, dict):
+        if "filter_id" in obj:
+            return {**obj, "id": obj["filter_id"]}
         if "id" in obj:
             return obj
         for key in ("filter", "data"):

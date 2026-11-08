@@ -1,5 +1,12 @@
 # gws-cli Filter-Creation OAuth Scope Limitation
 
+> **Resolved 2026-11-08** via the upstream route (option 1): gws-cli 1.6.1 adds
+> `gmail.settings.basic` to the gmail scope map. All wrapper pins were bumped
+> 1.3.1 → 1.6.1; each machine needs one re-consent (`auth logout`, then any gmail
+> call — a still-valid narrower access token otherwise masks the gap until it
+> expires). `gmail-delete-filter` and `gmail-delete-label` were added alongside.
+> Kept for the record of why fat-token injection and re-consent on 1.3.1 failed.
+
 ## Context
 
 The gmail label/filter wrapper set (`gmail-create-label`, `gmail-update-label`,

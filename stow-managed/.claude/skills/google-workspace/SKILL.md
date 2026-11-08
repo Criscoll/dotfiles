@@ -2,8 +2,9 @@
 name: google-workspace
 description: >-
   Read Gmail (list/search/read/label-move), manage Gmail labels
-  (create/rename labels), list existing Gmail filters (creating filters is
-  blocked by a gws-cli OAuth scope gap), backfill label actions onto
+  (create/rename/delete/merge labels), manage Gmail filters for automatic
+  sorting (list/create/delete; trash and forward actions unsupported),
+  backfill label actions onto
   existing messages matching a query, download and view email attachments
   (PDFs, etc.), manage Calendar (list/get/create/update), search/download
   Google Drive files (list/search/get/download/export), organise them (list
@@ -20,7 +21,8 @@ description: >-
   command is phrased.
   Trigger phrases: "check email", "search gmail", "list emails", "read email",
   "archive email", "label email", "mark as read", "create label", "rename label",
-  "create filter", "gmail filters", "backfill", "organize inbox",
+  "delete label", "merge labels", "create filter", "delete filter",
+  "gmail filters", "auto-sort email", "backfill", "organize inbox",
   "list calendar events", "create event", "update event", "google calendar",
   "gmail", "workspace", "attachment", "download attachment", "email pdf",
   "has attachment", "search drive", "find file", "download file",
@@ -93,7 +95,11 @@ even if you attempt them. Do not suggest or attempt these:
 
 **Gmail:** `send`, `reply`, `send-with-attachment`, `create-draft`, `update-draft`,
 `send-draft`, `delete-draft`, `delete`, `trash-thread`, `untrash`, `untrash-thread`,
-`delete-thread`, `delete-label`, `delete-filter`, `set-vacation`, `set-signature`
+`delete-thread`, `set-vacation`, `set-signature`. Filters with trash or forward
+actions are refused by `gmail-create-filter`.
+
+Exception: `delete-label` and `delete-filter` are wrapped (`gmail-delete-label`,
+`gmail-delete-filter`) and dry-run unless passed `--confirm` — see gmail.md.
 
 **Calendar:** `clear-calendar`, `delete-calendar`, `create-calendar`,
 `add-acl`, `remove-acl`, `update-acl`, `subscribe`, `unsubscribe`, `clear-reminders`

@@ -1,0 +1,83 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import argparse, json, os, subprocess, sys
+
+GWS = ["uvx", "gws-cli@1.6.1", "gmail"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def run(sub_args):
+    result = subprocess.run(GWS + sub_args, capture_output=True, text=True)
+    if result.returncode != 0:
+        msg = result.stderr.strip()
+        if result.stdout:
+            try:
+                err = json.loads(result.stdout)
+                msg = err.get("message", msg) or msg
+            except json.JSONDecodeError:
+                pass
+        eprint(msg)
+        sys.exit(result.returncode)
+    return json.loads(result.stdout)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Delete a Gmail label (gws-cli wrapper). Messages are NOT deleted — "
+                    "the label is stripped from them. Shows the label and its message "
+                    "count first; deletes only with --confirm.")
+    parser.add_argument("label_id", help="Label ID (e.g. Label_12345) — see gmail-labels")
+    parser.add_argument("--move-to", metavar="LABEL_ID",
+                        help="Add this label to every message carrying the doomed label "
+                             "before deleting (merge)")
+    parser.add_argument("--confirm", action="store_true",
+                        help="Actually delete (without it, only shows what would happen)")
+    args = parser.parse_args()
+
+    label = run(["get-label", args.label_id])
+    name = label.get("name", "")
+    total = label.get("messages_total", 0)
+    if label.get("label_type") == "system":
+        eprint(f"{args.label_id} ({name}) is a system label and cannot be deleted.")
+        sys.exit(2)
+
+    print(f"Label: {args.label_id} | {name} | {total} messages")
+    if args.move_to:
+        target = run(["get-label", args.move_to])
+        print(f"Will first add {args.move_to} ({target.get('name', '')}) to those {total} messages.")
+    elif total:
+        print(f"Warning: {total} messages lose this label. Archived ones carrying no other "
+              "user label will then only be findable via All Mail. Use --move-to to merge.")
+
+    if not args.confirm:
+        print("Dry run — re-run with --confirm to delete this label.")
+        return
+
+    if args.move_to and total:
+        backfill = os.path.join(os.path.dirname(os.path.realpath(__file__)), "gmail-backfill")
+        query = f'label:"{name}"'
+        out = subprocess.run([backfill, query, "--add-labels", args.move_to,
+                              "--max", str(total)], capture_output=True, text=True)
+        print(out.stdout, end="")
+        if out.returncode != 0:
+            eprint(out.stderr.strip())
+            eprint("Move failed; label NOT deleted.")
+            sys.exit(out.returncode)
+        if f"Matched {total} messages." not in out.stdout:
+            eprint(f"Search {query} did not match exactly {total} messages; "
+                   "label NOT deleted. Move the remainder manually, then retry.")
+            sys.exit(1)
+
+    run(["delete-label", args.label_id])
+    print(f"{args.label_id} | {name} | deleted")
+
+
+if __name__ == "__main__":
+    main()

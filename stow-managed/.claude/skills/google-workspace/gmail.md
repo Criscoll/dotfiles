@@ -159,21 +159,27 @@ Note: `gmail-list` and `gmail-search` do **not** show attachment columns — the
 # Inspect one filter
 ~/bin/agent_scripts/gmail-get-filter <filter-id>
 
-# Create a filter — needs >= 1 criterion AND >= 1 action
+# Create a filter — needs >= 1 criterion AND >= 1 action. Filters act on FUTURE mail only.
+# Always --dry-run first: shows the equivalent search and up to 10 existing matches.
+~/bin/agent_scripts/gmail-create-filter --from "newsletter@example.com" --remove-labels INBOX --add-labels Label_12345 --dry-run
 ~/bin/agent_scripts/gmail-create-filter --from "newsletter@example.com" --remove-labels INBOX --add-labels Label_12345
 ~/bin/agent_scripts/gmail-create-filter --query "invoice" --has-attachment --never-spam --star
-# (delete-filter has NO wrapper — filters are permanent for the agent; only create real ones)
+# Trash and forward actions are deliberately unsupported (destructive / sends mail out).
+# To apply the same action to existing mail, follow up with gmail-backfill.
 
-> ⚠️ **`gmail-create-filter` is currently blocked by an OAuth scope gap** (verified
-> 2026-09-28): the Gmail filters-create API requires the `gmail.settings.basic`
-> scope, but gws-cli 1.3.1's gmail scope map requests only `gmail.modify` — it
-> never asks for the setting scope, so no re-auth or consent can grant it. The
-> call fails with `Gmail API error: Request had insufficient authentication
-> scopes.` `gmail-filters` (list) and `gmail-get-filter` DO work under the current
-> grant — only creation is blocked. Do not retry create-filter or suggest
-> re-authenticating; the fix must land upstream in gws-cli's scope map
-> (`gws/auth/scopes.py`). Until then, ask the user to create filters in the
-> Gmail UI (Settings → Filters), then the agent can list/inspect them.
+# Delete a filter — shows it first; --confirm actually deletes. There is no "edit filter"
+# API: to change one, create the replacement, then delete the old one.
+~/bin/agent_scripts/gmail-delete-filter <filter-id>
+~/bin/agent_scripts/gmail-delete-filter <filter-id> --confirm
+
+# Delete a label — messages are NOT deleted, the label is stripped from them. Shows the
+# message count first; --confirm actually deletes. System labels are refused.
+~/bin/agent_scripts/gmail-delete-label Label_12345
+# Merge: add Label_67890 to every message carrying Label_12345, then delete Label_12345.
+# Aborts without deleting if the move doesn't cover exactly the label's message count.
+~/bin/agent_scripts/gmail-delete-label Label_12345 --move-to Label_67890 --confirm
+# Without --move-to, archived messages whose only user label was this one end up
+# findable only via All Mail — prefer merging when the label has messages.
 
 # Backfill: apply label actions to EXISTING messages matching a query.
 # Gmail has no native "run filter on inbox" — this composite is search + batch-modify.
@@ -186,8 +192,7 @@ Note: `gmail-list` and `gmail-search` do **not** show attachment columns — the
 ```
 
 Per-message `add-labels`/`remove-labels` and a standalone `batch-modify` wrapper do not
-exist — use `gmail-backfill` for bulk label application. `delete-label` and `delete-filter`
-have no wrappers (destructive; blocked by absence).
+exist — use `gmail-backfill` for bulk label application.
 
 ## Common label IDs
 

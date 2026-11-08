@@ -4,7 +4,7 @@
 # dependencies = []
 # ///
 
-import argparse, json, subprocess, sys
+import argparse, json, os, subprocess, sys
 
 GWS = ["uvx", "gws-cli@1.6.1", "gmail", "create-filter"]
 
@@ -54,30 +54,48 @@ def main():
     imp.add_argument("--important", action="store_true", help="Mark important")
     imp.add_argument("--not-important", action="store_true", help="Never mark important")
     actions.add_argument("--never-spam", action="store_true", help="Never send to spam")
-    actions.add_argument("--trash", action="store_true", help="Send to trash")
-    actions.add_argument("--forward", metavar="E", help="Forward to email address")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Show existing messages the criteria match; create nothing")
     parser.add_argument("--json", action="store_true", dest="json_out",
                         help="Output raw gws-cli response as JSON")
     args = parser.parse_args()
 
     has_criterion = any([args.from_, args.to, args.subject, args.query, args.has_attachment])
     has_action = any([args.add_labels, args.remove_labels, args.archive, args.star,
-                      args.important, args.not_important, args.never_spam,
-                      args.trash, args.forward])
+                      args.important, args.not_important, args.never_spam])
     if not has_criterion or not has_action:
         eprint("Usage: gmail-create-filter needs at least one criterion "
                "(--from/--to/--subject/--query/--has-attachment) and at least one action "
                "(--add-labels/--remove-labels/--archive/--star/--important/--not-important/"
-               "--never-spam/--trash/--forward)")
+               "--never-spam). Trash and forward actions are deliberately not supported.")
         sys.exit(2)
+
+    if args.dry_run:
+        terms = []
+        if args.from_:
+            terms.append(f"from:({args.from_})")
+        if args.to:
+            terms.append(f"to:({args.to})")
+        if args.subject:
+            terms.append(f"subject:({args.subject})")
+        if args.query:
+            terms.append(f"({args.query})")
+        if args.has_attachment:
+            terms.append("has:attachment")
+        query = " ".join(terms)
+        print(f"Dry run — equivalent search: {query}")
+        print("Existing matches (filters only act on future mail; "
+              "use gmail-backfill to apply to these):", flush=True)
+        search = os.path.join(os.path.dirname(os.path.realpath(__file__)), "gmail-search")
+        sys.exit(subprocess.run([search, "--max", "10", query]).returncode)
 
     cmd = GWS[:]
     for flag, val in [("--from", args.from_), ("--to", args.to), ("--subject", args.subject),
                       ("--query", args.query), ("--add-labels", args.add_labels),
-                      ("--remove-labels", args.remove_labels), ("--forward", args.forward)]:
+                      ("--remove-labels", args.remove_labels)]:
         if val:
             cmd += [flag, val]
-    for flag in ("--has-attachment", "--archive", "--star", "--never-spam", "--trash"):
+    for flag in ("--has-attachment", "--archive", "--star", "--never-spam"):
         if getattr(args, flag.lstrip("-").replace("-", "_")):
             cmd.append(flag)
     for flag, attr in [("--important", "important"), ("--not-important", "not_important")]:
@@ -131,12 +149,11 @@ def main():
         for flag, val in [("--from", args.from_), ("--to", args.to),
                           ("--subject", args.subject), ("--query", args.query),
                           ("--add-labels", args.add_labels),
-                          ("--remove-labels", args.remove_labels),
-                          ("--forward", args.forward)]:
+                          ("--remove-labels", args.remove_labels)]:
             if val:
                 echo.append(f"{flag}={val}")
         for flag in ("--has-attachment", "--archive", "--star", "--never-spam",
-                     "--trash", "--important", "--not-important"):
+                     "--important", "--not-important"):
             if getattr(args, flag.lstrip("-").replace("-", "_")):
                 echo.append(flag)
         print("Configured: " + " ".join(echo))

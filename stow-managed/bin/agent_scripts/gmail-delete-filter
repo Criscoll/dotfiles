@@ -1,0 +1,88 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+
+import argparse, json, subprocess, sys
+
+GWS = ["uvx", "gws-cli@1.6.1", "gmail"]
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def unwrap(obj):
+    if isinstance(obj, str):
+        try:
+            return unwrap(json.loads(obj))
+        except json.JSONDecodeError:
+            return None
+    if isinstance(obj, list):
+        for item in obj:
+            if isinstance(item, dict) and "id" in item:
+                return item
+        return None
+    if isinstance(obj, dict):
+        if "filter_id" in obj:
+            return {**obj, "id": obj["filter_id"]}
+        if "id" in obj:
+            return obj
+        for key in ("filter", "data"):
+            if key in obj:
+                found = unwrap(obj[key])
+                if found is not None:
+                    return found
+    return None
+
+
+def run(sub_args):
+    result = subprocess.run(GWS + sub_args, capture_output=True, text=True)
+    if result.returncode != 0:
+        msg = result.stderr.strip()
+        if result.stdout:
+            try:
+                err = json.loads(result.stdout)
+                msg = err.get("message", msg) or msg
+            except json.JSONDecodeError:
+                pass
+        eprint(msg)
+        sys.exit(result.returncode)
+    return result.stdout
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Delete a Gmail filter (gws-cli wrapper). Shows the filter first; "
+                    "deletes only with --confirm. Affects future mail only — "
+                    "already-labelled messages keep their labels.")
+    parser.add_argument("filter_id", help="Filter ID — see gmail-filters")
+    parser.add_argument("--confirm", action="store_true",
+                        help="Actually delete (without it, only shows what would be deleted)")
+    args = parser.parse_args()
+
+    filt = unwrap(json.loads(run(["get-filter", args.filter_id])))
+    if filt is None:
+        eprint("Unrecognized get-filter response shape; refusing to delete.")
+        sys.exit(1)
+
+    print(f"Filter: {filt.get('id', '')}")
+    for section, key in (("Criteria", "criteria"), ("Action", "action")):
+        body = filt.get(key, {})
+        if body:
+            print(f"{section}:")
+            for k, v in body.items():
+                if v:
+                    print(f"  {k}: {v}")
+
+    if not args.confirm:
+        print("Dry run — re-run with --confirm to delete this filter.")
+        return
+
+    run(["delete-filter", args.filter_id])
+    print(f"{args.filter_id} | deleted")
+
+
+if __name__ == "__main__":
+    main()

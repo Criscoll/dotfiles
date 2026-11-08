@@ -86,9 +86,7 @@ This means a script can **export filters to JSON → commit to the repo → impo
 
 ### gws-cli and the guard
 
-The repo already has `gws-cli` set up for Gmail access, with wrapper scripts in `~/bin/agent_scripts/`. The existing guard hook blocks destructive operations (send, delete, create-filter, etc.) at the subcommand level, so adding filter management would need either:
-- New wrapper scripts with explicit allow-list entries in the guard
-- Or relaxing the guard to allow filter management (less restrictive)
+Filter management is now wrapped (2026-11-08, gws-cli 1.6.1): `gmail-filters`, `gmail-get-filter`, `gmail-create-filter` (trash/forward actions refused) and `gmail-delete-filter`. Option A below no longer needs its own OAuth credentials — an export/import script can be built on top of these wrappers.
 
 ### What Gmail filters cannot do
 
