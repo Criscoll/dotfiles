@@ -97,7 +97,7 @@
       },
       {
         "title": "Sleep prep: HOT, use the AC",
-        "advice": "**Pre-cool the bedroom with the AC** (cool mode, door shut) **{pre}-{bed}**, then ducted fan **HIGH** and bedroom fan **HIGH**, with the AC timer below.",
+        "advice": "**Pre-cool the bedroom with the AC** (cool mode, door shut) **{pre}-{bed}**, then bedroom fan **HIGH** and ducted fan **LOW** between the AC bursts below: fan mode blows in warmer main-room air, so a higher speed drains the cold faster.",
         "priority": 4,
         "tags": [
           "fire"
@@ -105,7 +105,7 @@
       },
       {
         "title": "Sleep prep: VERY HOT, AC tonight",
-        "advice": "**Very hot night.** **Pre-cool the bedroom with the AC from {pre}** (door shut), then run the AC on the **timer below** through the night, with ducted fan **HIGH** and bedroom fan **HIGH** in between.",
+        "advice": "**Very hot night.** **Pre-cool the bedroom with the AC from {pre}** (door shut), then run the AC on the **timer below** through the night, with bedroom fan **HIGH** and ducted fan **LOW** in between: fan mode blows in warmer main-room air, so a higher speed drains the cold faster.",
         "priority": 4,
         "tags": [
           "fire",
