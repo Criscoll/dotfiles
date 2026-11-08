@@ -193,8 +193,9 @@ Run Setup in full, loading every sibling file in step 3.
   hotel booking finalised" are the same item. Only differences in meaning or scope count.
   Never reword for style: calendar-management forbids rewording, and the wording is the
   user's.
-- **Stale needle items get `❌` and are never removed.** The needle is an honest record, so
-  you only ever append marks.
+- **Stale needle items get a mark and are never removed.** `❌` for an item that was live and
+  didn't get done, `🚫` for one that no longer applies (struck, moot, superseded or dropped).
+  The needle is an honest record, so you only ever append marks.
 - **Nothing is written without confirmation,** except calendar-management's mechanical format
   normalization.
 
@@ -203,9 +204,13 @@ Run Setup in full, loading every sibling file in step 3.
 | Meaning | Log | Needle | Outline |
 |---|---|---|---|
 | done | `[x]` (also `[X]`) | `✅` | `[x]` |
-| cancelled/deprioritised | `~struck~` | `❌` | `~struck~` |
-| not done at close | carried or struck | `❌` | stays `[ ]` |
+| cancelled/deprioritised | `~struck~` | `🚫` | `~struck~` |
+| not done at close | carried | `❌` | stays `[ ]` |
 | open | `[ ]` | no mark | `[ ]` |
+
+`🚫` is the needle's "no longer applicable" mark and `❌` its "still live, didn't get done"
+mark. Keeping them apart stops the leftovers step offering dead items for a retry. A log line
+that is struck always maps to `🚫`; `❌` is for items that were carried or are still open.
 
 Existing logs contain uppercase `[X]`; read it as ticked. Write new ticks as `[x]`, and don't
 mass-normalise old ones: the diff noise would hide the real change.

@@ -45,10 +45,10 @@ next branch must see the state the last one left.
    |---|---|---|
    | done or Done untracked | `✅` on the item | — |
    | carried | `❌` on the item | a fresh unmarked copy |
-   | dropped | `❌` on the item | — |
+   | dropped | `🚫` on the item | — |
 
    For needle items that weren't in the stale Today, ask calendar-management's leftovers
-   question: `❌` and carry to today, `❌` only, or leave.
+   question: `❌` and carry to today, `❌` only, `🚫` (no longer applicable), or leave.
 3. Run `today-rollover.md` step 4 to write the fresh Today. Then append its top 1–3 entries to
    today's needle. Append only: the needle may already hold the user's own picks.
 

@@ -49,6 +49,23 @@ items).
   delivered) or `Move the Needle ❌` (a wasted day). The agent proposes this; the user confirms
   before it is applied.
 
+### Item marks
+
+Each `<li>` can carry one trailing mark, appended and never replacing the wording, because the
+needle is the day's honest record.
+
+| Mark | Means | Leftovers |
+|---|---|---|
+| `✅` | Done | — |
+| `❌` | Still applied but didn't get done that day | Offered for another shot |
+| `🚫` | No longer applicable: struck, moot, superseded or dropped after it was picked | Closed; never offered or carried |
+
+`❌` and `🚫` stay separate because one mark for both makes the leftovers step offer dead items
+for a retry, and makes a changed plan look like a wasted day. Use `🚫` when the log or an outline
+shows the item as moot (a decision cancelled or deferred the work), when the user drops it, or
+when it is rerouted off the needle (for example to capture.md). Use `❌` only for an item that was
+still live and didn't get done.
+
 ### Retired: `Goals for the Week`
 
 Retired 2026-10-26. It was a write-only copy of the log's `# Weekly Goals`, re-sorted into
@@ -97,11 +114,11 @@ Allowed fixes (mechanical only — never touch meaning):
 - Capitalise the first letter of each item; leave the rest of the wording alone.
 - Collapse repeated spaces, trim leading/trailing whitespace on lines, remove empty list items
   and stray doubled `<br>`/blank lines.
-- Normalise mark placement so `✅`/`❌` sits at the end of its item line (fix spacing around
+- Normalise mark placement so `✅`/`❌`/`🚫` sits at the end of its item line (fix spacing around
   the mark, don't add or remove marks).
 
 Forbidden during normalization: rewording, reordering, adding/removing items, changing any
-`✅`/`❌` mark. If a structural fix would require guessing at meaning (e.g. a merged line could be
+`✅`/`❌`/`🚫` mark. If a structural fix would require guessing at meaning (e.g. a merged line could be
 two items), ask the user.
 
 If the description is already clean, skip silently — no `calendar-update` call, no commentary.
@@ -138,7 +155,7 @@ a pick by Sunday" has.
   first, keep the existing content verbatim, and only append marks / add carried items.
 - **Preserve the user's structure with a minimal touch**: don't reorder items, don't reword. The
   one exception is the mechanical format-normalization pass above, which always runs first on the
-  focused day. Beyond that, only append `✅`/`❌` marks and add items.
+  focused day. Beyond that, only append `✅`/`❌`/`🚫` marks and add items.
 - Never modify the recurring masters (`46gvt7r9isdp1kvv0bgve3ju3o` and
   `12k1buhgem5sguhl882be01b7d` with no `_YYYYMMDD` suffix) — only dated instances.
 
@@ -162,9 +179,10 @@ a pick by Sunday" has.
 ### End-of-day `Move the Needle` leftovers (on request)
 
 1. `calendar-get --full` the day's instance.
-2. For each unmarked `<li>` item, propose marking it `❌` (it didn't get done). Also ask whether
-   already-`❌` items get another shot — the user often treats `❌` as "didn't get done, retry"
-   rather than "closed". Apply on confirmation.
+2. For each unmarked `<li>` item, propose marking it `❌` (it didn't get done), or `🚫` when the
+   log or an outline shows it is no longer applicable. Also ask whether already-`❌` items get
+   another shot — the user often treats `❌` as "didn't get done, retry" rather than "closed".
+   Items already marked `🚫` are closed: don't offer or carry them. Apply on confirmation.
 3. Copy the confirmed items — **fresh, unmarked** — into the target day's `Move the Needle`
    description. The target is the **next day** by default; honor a specific day the user names
    (e.g. "move the Alishan items to tomorrow").

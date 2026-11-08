@@ -42,7 +42,7 @@ Each kind lists the fix to propose. The trust rules decide what's proposed and w
    Then update the other side(s).
 3. **Outline contradiction.** A log line or needle item is something the outline shows as
    moot, superseded or cancelled. Propose a strike on the log line, adding `— <reason>`, and
-   `❌` on the needle item if there is one. Example: the refinance outline's "Status
+   `🚫` on the needle item if there is one. Example: the refinance outline's "Status
    (2026-10-23): Up declined; the refinance is off" makes any live line that assumes the
    refinance proceeds moot.
 4. **Outline-only news.** An outline completion, or an open item due this week, changes
@@ -56,10 +56,10 @@ Each kind lists the fix to propose. The trust rules decide what's proposed and w
 6. **Today ↔ needle.**
    - A needle item is missing from Today (often typed on the phone). Never write it into the
      goals. Ask which applies: add it to Today (Recommended when it is a step toward an
-     existing goal); send it to capture.md and mark it `❌` on the needle, appending
+     existing goal); send it to capture.md and mark it `🚫` on the needle, appending
      `- <item wording> (was: Move the Needle, <date>)`, when it is really a new goal, so the
-     next capture.md triage decides; mark it `❌` only; or leave it. An item that already
-     carries `✅` or `❌` is a closed record, so leave it alone.
+     next capture.md triage decides; mark it `🚫` only; or leave it. An item that already
+     carries `✅`, `❌` or `🚫` is a closed record, so leave it alone.
    - Ticks disagree: propagate the completion.
    - Today has entries but the needle is empty: propose 1–3 picks from Today that pass the
      outcome-verb test.
