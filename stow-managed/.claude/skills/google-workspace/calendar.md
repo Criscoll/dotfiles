@@ -37,26 +37,24 @@ Default calendar is the authenticated account's primary calendar.
 ## Creating events
 
 ```bash
-# Create a single event (summary, start, end are positional)
-~/bin/agent_scripts/calendar-create "Team sync" 2024-01-15T10:00:00 2024-01-15T11:00:00
-
-# With timezone offset
+# Create a single event (summary, start, end are positional). Timed events MUST carry
+# a UTC offset — without one the API rejects with "Missing time zone definition".
 ~/bin/agent_scripts/calendar-create "Team sync" 2024-01-15T10:00:00+01:00 2024-01-15T11:00:00+01:00
 
 # All-day event
 ~/bin/agent_scripts/calendar-create "Conference" 2024-01-15 2024-01-16 --all-day
 
 # With location and description
-~/bin/agent_scripts/calendar-create "Lunch" 2024-01-15T12:00:00 2024-01-15T13:00:00 \
+~/bin/agent_scripts/calendar-create "Lunch" 2024-01-15T12:00:00+01:00 2024-01-15T13:00:00+01:00 \
   --location "Restaurant XYZ" \
   --description "Monthly team lunch"
 
 # On a specific calendar
-~/bin/agent_scripts/calendar-create "Event" 2024-01-15T10:00:00 2024-01-15T11:00:00 \
+~/bin/agent_scripts/calendar-create "Event" 2024-01-15T10:00:00+01:00 2024-01-15T11:00:00+01:00 \
   --calendar <calendar-id>
 
 # With attendees (comma-separated emails)
-~/bin/agent_scripts/calendar-create "Meeting" 2024-01-15T10:00:00 2024-01-15T11:00:00 \
+~/bin/agent_scripts/calendar-create "Meeting" 2024-01-15T10:00:00+01:00 2024-01-15T11:00:00+01:00 \
   --attendees "alice@example.com,bob@example.com"
 
 # Quick add, recurring events: not yet wrapped (use raw gws-cli is blocked)
@@ -68,8 +66,8 @@ Default calendar is the authenticated account's primary calendar.
 # Update title, time, or other fields
 ~/bin/agent_scripts/calendar-update <event-id> \
   --summary "Updated title" \
-  --start 2024-01-15T11:00:00 \
-  --end 2024-01-15T12:00:00
+  --start 2024-01-15T11:00:00+01:00 \
+  --end 2024-01-15T12:00:00+01:00
 
 # Update description or location
 ~/bin/agent_scripts/calendar-update <event-id> \
