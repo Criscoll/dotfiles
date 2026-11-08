@@ -119,7 +119,9 @@ deletion and emptying the trash are the user's job.
 auto-fill, move rows/columns, duplicate-sheet, text-to-columns, trim-whitespace,
 `batch-get`, raw `batchUpdate`, or updating a chart in place (delete and re-add).
 Value clear, cell formatting, borders, merges, sizes, freeze, validation, filters,
-conditional formats and charts do have wrappers — see sheets.md.
+conditional formats and charts do have wrappers — see sheets.md. For dynamic behaviour
+no wrapper can express (auto-sort on edit, reactive logic), write an Apps Script for the
+user to paste in — see "Behaviour the wrappers can't express" in sheets.md.
 
 This list is not hook-structurally-enforced the way `.enc` file access is — it's
 enforced by which wrapper scripts exist. Do not attempt these via raw `gws-cli` even

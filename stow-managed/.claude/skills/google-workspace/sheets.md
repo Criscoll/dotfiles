@@ -181,3 +181,13 @@ There is no chart update — `delete` it and `add` it again. `delete` prints the
 Pivots, protected ranges, named ranges, banding, copy-paste, auto-fill, move rows/columns, `duplicate-sheet`, text-to-columns, trim-whitespace, `batch-get`, raw `batchUpdate`, and updating a chart in place (delete and re-add instead). Spreadsheets can be trashed and restored with `drive-trash` / `drive-restore` (see drive.md); permanent deletion is the user's job.
 
 If you need one of these, state what you need, confirm no existing wrapper covers it, then ask the user to add a new wrapper script — do not call gws-cli directly.
+
+## Behaviour the wrappers can't express: write an Apps Script for the user to paste
+
+Default approach for anything dynamic or more complex than static values, formatting, validation and rules — auto-sorting on edit, auto-timestamps, derived or cross-row logic, custom menus, anything that must react to an edit. Write the Apps Script, give it to the user in a code block, and have them paste it in (Extensions → Apps Script, replace `Code.gs`, save). Do not try to read, write or deploy scripts yourself: `gws-cli` 1.3.1 has no `script` service (checked 2026-10-31), and a wrapper would need a new OAuth scope, the Apps Script API enabled, and an allow-list entry the user must add. Only revisit if the user asks for that wrapper.
+
+- **Formulas first:** if a formula can do it, use one. Not for sorting a range in place: a `SORT()` formula can't sit on its own input, so it needs a separate read-only tab. That is why the Declutter workbook once had a "Declutter Sorted" tab.
+- **Prefer a simple trigger:** a function named `onEdit(e)` bound to the spreadsheet. It needs no deploy and no authorisation, and runs for anyone with edit access — no per-user setup.
+- **API edits don't fire triggers:** writes made through these wrappers never run `onEdit`, so state it maintains (such as sort order) goes stale after your edits until the next manual edit. Tell the user.
+- **Keep it narrow:** guard on tab name and on the columns that matter, so notes or other edits don't trigger it.
+- **Can't test it:** ask the user to try one edit and report back, or read Extensions → Apps Script → Executions for errors. Don't remove the tab or formula it replaces until they confirm it works.
