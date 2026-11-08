@@ -251,7 +251,7 @@ If `~/opt/pi/docs/` does not exist on this machine, alert the user before procee
 
 Two top-level directories hold institutional knowledge discovered across sessions:
 
-- **`docs/`** — *settled* conventions and best practices reached after research or experience. Treat as authoritative. Before any substantial change, check `docs/` for conventions that constrain implementation; if one turns out wrong, update it rather than working around it. Examples: `skill-authoring-best-practices-2026-06-17.md`, `language-skill-conventions.md`.
+- **`docs/`** — *settled* conventions and best practices reached after research or experience. Treat as authoritative. Before any substantial change, check `docs/` for conventions that constrain implementation; if one turns out wrong, update it rather than working around it. Examples: `skill-authoring-best-practices-2026-06-17.md`, `git-commit-message-philosophy.md`.
 - **`ideas/`** — *well-researched* proposals not yet implemented. Each documents context, problem, rationale, findings, and next steps — enough that another agent can resume it. Check `ideas/` before researching an improvement; when deferring a researched improvement, write an idea doc so the context isn't lost. Example: `install-svelte-skills.md`.
 
 The dividing line: settled → `docs/`; still speculative → `ideas/`.

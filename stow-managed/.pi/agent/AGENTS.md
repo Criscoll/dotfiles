@@ -75,6 +75,15 @@ Before using a flag you haven't verified, run `<cmd> --help` to confirm it exist
 
 Default to a 60 second timeout on bash tool calls. Pass a longer explicit `timeout` only when the command is known to run longer (builds, test suites, JS-rendered crawls, etc).
 
+## Language Toolchain
+
+Personal toolchain choices — apply these without being told; don't substitute alternatives.
+
+- **Python:** `uv` only — `uv add`, `uv add --dev`, `uv sync`, `uv run python`. Never `pip install`, `python -m venv`, `requirements.txt`, or `setup.py`; `pyproject.toml` is canonical. Never name a `.py` file after a stdlib module — it shadows it.
+- **TS/JS:** Node via `nvm`, tools via `npx` (`npx tsc --noEmit`, `npx eslint --fix`). Never global `npm install -g`, `ts-node`, runtime `tsx`, or `npm link`. `strict: true`, no `any` — use `unknown`. Run `npx tsc --noEmit` for a clean baseline before editing `.ts`/`.tsx`.
+- **Svelte:** Svelte 5 runes, SvelteKit 2, `pnpm`.
+- **Data:** polars by default; pandas only when a library requires it (convert at the boundary). DuckDB for SQL over CSV/Parquet without loading it.
+
 ## What Not to Do
 
 - Don't add features, refactors, or improvements beyond what was asked

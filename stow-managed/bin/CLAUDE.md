@@ -96,7 +96,7 @@ Declare deps via a `package.json` in the script's directory. Commit both `packag
 
 ## Language Standards (linting)
 
-Mechanical enforcement runs via `agent_scripts/lint-file.sh`, called by both the `settings.json` PostToolUse hook and the `lint-on-edit.ts` pi extension. Language detail lives in the `python-knowledge` / `typescript-knowledge` skills (auto-invoked on edit); `lint-file.sh` only maps extensions to fixers:
+Mechanical enforcement runs via `agent_scripts/lint-file.sh`, called by both the `settings.json` PostToolUse hook and the `lint-on-edit.ts` pi extension. Language toolchain rules live in the global `CLAUDE.md` / `AGENTS.md` (`## Language Toolchain` section); `lint-file.sh` only maps extensions to fixers:
 
 - `.py` → `uvx ruff check --fix`
 - `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs` → `npx eslint --fix`

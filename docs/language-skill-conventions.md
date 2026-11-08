@@ -3,6 +3,8 @@
 Date: 2026-06-21
 Sources: community skill repos (spences10/skills, HoangNguyen0403/agent-skills-standard, sveltejs/ai-tools), Claude skill authoring docs, mgechev/skills-best-practices, VoltAgent/awesome-agent-skills, observed patterns across 20+ production skills.
 
+> **Superseded 2026-11-07:** language and framework skills (`python-knowledge`, `typescript-knowledge`, `svelte-knowledge`, `data-analysis-toolkit`) were removed from this dotfiles repo. Models already know these languages, so the skills cost trigger/description tokens every session for no gain. Only the personal toolchain preferences survive, as a short `## Language Toolchain` block in the global `CLAUDE.md` / `AGENTS.md`. The research body below is kept for reference — do not create new language skills from it.
+
 ---
 
 ## What This Documents
