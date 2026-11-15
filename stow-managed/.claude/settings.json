@@ -76,6 +76,11 @@
   },
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
+  "modelSettings": {
+    "claude-sonnet-5-5": {
+      "effortLevel": "medium"
+    }
+  },
   "showClearContextOnPlanAccept": true,
   "skipDangerousModePermissionPrompt": true,
   "agentPushNotifEnabled": true
