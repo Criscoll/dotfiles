@@ -1,9 +1,9 @@
 ---
 name: web-search
 description: >-
-  Search the web on-demand — Brave Search API primary (search + extracted page
-  content in one call, no Docker), local SearXNG Docker instance as automatic
-  fallback. Use for live web search, recent news, current documentation, or any
+  Search the web on-demand via the Brave Search API (search + extracted page
+  content in one call, no Docker); a local SearXNG Docker instance is available
+  only when forced. Use for live web search, recent news, current documentation, or any
   query that needs real-time results. Auto-invoke BEFORE attempting to answer
   questions requiring current information. Trigger phrases: "search the web",
   "look this up", "find recent", "what's the latest on", "search for", "web
@@ -18,10 +18,12 @@ Search the web using `~/bin/agent_scripts/websearch`, a tiered search wrapper:
   quick lookups need no follow-up crawl; for anything that will drive an
   action, read 1–2 top sources yourself (see Content Rule). No Docker,
   sub-second response.
-- **Fallback — SearXNG** (Docker-backed, via `websearch-searxng`). The wrapper
-  delegates automatically when no API key is present or the Brave call fails
-  (invalid key, quota, rate limit, network). The stderr banner says which
-  provider served each search — read it so you know whether content came back.
+- **SearXNG — automatic fallback currently DISABLED.** Its results were poor
+  (Bing returned unrelated pages), so a Brave failure (no key, invalid key,
+  quota, rate limit, network) now exits 1 with an `Error: Brave search
+  failed (…)` on stderr instead of silently degrading. Report the error to the
+  user; don't retry with `--provider searxng` unless they ask, or Brave is
+  known to be down and low-quality results are acceptable.
 
 Do not use the built-in `WebSearch` tool or `WebFetch` when this is available.
 
@@ -34,39 +36,30 @@ ls ~/bin/agent_scripts/websearch
 
 If the script is missing, stow from the dotfiles repo hasn't been run. Do not attempt a fallback.
 
-**If the key is missing, say so loudly before searching.** Open your reply with
-a line like `WARNING: BRAVE_API_KEY is not set, so web-search is DEGRADED
-(SearXNG fallback, short snippets from a single engine).` Do not stay quiet and
-carry on. Why it matters: in the missing-key case the fallback returned generic
-vendor and Wikipedia pages with 70–136-character snippets, and an earlier
-session answered from them without noticing. Brave returns 1.4–2k characters of
-extracted content per result and finds forums, issues and official docs. The two
-are not the same tool.
-
-Then tell the user the fix: export `BRAVE_API_KEY` from `~/.zshenv` (inherited
-when `claude` is launched from zsh) or write `~/.config/agent-scripts/env` (also
-works from launchers, IDEs, cron and Paseo). Never print or ask for the key
-in chat. You may still search, but follow the degraded rules below.
+**If the key is missing, say so before searching.** With no key the wrapper
+exits 1 (automatic SearXNG fallback is disabled), so report it instead of
+answering from memory. Tell the user the fix: export `BRAVE_API_KEY` from
+`~/.zshenv` (inherited when `claude` is launched from zsh) or write
+`~/.config/agent-scripts/env` (also works from launchers, IDEs, cron and
+Paseo). Never print or ask for the key in chat.
 
 ## Check the provider after every search
 
-Never throw stderr away: it holds the only record of which provider answered.
-Save it and read it every time:
+Never throw stderr away: it holds the only record of which provider answered
+and why a search failed. Save it and read it every time:
 
 ```bash
 ~/bin/agent_scripts/websearch -n 8 "query" >ws.json 2>ws.err   # scratch dir, not the repo
-grep -E 'Falling back|SearXNG' ws.err && echo "DEGRADED: fallback served this search"
+grep -E 'Falling back|SearXNG|^Error' ws.err && echo "NOT A NORMAL BRAVE RESULT"
 ```
 
 A banner of `Searching (Brave LLM Context)` or `Searching (Brave, raw)` is good.
-`Falling back to SearXNG …` means degraded, whatever the reason (no key, invalid
-key, quota, rate limit, network). Yell about it the same way as a missing key,
-including the reason from the banner.
-
-When degraded, do **not** treat snippets as evidence. Use them only to pick
-URLs, then fetch the best 2–3 with the **web-crawl** skill and answer from what
-you read. If results are off-topic (generic vendor pages, wrong language), say so
-instead of summarising them.
+`Error: Brave search failed (…)` means no results: report the reason to the user.
+`Falling back to SearXNG …` appears only when SearXNG was forced with
+`--provider searxng`; treat that output as degraded: do **not** treat snippets
+as evidence. Use them only to pick URLs, then fetch the best 2–3 with the
+**web-crawl** skill and answer from what you read. If results are off-topic
+(generic vendor pages, wrong language), say so instead of summarising them.
 
 ## Common Usage
 
@@ -87,7 +80,23 @@ instead of summarising them.
 
 # Force the SearXNG fallback (e.g. testing, or Brave quota is known-exhausted)
 ~/bin/agent_scripts/websearch --provider searxng "docker security vulnerabilities"
+
+# Country — defaults to AU ($WEBSEARCH_COUNTRY overrides per machine).
+# Global/tech queries return the same results under AU and US; money, law,
+# shopping and health queries get Australian sources. Use -c US (or another
+# code) when the question is explicitly about that country.
+~/bin/agent_scripts/websearch -c US "401k contribution limits"
+
+# Precision over recall (LLM Context only) — roughly half the passages, all
+# more on-topic. Good for factual lookups; skip for broad research.
+~/bin/agent_scripts/websearch --strict "python 3.13 release date"
+
+# Re-rank sources with Goggles (see "Goggles" below); repeat up to 3 times
+~/bin/agent_scripts/websearch --goggles '$boost=3,site=docs.python.org' "asyncio taskgroup"
 ```
+
+`-c`, `-l LANG`, `--goggles` and `--strict` are Brave-only; on SearXNG
+fallback they are ignored and stderr says so.
 
 ## Output Format
 
@@ -157,6 +166,64 @@ image(s)" page. The right move is to crawl the manual page (it names the move,
 copy, copy locally and resync buttons exactly) and cite the forums only for
 experience reports.
 
+## Source Quality and Recency
+
+Search ranking rewards popularity and SEO, not accuracy. Before answering:
+
+- **Prefer primary sources** — official docs, the vendor's own pricing/terms
+  pages, original announcements, papers, the actual thread. Comparison
+  listicles and "best X in 2026" posts are often written by a vendor in the
+  space; treat them as leads, not evidence.
+- **Crawl the primary page for prices, terms, policies, limits, and anything
+  contested** rather than answering from a secondary summary.
+- **Check dates.** Note when each source was published or updated. Claims about
+  policies, pricing, terms, or API behaviour from an undated source or one over
+  a year old may be stale — confirm against a current primary source or say so.
+  (Real example: a 9-month-old HN thread said Brave's API forbids AI use; that
+  rule belonged to a plan Brave retired in Feb 2026.)
+- **Cite the source you actually relied on**, with its date when it matters.
+
+## Goggles (Brave re-ranking)
+
+A Goggle is a set of rules that boosts, downranks, or discards results by site
+or URL pattern for one query. Opt-in only — never apply one by default, since
+it imposes our own bias. Rules are newline- (or `\n`-) separated; each is
+`$<action>,site=<domain>` where action is `boost=N`, `downrank=N` (N 1–10) or
+`discard`. Precedence: discard > boost > downrank. A bare `$discard` line
+first turns the list into an allow-list (only listed sites survive). A hosted
+goggle URL also works but must be registered with Brave first; inline rules
+need no registration.
+
+Recipes (tested 2026-11-19) — substitute domains relevant to the query:
+
+```bash
+# Docs-first: boost the official docs for the topic. Use site= boosts, not
+# path patterns like /docs/ — those also boost low-quality sites that use /docs/.
+--goggles '$boost=3,site=docs.python.org\n$boost=3,site=developer.mozilla.org\n$downrank=3,site=medium.com'
+
+# De-SEO: drop or sink content farms for how-to queries
+--goggles '$discard,site=pinterest.com\n$discard,site=quora.com\n$downrank=5,site=medium.com\n$downrank=5,site=geeksforgeeks.org'
+
+# Community experience: lived-experience questions ("is X worth it", "anyone
+# used Y"). Even boost=2 can fill every slot with Reddit when it has many
+# matching threads (tested: top 6 went from 1 Reddit hit to 6). Use it when you
+# want forum voices specifically, not as a "mix in some forums" setting.
+--goggles '$boost=2,site=reddit.com\n$boost=2,site=news.ycombinator.com\n$boost=2,site=lobste.rs'
+
+# Allow-list: only these sites
+--goggles '$discard\n$site=docs.rs\n$site=rust-lang.org'
+```
+
+## Brave Terms — Don't Persist Raw Results
+
+Brave's API terms (updated 2026-09-01) permit feeding results to a model at
+query time — the normal use of this skill. They forbid storing or caching
+results beyond transient use (clause 3(b)(i)) and using them to train,
+fine-tune, or benchmark models (3(b)(xiii)). Do not write raw `websearch`
+output into a database, vector store, cache, or bulk file. Writing a
+summary in your own words with citations (e.g. a note via the notes skill) is
+fine.
+
 ## API Key Setup (per machine)
 
 The key can come from either place; the wrapper accepts both:
@@ -173,15 +240,21 @@ echo 'export BRAVE_API_KEY="<key from password manager>"' > ~/.config/agent-scri
 chmod 600 ~/.config/agent-scripts/env
 ```
 
-If neither exists, the wrapper falls back to SearXNG automatically. The skill
-still runs, but results are much weaker (see Preflight): treat it as degraded
-and say so, not as equivalent.
+The same file can set `export WEBSEARCH_COUNTRY="US"` to change this machine's
+default country (unset → AU). Note it is only sourced when `$BRAVE_API_KEY` is
+not already in the environment.
+
+If neither the file nor `$BRAVE_API_KEY` exists, the wrapper errors out — a key
+is required (automatic SearXNG fallback is disabled).
 
 **Cost note:** ~$5/1k requests (search and LLM Context both count as requests);
 $5 of free credits is applied automatically every month. Prefer `--search-only`
 for high-volume URL-hunting; use the default for content-grounded answers.
 
 ## SearXNG Fallback Details
+
+Applies only when forced with `--provider searxng` while automatic fallback is
+disabled. To re-enable it, set `PROVIDER="auto"` in `websearch`.
 
 The fallback runs a persistent SearXNG Docker container (`searxng-websearch`,
 starts on first use, stays running). Requires Docker at `/usr/bin/docker` and

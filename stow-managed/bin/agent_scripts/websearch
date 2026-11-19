@@ -5,18 +5,29 @@
 #           (https://api.search.brave.com/res/v1/llm/context) — search +
 #           pre-extracted page content in one call. `--search-only` switches to
 #           raw web search (titles + snippets, cheapest per request).
-# Fallback: SearXNG via websearch-searxng (Docker-backed), used automatically
-#           when no API key is available or the Brave call fails (auth, quota,
-#           rate limit, network).
+# Fallback: SearXNG via websearch-searxng (Docker-backed). Automatic fallback
+#           on Brave failure is currently DISABLED (see PROVIDER below);
+#           `--provider searxng` still forces it.
 #
-# Usage: websearch [-n N] [-t TIME] [--search-only] [--provider brave|searxng] QUERY
+# Usage: websearch [-n N] [-t TIME] [-c CC] [-l LANG] [--goggles G]... [--strict]
+#                  [--search-only] [--provider brave|searxng] QUERY
 #
 # Options:
 #   -n N         max results (default: 10; Brave caps at 50)
 #   -t TIME      freshness: day|week|month|year (pd|pw|pm|py also accepted)
+#   -c CC        Brave result country, 2-letter code or ALL
+#                (default: $WEBSEARCH_COUNTRY, else AU)
+#   -l LANG      Brave result language, e.g. en, de (default: Brave's, en)
+#   --goggles G  Brave re-ranking: inline rules (newline- or \n-separated) or a
+#                hosted goggle URL; repeat up to 3 times
+#   --strict     LLM Context only: context_threshold_mode=strict (fewer, more
+#                relevant passages)
 #   --search-only  raw web search — titles + snippets only, then use the
 #                  web-crawl skill for content (cheapest Brave tier)
-#   --provider   force 'brave' (no fallback, error on failure) or 'searxng'
+#   --provider   'brave' (default; errors on failure — automatic SearXNG
+#                fallback is currently disabled) or 'searxng' (force it)
+#
+#   -c, -l, --goggles and --strict are Brave-only; ignored on SearXNG fallback.
 #
 # Output: JSON array [{title, url, snippet, engine}] on stdout.
 #         With the default (LLM Context) endpoint, `snippet` carries extracted
@@ -36,8 +47,17 @@ SEARXNG_SCRIPT="$SELF_DIR/websearch-searxng"
 
 MAX_RESULTS=10
 FRESHNESS_IN=""
-PROVIDER="auto"   # auto | brave | searxng
+# Automatic SearXNG fallback disabled (2026-11-19): its results were poor
+# (bing returned unrelated pages). Set back to "auto" to re-enable.
+PROVIDER="brave"  # auto | brave | searxng
 SEARCH_ONLY=0
+COUNTRY=""
+SEARCH_LANG=""
+STRICT=0
+GOGGLES_N=0
+GOGGLES_1=""
+GOGGLES_2=""
+GOGGLES_3=""
 
 # ── Argument parsing ────────────────────────────────────────────────────────
 QUERY=""
@@ -45,6 +65,20 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -n) MAX_RESULTS="$2"; shift 2 ;;
     -t) FRESHNESS_IN="$2"; shift 2 ;;
+    -c) COUNTRY="$2"; shift 2 ;;
+    -l) SEARCH_LANG="$2"; shift 2 ;;
+    --strict) STRICT=1; shift ;;
+    --goggles)
+      GOGGLES_N=$((GOGGLES_N + 1))
+      # Accept literal "\n" separators as well as real newlines.
+      G=$(printf '%b' "$2")
+      case "$GOGGLES_N" in
+        1) GOGGLES_1="$G" ;;
+        2) GOGGLES_2="$G" ;;
+        3) GOGGLES_3="$G" ;;
+        *) echo "Error: Brave accepts at most 3 --goggles values" >&2; exit 1 ;;
+      esac
+      shift 2 ;;
     --search-only) SEARCH_ONLY=1; shift ;;
     --provider)
       case "${2:-}" in
@@ -53,7 +87,7 @@ while [ $# -gt 0 ]; do
       esac
       shift 2 ;;
     -h|--help)
-      sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -80,10 +114,13 @@ fi
 fallback() {
   REASON="$1"
   if [ "$PROVIDER" = "brave" ]; then
-    echo "Error: Brave search failed ($REASON) and --provider brave forbids fallback" >&2
+    echo "Error: Brave search failed ($REASON); SearXNG fallback is disabled (--provider searxng forces it)" >&2
     exit 1
   fi
   echo "Falling back to SearXNG ($REASON)..." >&2
+  if [ -n "$COUNTRY$SEARCH_LANG$GOGGLES_1" ] || [ "$STRICT" = "1" ]; then
+    echo "Note: -c/-l/--goggles/--strict are Brave-only; ignored on SearXNG" >&2
+  fi
   SEARXNG_ARGS="-n $MAX_RESULTS"
   case "$FRESHNESS_IN" in
     day|month|year)   SEARXNG_ARGS="$SEARXNG_ARGS -t $FRESHNESS_IN" ;;
@@ -135,15 +172,34 @@ else
   echo "Searching (Brave LLM Context): $QUERY" >&2
 fi
 
+# Brave defaults to country=US; AU keeps global/tech results identical while
+# localising money/law/shopping queries (verified 2026-11-19).
+COUNTRY="${COUNTRY:-${WEBSEARCH_COUNTRY:-AU}}"
+
+# Build request params in "$@" — goggle rules contain spaces/newlines, so they
+# can't go through unquoted ${VAR:+...} expansion.
+set -- --data-urlencode "q=$QUERY" \
+  --data-urlencode "count=$MAX_RESULTS" \
+  --data-urlencode "country=$COUNTRY"
+if [ -n "$FRESHNESS" ]; then set -- "$@" --data-urlencode "freshness=$FRESHNESS"; fi
+if [ -n "$SEARCH_LANG" ]; then set -- "$@" --data-urlencode "search_lang=$SEARCH_LANG"; fi
+for G in "$GOGGLES_1" "$GOGGLES_2" "$GOGGLES_3"; do
+  if [ -n "$G" ]; then set -- "$@" --data-urlencode "goggles=$G"; fi
+done
+if [ "$STRICT" = "1" ]; then
+  if [ "$SEARCH_ONLY" = "1" ]; then
+    echo "Note: --strict applies to LLM Context only; ignored with --search-only" >&2
+  else
+    set -- "$@" --data-urlencode "context_threshold_mode=strict"
+  fi
+fi
+
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 HTTP_CODE=$(curl -s --compressed -o "$TMP" -w "%{http_code}" \
   -H "X-Subscription-Token: $BRAVE_API_KEY" \
   -H "Accept: application/json" \
-  -G "$BRAVE_URL" \
-  --data-urlencode "q=$QUERY" \
-  --data-urlencode "count=$MAX_RESULTS" \
-  ${FRESHNESS:+--data-urlencode "freshness=$FRESHNESS"}) || {
+  -G "$BRAVE_URL" "$@") || {
   fallback "curl/network failure"
 }
 
@@ -169,7 +225,7 @@ if 'grounding' in d:
         {
             'title': it.get('title', ''),
             'url': it.get('url', ''),
-            'snippet': ' '.join(it.get('snippets', [])),
+            'snippet': '\n\n'.join(it.get('snippets', [])),
             'engine': 'brave-llm-context',
         }
         for it in d.get('grounding', {}).get('generic', [])
