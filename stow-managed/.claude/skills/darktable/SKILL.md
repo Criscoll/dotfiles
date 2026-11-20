@@ -55,15 +55,19 @@ Flags: `--min-mip`/`--max-mip` (0–8, default 0–2), `--min-imgid`/`--max-imgi
 **darktable does the organising; the user never files photos by hand.** Folders are only storage, chosen automatically from the capture date at import. Finding photos happens in the collections module (capture date, tags, ratings), not in the folder tree. This replaced an earlier "one named folder per shoot or trip" scheme: hand-naming folders added friction at every import, and a casual city day has no natural name.
 
 ```
-Photos/<YYYY>/<YYYY-MM-DD>/                one folder per capture day: RAW + camera JPG + .xmp, never moved
+Photos/<YYYY>/<YYYY-MM-DD>/                one folder per capture day: RAW + camera JPG + video + .xmp, never moved
 Photos/_undated/                           migration only: frames shot before the camera clock was set
 Exports/<YYYY>/<YYYY-MM-DD>/               outputs only, mirrors the originals' day folder
+Video/Projects/<YYYY>/<YYYY-MM-DD>_<name>/ video editor projects and renders only; clips stay in Photos/
 ```
+- **Videos live in the same day folder as that day's photos** (agreed 2026-11-16). darktable is stills-only: it doesn't import them, and copy & import leaves MOV/MP4 on the card, so each card offload needs a separate video copy step. Keep editor caches and proxies off the archive drive.
+- **Day = the camera's clock as-is**, even if it was on the wrong zone (user decision 2026-11-16: folders match what darktable shows as capture date). darktable can apply a time offset later if wanted.
+- **Film scans are the one named-folder exception** (`Photos/<YYYY>/film_<trip>/<roll>/`): lab scans carry the scan date, not the shoot date. Their exports go to `Exports/<YYYY>/film_<trip>/`, typed by hand, since `$(ROLL.NAME)` would give the roll number.
 - **Trips and events are tags, not folders** (e.g. `japan`). A tag is one keystroke on a selection, spans month boundaries, and keeps the folder layout fully automatic. Don't suggest named trip folders unless the user asks for them again.
 - Day folders with only 1–2 frames, or that shrink after culling, are fine. Culling deletes rejects; it never moves files between folders. Delete a folder only if it ends up empty.
 - Track status with metadata, never by moving files between stage folders. Moving RAWs between folders like `02_TO_EDIT` / `04_TO_EXPORT` breaks film-roll links unless the XMP moves too and the folder is re-imported, and it shuffles multi-GB files for no benefit.
 - Exports live in a separate tree, not beside the originals, which keeps the library clean and avoids the "changed XMP" prompt. Export path: `…/Exports/$(EXIF.YEAR)/$(ROLL.NAME)/$(FILE.NAME)`. Use `$(ROLL.NAME)` (the film roll, i.e. the day folder's name), not `$(FILE.FOLDER)`: that is the full source path, which is why darktable's own default export is `$(FILE_FOLDER)/darktable_exported/…`, and it would nest `/media/...` inside Exports.
-- RAWs stay put once imported. Sony ARW needs no DNG conversion; darktable reads it directly.
+- RAWs stay put once imported. Sony ARW needs no DNG conversion; darktable reads it directly. The A7 IV's **lossless compressed** ARW was unsupported until darktable 4.4 (mid-2023; [#12064](https://github.com/darktable-org/darktable/issues/12064)), which is why the 2023 NYC files were converted with dnglab. Full-size (L) lossless works now; M/S downsized lossless still doesn't, so keep the camera on Lossless L or Uncompressed.
 
 Status scheme (adjust to taste, but keep one scheme across all shoots):
 
@@ -149,24 +153,33 @@ The user's NVMe is too small to hold the photos, so the pattern is: library, thu
 The per-card sequence is in section 1. Also tell the user to offload regularly rather than let a card fill: small cards copy quickly, fit on the drive, and keep the camera responsive (see "Camera slow on review or delete" under Troubleshooting).
 
 ### 7. Migrating the old library
-The existing `01_PHOTOGRAPHY` folders are moved into the same `Photos/<YYYY>/<YYYY-MM-DD>/` layout one folder at a time, with `01_PHOTOGRAPHY/_reorg/reorg_by_shoot.py`. It reads each frame's date from the JPG EXIF (`DateTimeOriginal`; RAF/XMP follow their JPG's stem, files without a JPG fall back to mtime and are flagged).
+**Read `01_PHOTOGRAPHY/_reorg/PROGRESS.md` first.** It holds what's done, what's staged, what's left, and the rules agreed so far. Update it at the end of each run.
+
+The existing `01_PHOTOGRAPHY` folders are moved into the same `Photos/<YYYY>/<YYYY-MM-DD>/` layout one folder at a time, with `01_PHOTOGRAPHY/_reorg/reorg_by_shoot.py`. It reads each frame's date from the JPG EXIF (`DateTimeOriginal`; RAF/XMP follow their JPG's stem, including `_01` virtual copies and `(1)` duplicates; files without a JPG fall back to mtime and are flagged).
 - It is a **dry run by default** and prints every move plus a plan code. It only moves with `--apply <code>` from a dry run of the identical plan, so the user approves exactly what runs.
 - It never deletes or overwrites, refuses cross-filesystem moves, writes a src→dst TSV to `_reorg/logs/` for undo, and removes only emptied source folders.
 - Per-day call: `uv run --no-project --with pillow python -I _reorg/reorg_by_shoot.py <src> Photos --min-frames 1 [--undated YYYY-MM-DD]`. Check `--help`: it also has `--group` and a misc threshold left over from earlier layouts that were dropped.
 - Only use it on folders darktable hasn't imported, or close darktable and update the film-roll paths afterwards. Check `library.db` (`film_rolls.folder`) first. After moving, "add to library" the new folders and tag trips.
+- Use darktable for import, checking, culling and editing, not for merging copies: it treats every copy as a separate image and can't match a DNG's rating to its ARW by name.
 
-## User's library state (measured 2026-11-15)
-Context for advising this user; re-verify before relying on it.
-- Photos live on `/media/cristian/EXTERNAL1TB/Media` (exFAT, 932 GB, ~93% full): `01_PHOTOGRAPHY` (~784 GB) and `02_EXPORTED` (one export set, 14 JPGs). The drive is the only copy seen, so there's no backup.
-- `01_PHOTOGRAPHY` mixes at least five layouts: `japan_2023` (373 GB), `NYC_organised`, `unorganised`, `SonyA7iv_original`, `2025/`, `new_zealand_*`.
-- An earlier stage-folder pipeline exists at `01_Darktable_Backups/NYC_2023/` (`01_RAW` … `06_BACKED_UP`). It was only half used: `03_TO_FILTER` holds 1,345 files (17 GB) and the `04_*` and `06_*` folders are empty.
-- Suspected duplicates (same card-folder names): `SonyA7iv_original/` vs `NYC_organised/sonya7iv_original_photos/`, plus `…_dng_coverted_photos`. Not yet checksummed.
-- Exports are scattered beside originals (`DEST/01_ready_to_export` for New Zealand 2025, `IMG_xxxx_01.jpg` in Japan 2025).
+Per folder, before moving (lessons from 2026-11-16):
+1. **Inventory first.** List file types per subfolder and check `library.db`. Folders mix originals, exports (lowercase `.jpg`, `*(1).jpg`, `DEST/`, `*_exported/`), film scans and macOS `._*` junk. Move exports and junk out first, or the script files them into `Photos/`.
+2. **Copies hide work.** The same shoot often exists in several folders with byte-identical images but different XMPs (separate culling or edit passes). Checksum the images *and* compare XMP rating, labels, tags and history before calling a copy redundant. Tools in `_reorg/tools/`: `dupcheck.py`, `copies_audit.py`, `dng_audit.py`. XMPs differing only in `import_timestamp` hold nothing.
+3. **"Edited"** means history beyond darktable's auto-applied default stack, counting entries above `history_end` (undone, still recoverable). Collect every virtual copy (`_01.xmp`) from every copy; keep one per distinct history.
+4. **Merge metadata by script into the master copy's XMPs, via a staging folder**, verify the diff touches only ratings and labels, back up the replaced XMPs, then move. Merge rules and examples are in PROGRESS.md (`merge_fuji_xmp.py`, `merge_sony_xmp.py`).
+5. **Check dates against neighbours.** On the external drive, file mtimes read +8 h vs the camera clock, so anything dated by mtime (videos, files without a JPG) needs that correction. Check odd capture hours too: daylight exposures stamped at night mean the camera clock was on another zone.
+6. **Deletion is a separate, approved step.** `rm` on the exFAT drive has no trash. Give the user the list and the command; never delete in the same step as a move.
+
+## User's library state (updated 2026-11-16)
+Context for advising this user; re-verify before relying on it. Migration progress and per-folder detail: `01_PHOTOGRAPHY/_reorg/PROGRESS.md`.
+- Photos live on `/media/cristian/EXTERNAL1TB/Media` (exFAT, 932 GB, 141 GB free after removing duplicates). The drive is the only copy, so there's no backup; several originals now exist exactly once.
+- Migrated into `Photos/` and `Exports/`: the old `2025/` folder (Aug 2024–Mar 2025 incl. Japan 2025), NZ 2025 (external part), NZ 2023, NYC 2023 Fuji. NYC 2023 Sony is staged. None of it is imported into darktable yet.
+- Still in old layouts: `japan_2023` (373 GB), rest of NYC 2023 (`NYC_organised`, `unorganised`, `NYC_2023_Videos`, `01_Darktable_Backups/NYC_2023`), `unorganised/Newtown_Sonya7iv`, `02_EXPORTED`, and NZ 2025's main copy on the NVMe (`~/Media/Photos/new_zealand_2025`, darktable film rolls 1–2).
+- The old stage-folder pipeline (`01_Darktable_Backups/NYC_2023/01_RAW` … `06_BACKED_UP`) holds the newest NYC edits (Dec 2024); its status is being converted to stars, after which it goes.
 - Settings: `write_sidecar_files` was `on import` and was changed to `after edit` on 2026-11-15 after it put 1,136 XMPs on the X100VI card. JPEG quality 95. `cache_disk_backend=TRUE`. The older library has ~11.9k `.xmp` files from the previous setting; leave those alone.
 - Fuji X100VI card (`/media/cristian/MIMCARDFUJI`, 239 GB exFAT, label `MIMCARDFUJI`): about 872 RAF + 873 JPG, 87 GB, all in `DCIM/100_FUJI`. Its extra clutter (`.Trash-1000`, `.Spotlight-V100`, `.Trashes`, `FFDB`, `UPD`) is normal for a card that has touched a computer.
-- Suggested migration order: checksum and remove confirmed duplicates (read-only report first), migrate one trip (e.g. NYC 2023) to the new layout carrying XMPs across, finish or reject `03_TO_FILTER` and delete the stage folders, and set up a second backup drive before moving more files.
-- Migration in progress (2026-11-15): `2025/Japan_2025/Japan_2025` (1,162 files, 56 GB) is actually Aug 2024 to Mar 2025. Only 4–8 Mar 2025 is Japan; DSCF0001–0008 are dated 2024-01-01 (clock not set) and go to `_undated`. Dry run done (per-day, 22 folders, plan code `2d13f8e6`). The folder names match darktable's (padding verified), so it's ready to apply once the user approves. None of it is in `library.db`. Full audit: `01_PHOTOGRAPHY/LIBRARY_AUDIT_2026-11-15.md`.
-- The external drive can't take a full card yet (72 GB free vs an 87 GB card) until confirmed duplicates (~138 GB) are removed. Use chunked import (section 1) until then.
+- The external drive now has room for a full card (141 GB free vs the 87 GB X100VI card), but check `df -h` first; chunked import (section 1) is still the fallback.
+- About 1,338 macOS `._*` files sit across the drive (from a Mac copying to exFAT). They're junk: exclude them from scripts and delete them once nothing is running.
 - `01_PHOTOGRAPHY/Photos/` exists. Its first film roll (id 4) is `Photos/2025/2025-06-28` with 12 X100VI files from the import pattern test, kept as real archive copies. The import dialog now has the agreed patterns, with the base set to `Photos/$(EXIF.YEAR)`.
 
 ## Troubleshooting
