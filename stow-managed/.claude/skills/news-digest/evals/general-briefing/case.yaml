@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: general-briefing
+expected_outcome: |
+  A scannable multi-topic digest, each story cited to a trusted outlet with a working full URL, saved as markdown.

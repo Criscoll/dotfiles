@@ -1,0 +1,173 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""news-feed — fetch headlines from the curated news sources as JSON.
+
+Usage: news-feed [-c CATEGORY[,CATEGORY...]] [-k KEYWORD[,KEYWORD...]]
+                 [--since-hours N] [-n PER_FEED] [--sources] [--sources-file PATH]
+
+Sources come from the news-digest skill's references/sources.toml, overlaid by
+~/.config/news-digest/sources.local.toml (same-name [[source]] replaces).
+
+Output (stdout): JSON {"items": [{source, tier, category, title, url, published,
+summary}], "errors": [{source, error}]}, newest first, de-duplicated by URL.
+Diagnostics go to stderr. Items are headlines + feed blurbs only — read the
+full article with `webcrawl <url>` before summarising it.
+"""
+import argparse
+import json
+import re
+import sys
+import tomllib
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from html import unescape
+from pathlib import Path
+from xml.etree import ElementTree as ET
+
+BUNDLED = Path.home() / ".claude/skills/news-digest/references/sources.toml"
+LOCAL = Path.home() / ".config/news-digest/sources.local.toml"
+UA = "Mozilla/5.0 (compatible; news-digest/1.0)"
+
+
+def load_sources(bundled: Path) -> tuple[dict, list[dict]]:
+    with open(bundled, "rb") as f:
+        data = tomllib.load(f)
+    defaults = data.get("defaults", {})
+    by_name = {s["name"]: s for s in data.get("source", [])}
+    if LOCAL.exists():
+        with open(LOCAL, "rb") as f:
+            local = tomllib.load(f)
+        defaults = {**defaults, **local.get("defaults", {})}
+        for s in local.get("source", []):
+            by_name[s["name"]] = s
+    return defaults, list(by_name.values())
+
+
+def strip_html(text: str) -> str:
+    return re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", " ", text or ""))).strip()
+
+
+def parse_date(text: str | None) -> datetime | None:
+    if not text:
+        return None
+    text = text.strip()
+    try:
+        dt = parsedate_to_datetime(text)
+    except (TypeError, ValueError):
+        try:
+            dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def child_text(el: ET.Element, *names: str) -> str:
+    for c in el:
+        if local_name(c.tag) in names and (c.text or "").strip():
+            return c.text.strip()
+    return ""
+
+
+def parse_feed(xml: bytes, src: dict) -> list[dict]:
+    root = ET.fromstring(xml)
+    out = []
+    for el in root.iter():
+        if local_name(el.tag) not in ("item", "entry"):
+            continue
+        url = child_text(el, "link")
+        if not url:  # Atom: <link href="..."/>
+            for c in el:
+                if local_name(c.tag) == "link" and c.get("href"):
+                    if c.get("rel") in (None, "alternate"):
+                        url = c.get("href")
+                        break
+        dt = parse_date(child_text(el, "pubDate", "published", "updated", "date"))
+        out.append({
+            "source": src["name"],
+            "tier": src.get("tier", ""),
+            "category": src["category"],
+            "title": strip_html(child_text(el, "title")),
+            "url": url,
+            "published": dt.isoformat() if dt else None,
+            "summary": strip_html(child_text(el, "description", "summary", "content"))[:400],
+        })
+    return out
+
+
+def fetch(src: dict) -> tuple[list[dict], dict | None]:
+    try:
+        req = urllib.request.Request(src["feed"], headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return parse_feed(r.read(), src), None
+    except Exception as e:  # one dead feed must not sink the digest
+        print(f"news-feed: {src['name']}: {e}", file=sys.stderr)
+        return [], {"source": src["name"], "error": str(e)}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("-c", "--category", help="comma-separated categories (default: from [defaults])")
+    ap.add_argument("-k", "--keyword", help="comma-separated; keep items whose title/summary match any (case-insensitive)")
+    ap.add_argument("--since-hours", type=int, default=36)
+    ap.add_argument("-n", type=int, default=8, help="max items per feed (default 8)")
+    ap.add_argument("--sources", action="store_true", help="list configured sources and exit")
+    ap.add_argument("--sources-file", type=Path, default=BUNDLED)
+    a = ap.parse_args()
+
+    defaults, sources = load_sources(a.sources_file)
+    if a.sources:
+        json.dump({"defaults": defaults, "sources": sources}, sys.stdout, indent=2)
+        return 0
+
+    # With a keyword and no explicit category, search every category: a topic
+    # query like "Taiwan" shouldn't be limited to the default digest categories.
+    if a.category:
+        cats = {c.strip() for c in a.category.split(",")}
+    elif a.keyword:
+        cats = {s["category"] for s in sources}
+    else:
+        cats = set(defaults.get("categories", []))
+    chosen = [s for s in sources if s["category"] in cats]
+    if not chosen:
+        print(f"news-feed: no sources for categories {sorted(cats)}", file=sys.stderr)
+        return 2
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        results = list(ex.map(fetch, chosen))
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=a.since_hours)
+    kws = [k.strip().lower() for k in a.keyword.split(",")] if a.keyword else []
+    seen: set[str] = set()
+    items: list[dict] = []
+    for feed_items, _ in results:
+        kept = 0
+        for it in feed_items:
+            if not it["url"] or it["url"] in seen:
+                continue
+            dt = parse_date(it["published"])
+            if dt and dt < cutoff:
+                continue
+            if kws and not any(k in f"{it['title']} {it['summary']}".lower() for k in kws):
+                continue
+            seen.add(it["url"])
+            items.append(it)
+            kept += 1
+            if kept >= a.n:
+                break
+    items.sort(key=lambda i: i["published"] or "", reverse=True)
+    errors = [e for _, e in results if e]
+    json.dump({"items": items, "errors": errors}, sys.stdout, indent=2, ensure_ascii=False)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

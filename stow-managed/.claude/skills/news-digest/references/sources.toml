@@ -1,0 +1,105 @@
+# Curated, trusted news sources for the news-digest skill.
+# Per-machine additions/overrides go in ~/.config/news-digest/sources.local.toml
+# (same schema; a [[source]] with the same `name` replaces the one here).
+#
+# `tier` records why a source is trusted:
+#   wire      - wire service / public broadcaster with a standards desk
+#   major     - established editorial newsroom with published corrections policy
+#   primary   - the original publisher (journal, institution) of the research/news
+# `category` drives filtering: world, asia, business, tech, science.
+
+[defaults]
+# Used when the user asks for "the news" / "a digest" without naming a topic.
+categories = ["world", "business", "tech", "science"]
+# Standing interests: also surfaced as a "For you" section if anything matches.
+interest_keywords = ["Taiwan", "Hong Kong", "semiconductor", "TSMC"]
+
+[[source]]
+name = "BBC News"
+category = "world"
+tier = "wire"
+feed = "https://feeds.bbci.co.uk/news/world/rss.xml"
+
+[[source]]
+name = "The Guardian"
+category = "world"
+tier = "major"
+feed = "https://www.theguardian.com/world/rss"
+
+[[source]]
+name = "NPR"
+category = "world"
+tier = "major"
+feed = "https://feeds.npr.org/1001/rss.xml"
+
+[[source]]
+name = "Al Jazeera"
+category = "world"
+tier = "major"
+feed = "https://www.aljazeera.com/xml/rss/all.xml"
+
+[[source]]
+name = "Deutsche Welle"
+category = "world"
+tier = "wire"
+feed = "https://rss.dw.com/rdf/rss-en-all"
+
+[[source]]
+name = "BBC News Asia"
+category = "asia"
+tier = "wire"
+feed = "https://feeds.bbci.co.uk/news/world/asia/rss.xml"
+
+[[source]]
+name = "South China Morning Post"
+category = "asia"
+tier = "major"
+feed = "https://www.scmp.com/rss/91/feed"
+
+[[source]]
+name = "Taipei Times"
+category = "asia"
+tier = "major"
+feed = "https://www.taipeitimes.com/xml/index.rss"
+
+[[source]]
+name = "BBC Business"
+category = "business"
+tier = "wire"
+feed = "https://feeds.bbci.co.uk/news/business/rss.xml"
+
+[[source]]
+name = "The Guardian Business"
+category = "business"
+tier = "major"
+feed = "https://www.theguardian.com/business/rss"
+
+[[source]]
+name = "BBC Technology"
+category = "tech"
+tier = "wire"
+feed = "https://feeds.bbci.co.uk/news/technology/rss.xml"
+
+[[source]]
+name = "Ars Technica"
+category = "tech"
+tier = "major"
+feed = "https://feeds.arstechnica.com/arstechnica/index"
+
+[[source]]
+name = "The Verge"
+category = "tech"
+tier = "major"
+feed = "https://www.theverge.com/rss/index.xml"
+
+[[source]]
+name = "BBC Science & Environment"
+category = "science"
+tier = "wire"
+feed = "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
+
+[[source]]
+name = "Nature"
+category = "science"
+tier = "primary"
+feed = "https://www.nature.com/nature.rss"
