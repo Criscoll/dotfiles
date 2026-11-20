@@ -1,31 +1,70 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = []
+# dependencies = ["gws-cli==1.6.1"]
 # ///
 
-import argparse, json, subprocess, sys
+# Lists matching IDs via messages.list directly (paginated, IDs only) instead of
+# `gws-cli gmail search`, which caps at one page and silently drops any message
+# whose per-message metadata fetch is rate-limited — that made backfills report
+# success while skipping a large share of matches.
 
-GWS = ["uvx", "gws-cli@1.6.1", "gmail"]
-CHUNK_SIZE = 100
+import argparse
+import sys
+
+from googleapiclient.errors import HttpError
+from gws.services.gmail import GmailService
+
+LIST_PAGE_MAX = 500      # messages.list maxResults ceiling
+MODIFY_CHUNK = 1000      # messages.batchModify ids ceiling
+PREVIEW_COUNT = 10
 
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def extract(wrapped):
-    """Tolerant unwrap: handles both security_enabled shapes
-    ({"messages": "[...]", ...} and plain "[...]")."""
-    if isinstance(wrapped, dict) and "data" in wrapped:
-        return wrapped["data"]
-    return wrapped
+def list_ids(svc, query, limit):
+    """Return (ids, truncated) for up to `limit` messages matching `query`."""
+    ids, token = [], None
+    while len(ids) < limit:
+        resp = svc.execute(svc.service.users().messages().list(
+            userId="me", q=query, maxResults=min(LIST_PAGE_MAX, limit - len(ids)),
+            pageToken=token))
+        ids += [m["id"] for m in resp.get("messages", [])]
+        token = resp.get("nextPageToken")
+        if not token:
+            break
+    return ids, token is not None
+
+
+def preview(svc, ids):
+    for mid in ids[:PREVIEW_COUNT]:
+        msg = svc.execute(svc.service.users().messages().get(
+            userId="me", id=mid, format="metadata", metadataHeaders=["From", "Date", "Subject"]))
+        h = {x["name"]: x["value"] for x in msg.get("payload", {}).get("headers", [])}
+        print(f"  {mid} | {h.get('Date', '')} | {h.get('From', '')} | {h.get('Subject', '(no subject)')}")
+    if len(ids) > PREVIEW_COUNT:
+        print(f"  … and {len(ids) - PREVIEW_COUNT} more")
+
+
+def verify(svc, ids, add, remove):
+    """Read each modified message's labels back; return the IDs lacking the change.
+    Per-message reads (not a re-query) so queries that depend on the changed labels
+    (in:inbox, -label:X) can't hide failures."""
+    failed = []
+    for mid in ids:
+        labels = set(svc.execute(svc.service.users().messages().get(
+            userId="me", id=mid, format="minimal")).get("labelIds", []))
+        if not set(add) <= labels or labels & set(remove):
+            failed.append(mid)
+    return failed
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Apply label actions to existing messages matching a Gmail query "
-                    "(search + batch-modify composite)")
+                    "(paginated search + batch-modify composite)")
     parser.add_argument("query", help="Gmail search query, e.g. 'from:boss is:unread'")
     parser.add_argument("--add-labels", metavar="IDS",
                         help="Comma-separated label IDs to add (e.g. Label_123)")
@@ -34,7 +73,7 @@ def main():
     parser.add_argument("--max", type=int, default=100,
                         help="Max messages to match (default 100)")
     parser.add_argument("--dry-run", action="store_true",
-                        help="Print match count and would-be actions; modify nothing")
+                        help="Print match count, a preview, and would-be actions; modify nothing")
     args = parser.parse_args()
 
     if not args.add_labels and not args.remove_labels:
@@ -42,74 +81,46 @@ def main():
                "--add-labels / --remove-labels")
         sys.exit(2)
 
-    result = subprocess.run(
-        GWS + ["search", args.query, "--max", str(args.max)],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        msg = result.stderr.strip()
-        if result.stdout:
-            try:
-                err = json.loads(result.stdout)
-                msg = err.get("message", msg) or msg
-            except json.JSONDecodeError:
-                pass
-        eprint(msg)
-        sys.exit(result.returncode)
+    add = [x for x in (args.add_labels or "").split(",") if x]
+    remove = [x for x in (args.remove_labels or "").split(",") if x]
+    svc = GmailService()
 
     try:
-        outer = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        eprint("Unexpected non-JSON output:")
-        print(result.stdout, end="")
+        ids, truncated = list_ids(svc, args.query, args.max)
+        more = f" (more exist — raise --max above {args.max})" if truncated else ""
+        print(f"Matched {len(ids)} messages{more}.")
+        if not ids:
+            return
+
+        if args.dry_run:
+            preview(svc, ids)
+            if add:
+                print(f"Would add labels: {','.join(add)}")
+            if remove:
+                print(f"Would remove labels: {','.join(remove)}")
+            return
+
+        body = {}
+        if add:
+            body["addLabelIds"] = add
+        if remove:
+            body["removeLabelIds"] = remove
+        for start in range(0, len(ids), MODIFY_CHUNK):
+            chunk = ids[start:start + MODIFY_CHUNK]
+            svc.execute(svc.service.users().messages().batchModify(
+                userId="me", body={"ids": chunk, **body}))
+            print(f"Applied to messages {start + 1}-{start + len(chunk)}")
+
+        failed = verify(svc, ids, add, remove)
+        if failed:
+            eprint(f"Verification failed: {len(failed)} of {len(ids)} messages lack the change: "
+                   + ",".join(failed[:20]) + (" …" if len(failed) > 20 else ""))
+            sys.exit(1)
+        else:
+            print(f"Done. Verified all {len(ids)} messages.")
+    except HttpError as e:
+        eprint(f"Gmail API error: {e.reason}")
         sys.exit(1)
-
-    data_str = extract(outer.get("messages"))
-    if not data_str:
-        print("Matched 0 messages.")
-        return
-
-    try:
-        msgs = json.loads(data_str) if isinstance(data_str, str) else data_str
-    except json.JSONDecodeError:
-        eprint("Failed to parse message data.")
-        sys.exit(1)
-
-    if not msgs:
-        print("Matched 0 messages.")
-        return
-
-    ids = [m.get("id") for m in msgs if m.get("id")]
-    print(f"Matched {len(ids)} messages.")
-
-    if args.dry_run:
-        if args.add_labels:
-            print(f"Would add labels: {args.add_labels}")
-        if args.remove_labels:
-            print(f"Would remove labels: {args.remove_labels}")
-        return
-
-    for start in range(0, len(ids), CHUNK_SIZE):
-        chunk = ",".join(ids[start:start + CHUNK_SIZE])
-        cmd = GWS + ["batch-modify", chunk]
-        if args.add_labels:
-            cmd += ["--add-labels", args.add_labels]
-        if args.remove_labels:
-            cmd += ["--remove-labels", args.remove_labels]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            msg = result.stderr.strip()
-            if result.stdout:
-                try:
-                    err = json.loads(result.stdout)
-                    msg = err.get("message", msg) or msg
-                except json.JSONDecodeError:
-                    pass
-            eprint(f"batch-modify failed on messages {start + 1}-{min(start + CHUNK_SIZE, len(ids))}: {msg}")
-            sys.exit(result.returncode)
-        print(f"Applied to messages {start + 1}-{min(start + CHUNK_SIZE, len(ids))}")
-
-    print("Done.")
 
 
 if __name__ == "__main__":

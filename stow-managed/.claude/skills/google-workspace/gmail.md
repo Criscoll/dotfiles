@@ -186,9 +186,13 @@ Note: `gmail-list` and `gmail-search` do **not** show attachment columns — the
 ~/bin/agent_scripts/gmail-backfill "from:newsletter@example.com" --add-labels Label_12345 --dry-run
 ~/bin/agent_scripts/gmail-backfill "from:newsletter@example.com" --add-labels Label_12345 --max 200
 ~/bin/agent_scripts/gmail-backfill "from:boss older_than:1y" --remove-labels INBOX   # archive in bulk
-# --dry-run prints the match count and would-be actions without modifying anything.
+# --dry-run prints the match count, a 10-message preview and would-be actions; modifies nothing.
 # Always dry-run first; confirm with the user before a real run on a large match set.
-# Chunks batch-modify at 100 IDs per API call automatically.
+# --max (default 100) caps matches; "(more exist — raise --max …)" means the run is partial.
+# After modifying, it reads every message's labels back and exits 1 listing any that
+# lack the change (~0.3 s/message). Trust "Verified all N", not just "Applied".
+# Unlike gmail-search, matching is paginated and IDs-only, so long multi-sender
+# from:(a OR b …) queries are safe here — gmail-search can silently drop matches.
 ```
 
 Per-message `add-labels`/`remove-labels` and a standalone `batch-modify` wrapper do not
