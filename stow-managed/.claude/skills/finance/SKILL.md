@@ -16,9 +16,34 @@ description: >-
   "progressive tax", "tax brackets", "marginal rate", "inflation", "real terms",
   "today's money", "purchasing power", "net present value", "NPV", "IRR",
   "internal rate of return", "discount rate".
+  Also primes the agent as Cristian's personal-finance adviser — auto-invoke
+  BEFORE giving financial advice, reviewing his finances, or weighing a money
+  decision ("should I invest/buy", "can we afford", "where should the bonus
+  go", "financial advice", "am I on track financially").
   Currency/FX is separate — use the currency and landed-cost scripts.
 disable-model-invocation: false
 ---
+
+## Adviser stance
+
+When Cristian asks for financial advice, a review, or help with a money decision, act as
+his personal-finance adviser: an expert who knows his situation and tells him plainly what
+you'd do. Lead with a clear recommendation, show the numbers that drive it, keep it short.
+
+Advise from his philosophy, which you share: financial success comes from persistence, good
+behaviour, and habits — not stock picking or market timing. The big decisions (housing,
+career, where the household lives and is taxed, savings rate) matter far more than fund
+selection. Favour low-cost, diversified, automated, boring. When he floats something
+speculative or reactive, name the behaviour in a sentence and offer the boring alternative.
+
+Ground advice in his actual position: the latest dated snapshot in
+`~/Repos/scribbles/01_Notes/03_Adulting/Personal_Finances/` (git-crypt encrypted — keep
+balances there, never in plaintext notes). If it's stale, say so. Check current-events
+claims (a listing, a rate change) before advising on them, and only cite past agreements
+that are actually written down. Where an answer turns on tax law or cross-border rules,
+say a tax agent should confirm it and give the exact question to ask.
+
+## Calculations
 
 Do financial calculations with `~/bin/agent_scripts/finance`, never by deriving the
 formula and computing mentally. It runs the exact time-value-of-money math (amortization,
@@ -53,226 +78,27 @@ fall back to computing the answer yourself — surface the problem instead.
 
 ## Subcommands
 
-### `mortgage` — amortized loan payment
-
-```bash
-~/bin/agent_scripts/finance mortgage --principal 300000 --rate 6 --years 30
-```
-
-`result` = payment per period; also `num_payments`, `total_paid`, `total_interest`. Add
-`--pay-freq fortnightly` for accelerated schedules.
-
-Need an offset account? `mortgage` has no offset — use `payoff --offset` instead, which
-simulates the real payment schedule against the net balance.
-
-### `payoff` — time to clear a balance
-
-Two input modes. Payment mode (you know the payment):
-
-```bash
-~/bin/agent_scripts/finance payoff --balance 300000 --rate 6 --payment 1798.65
-```
-
-Income mode (derive `payment = income − expenses` per period):
-
-```bash
-~/bin/agent_scripts/finance payoff --balance 300000 --rate 6 --income 3000 --expenses 500
-```
-
-`result` = periods to payoff; also `years_months`, `final_payment` (the partial last one),
-`total_paid`, `total_interest`. Optional `--extra E` (paid every period) and repeatable
-`--lump AMT@PERIOD` (e.g. `--lump 5000@12`). If the payment can't cover the interest, it
-errors with the exact interest-only figure — the balance would never amortize.
-
-**Offset account** — feed `--balance` and `--offset` *separately*; never hand-collapse
-`loan − offset` into one net balance (that manual translation is where double-counting a
-repayment as both `--payment` and `--extra` slips in). Interest each period accrues only on
-`max(balance − offset, 0)`. `--offset-contribution C` grows the offset every period.
-`--offset-mode` picks the "paid off" definition: `loan` (default — the loan still amortizes to
-zero, standard offset mortgage) or `net` (payoff when the offset catches the loan,
-`balance ≤ offset`).
-
-```bash
-~/bin/agent_scripts/finance payoff --balance 300000 --rate 6 --payment 1798.65 --offset 50000
-~/bin/agent_scripts/finance payoff --balance 300000 --rate 6 --payment 1798.65 \
-    --offset 50000 --offset-contribution 500 --offset-mode net
-```
-
-**Variable rate** — `--rate-step PCT@PERIOD` (repeatable) applies a new annual rate from that
-period onward; `--rate-band LOW,HIGH` adds a `sensitivity` block bracketing best/worst at two
-flat rates. A rate path that stalls the loan errors with an amortization message (exit `2`).
-
-```bash
-~/bin/agent_scripts/finance payoff --balance 300000 --rate 6 --payment 2200 --rate-step 8@60
-~/bin/agent_scripts/finance payoff --balance 300000 --rate 6 --payment 2200 --rate-band 5,8
-```
-
-**Schedule** — `--schedule` adds a per-period `schedule` array (opening/closing balance,
-interest, principal, offset) for showing the trajectory, not just the aggregates.
-
-```bash
-~/bin/agent_scripts/finance payoff --balance 300000 --rate 6 --payment 1798.65 --schedule
-```
-
-### `compound` — future value with compounding
-
-```bash
-~/bin/agent_scripts/finance compound --principal 10000 --rate 5 --years 10
-~/bin/agent_scripts/finance compound --principal 10000 --rate 5 --years 10 --n 12 --contribution 200
-```
-
-`result` = future value; also `total_contributions`, `interest_earned`. `--contribution` is a
-recurring deposit per period; `--timing begin` for deposits at the start of each period.
-
-Add `--inflation PCT` to deflate the headline future value into today's money — every
-projection above is nominal by default and silently overstates the real outcome at longer
-horizons or higher rates. Adds `inflation_pct`, `real_future_value`, and `real_interest`.
-
-### `fv` / `pv` — future & present value
-
-```bash
-~/bin/agent_scripts/finance fv --present-value 10000 --payment 200 --rate 5 --years 10
-~/bin/agent_scripts/finance pv --future-value 16470.09 --rate 5 --years 10
-```
-
-`fv` is a thin framing over the compounding core; `pv` is its inverse (what a future sum is
-worth today). Both take an optional `--payment` annuity and `--n`. `fv` also takes
-`--inflation PCT` (see `compound` above) to add `real_future_value`.
-
-### `appreciate` — asset appreciation
-
-```bash
-~/bin/agent_scripts/finance appreciate --value 500000 --rate 4 --years 7
-```
-
-`result` = appreciated value; also `total_gain`, `total_gain_pct`. Defaults to annual
-compounding (`--n 1`). Add `--inflation PCT` for `real_final_value` and `real_gain`.
-
-### `real` — inflation-adjusted value or rate
-
-Two modes, picked by which inputs you give — `--inflation PCT` is required either way.
-
-Deflation mode: what a future nominal amount is worth in today's money.
-
-```bash
-~/bin/agent_scripts/finance real --amount 100000 --inflation 3 --years 20
-```
-
-`result`/`real_value` = the deflated amount; also `purchasing_power_pct` (how much of the
-original buying power survives) and `purchasing_power_lost`.
-
-Real-rate mode (Fisher equation): the inflation-adjusted version of a nominal rate — omit
-`--amount`/`--years`, pass `--rate` instead.
-
-```bash
-~/bin/agent_scripts/finance real --rate 7 --inflation 3
-```
-
-`result`/`real_rate_pct` = `((1+rate)/(1+inflation) − 1)`. Use this to sanity-check whether a
-quoted investment/loan rate actually beats inflation.
-
-### `depreciate` — asset depreciation schedule
-
-```bash
-~/bin/agent_scripts/finance depreciate --cost 30000 --salvage 5000 --life 5 --method straight
-~/bin/agent_scripts/finance depreciate --cost 30000 --salvage 5000 --life 5 --method declining --factor 2 --year 3
-```
-
-`result` = annual depreciation (straight-line) or book value at `--year` if given; always
-includes the full per-year `schedule`. Declining-balance floors book value at salvage.
-
-### `cagr` — compound annual growth rate
-
-```bash
-~/bin/agent_scripts/finance cagr --start 100 --end 200 --years 10
-```
-
-`result` = growth rate % — `(end/start)^(1/years) − 1`.
-
-### `roi` — return on investment
-
-```bash
-~/bin/agent_scripts/finance roi --cost 1000 --final-value 1500 --years 3
-```
-
-`result` = ROI %; pass `--gain` instead of `--final-value` if you know the net profit. With
-`--years` it also returns `annualized_roi_pct`.
-
-`roi`/`cagr` assume a single start→end value at even timing. For irregular, dated cashflows
-(an investment property, a lump-sum-vs-payments offer, signing bonuses/vesting), use `npv`/`irr`
-instead.
-
-### `npv` — net present value of a cashflow stream
-
-Repeatable `--cashflow AMT@PERIOD`: period `0` = today, negative = outflow, positive = inflow.
-`--n` sets cashflow periods per year (default `1` = annual); `--rate` is the annual discount
-rate, applied at the per-period rate `rate/n`.
-
-```bash
-~/bin/agent_scripts/finance npv --rate 8 \
-  --cashflow -10000@0 --cashflow 3000@1 --cashflow 3000@2 --cashflow 3000@3 --cashflow 3000@4
-```
-
-`result`/`npv` = sum of discounted cashflows; also `sum_undiscounted`, `num_cashflows`. Negative
-`npv` means the stream doesn't clear the discount rate; positive means it beats it.
-
-### `irr` — internal rate of return of a cashflow stream
-
-Same `--cashflow AMT@PERIOD` / `--n` inputs as `npv` (no `--rate` — IRR solves for it). Needs
-at least one outflow and one inflow among the cashflows.
-
-```bash
-~/bin/agent_scripts/finance irr \
-  --cashflow -10000@0 --cashflow 3000@1 --cashflow 3000@2 --cashflow 3000@3 --cashflow 3000@4
-```
-
-`result`/`irr_pct` = the annualized rate that zeroes NPV; also `npv_at_irr` (≈0, a sanity
-check) and `irr_period_pct` when `--n` isn't `1`. All-positive or all-negative cashflow streams
-error (exit `2`) — IRR is undefined without both a cost and a return.
-
-### `pct-change` — percentage change
-
-```bash
-~/bin/agent_scripts/finance pct-change --from 80 --to 100
-```
-
-`result` = percentage change; also `absolute_change`.
-
-### `ear` — effective annual rate
-
-```bash
-~/bin/agent_scripts/finance ear --rate 6 --n 12
-```
-
-`result` = effective annual rate % from a nominal rate compounded `--n` times/year (APR→EAR).
-
-### `savings-goal` — required periodic contribution
-
-```bash
-~/bin/agent_scripts/finance savings-goal --target 100000 --rate 6 --years 10
-```
-
-`result` = contribution needed each period to reach `--target`; optional `--principal` for a
-starting balance.
-
-### `progressive-tax` — tax across progressive brackets
-
-```bash
-~/bin/agent_scripts/finance progressive-tax --income 675000 \
-  --bracket 18200:0 --bracket 45000:16 --bracket 135000:30 --bracket 190000:37 --bracket inf:45 \
-  --surcharge 2
-```
-
-Repeatable `--bracket UPTO:RATE_PCT` (e.g. `45000:16`) gives the upper income threshold and
-marginal rate for that bracket; the top bracket uses the literal `inf` (e.g. `inf:45`) and
-must be last. Thresholds must be strictly ascending. `result` = total tax; also `base_tax`
-(bracket tax before surcharge), `tax_by_bracket` (per-bracket slice/rate/tax breakdown),
-`surcharge_amount`, `progressive_total`, `effective_rate_pct`. `--surcharge PCT` is an optional
-flat percentage of income added on top (e.g. AU's Medicare Levy).
-
-For HK-style two-method comparisons (progressive vs. a flat-rate alternative, taxed at
-whichever is lower), add `--flat-rate PCT`: `result` becomes `min(progressive, flat)`, and the
-output includes `methods: {progressive, flat}` plus `method_used`.
+| Subcommand | What it answers | Details |
+|---|---|---|
+| `mortgage` | Amortized payment per period | `references/loans.md` |
+| `payoff` | Time to clear a balance; offset accounts, variable rates, schedules | `references/loans.md` |
+| `compound` | Future value with compounding and contributions | `references/growth-and-value.md` |
+| `fv` / `pv` | Future / present value, optional annuity | `references/growth-and-value.md` |
+| `appreciate` | Asset value after growth | `references/growth-and-value.md` |
+| `real` | Inflation-adjusted amount or real rate | `references/growth-and-value.md` |
+| `depreciate` | Straight-line or declining-balance schedule | `references/growth-and-value.md` |
+| `savings-goal` | Contribution needed to hit a target | `references/growth-and-value.md` |
+| `cagr` | Compound annual growth rate | `references/returns-and-rates.md` |
+| `roi` | Return on investment, optionally annualized | `references/returns-and-rates.md` |
+| `npv` / `irr` | Value or rate of irregular dated cashflows | `references/returns-and-rates.md` |
+| `pct-change` | Percentage change | `references/returns-and-rates.md` |
+| `ear` | Effective annual rate (APR→EAR) | `references/returns-and-rates.md` |
+| `progressive-tax` | Tax across brackets, surcharge, HK flat-rate comparison | `references/tax.md` |
+
+Before running a subcommand for the first time in a session, read its reference file
+(`cat "$CLAUDE_SKILL_DIR/references/<file>"`) — flags differ between subcommands and
+guessing them fails or, worse, silently computes the wrong thing (e.g. double-counting an
+offset repayment).
 
 ## When to Use / Not Use
 
@@ -302,14 +128,5 @@ command trail out of the reader's way.
 `finance` is unit-agnostic and does no FX — if amounts are in different currencies, convert
 them with `currency` first, then feed single-currency numbers into `finance`.
 
-## Chaining with Other Scripts
-
-For a cross-currency tax comparison, convert first with `currency`, then feed the converted
-number straight into `finance` — don't hand-compute the FX step in `calculator`:
-
-```bash
-~/bin/agent_scripts/currency 675000 AUD HKD
-# → take the converted amount and feed it into progressive-tax
-~/bin/agent_scripts/finance progressive-tax --income <converted_amount> \
-  --bracket 50000:2 --bracket 100000:6 --bracket 150000:10 --bracket 200000:14 --bracket inf:17
-```
+For a cross-currency tax comparison, convert with `currency` first, then feed the converted
+figure into `finance` — the worked example is in `references/tax.md`.
