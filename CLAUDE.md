@@ -72,7 +72,7 @@ Current guard directories:
 - `~/.claude/commands/` — legacy; skills can be invoked exactly like commands, so prefer `skills/` for anything new
 - `~/.claude/hooks/` — PreToolUse/Notification hook scripts (tracked in repo); no local-only additions expected but must be a real dir so stow links individual files
 - `~/.pi/agent/extensions/` — global pi extensions (tracked in repo) + machine-specific extensions (local only)
-- `~/.pi/agent/agents/` — global pi subagent definitions (tracked in repo) + machine-specific agents (local only)
+- `~/.pi/agent/agents/` — pi agent definitions (none tracked currently; the `scout` extension defines its profiles in code) + machine-specific agents (local only)
 - `~/.local/share/watchers/` — watch-alerts watcher code (`watcher.py` + public `config.json`, tracked); `config.local.json` (private values, deep-merged over `config.json`), `state.json` and `.lock` are local-only and gitignored. Each `<name>/` subdir should also pre-exist on a new machine (`mkdir -p`), or stow folds it into a symlink and runtime files land in the repo. The repo is public: never commit coordinates, addresses or other personal values — put them in `config.local.json`.
 
 ### Apps That Don't Follow Symlinks

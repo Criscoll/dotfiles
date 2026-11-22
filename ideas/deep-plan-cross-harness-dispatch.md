@@ -3,8 +3,9 @@
 ## Problem
 
 Batch-mode deep-plan (`references/model-tiers.md`) assigns every dispatch step a tier, and
-each harness has its own concrete recipe for running a step at that tier: pi has the
-`subagent` tool with a per-task `model`/`provider` override (added alongside this idea doc);
+each harness has its own concrete recipe for running a step at that tier: pi had a
+`subagent` tool with a per-task `model`/`provider` override (since removed — it was replaced by the
+read-only `scout` tool; see `git show 4fe7818:stow-managed/.pi/agent/extensions/subagent.ts`);
 Claude Code has the `Agent` tool with a `model` parameter. But Claude Code's `Agent` tool only
 accepts Anthropic model aliases (`opus`, `sonnet`, `haiku`) — it has no mechanism to shell out
 to a different provider or CLI. So a Claude Code orchestrator cannot itself dispatch a step to
@@ -14,7 +15,7 @@ nothing lets it reach across.
 
 ## Findings
 
-- **pi's dispatch pattern** (`subagent.ts:430-436`, `getPiInvocation` at `subagent.ts:378-392`):
+- **pi's dispatch pattern** (the removed `subagent.ts` at commit 4fe7818, lines 430-436, `getPiInvocation` at 378-392; the same spawn logic lives on in `scout.ts`):
   spawn a child `pi` process with
   `pi --mode json -p --no-session --provider <p> --model <m> --tools <allowlist> --append-system-prompt <tmpfile> "Task: <task>"`,
   reading newline-delimited JSON events from stdout (`message_end`, `tool_result_end`) and
@@ -23,7 +24,7 @@ nothing lets it reach across.
   except the flags, so any harness capable of running `bash` could shell out to it the same way.
 - **Cost/usage parsing**: the JSON event stream carries `usage.cost.total`, `usage.input`,
   `usage.output`, `usage.cacheRead`/`cacheWrite` per `message_end` — the exact fields
-  `subagent.ts`'s `formatUsageStats` aggregates. A cross-harness dispatcher would sum these the
+  the old `subagent.ts`'s `formatUsageStats` aggregates. A cross-harness dispatcher would sum these the
   same way regardless of which harness spawned the process.
 - **rtk/hook considerations**: no longer applicable — rtk has been uninstalled from both
   harnesses (2026-09-15).
@@ -37,7 +38,7 @@ nothing lets it reach across.
 - Add a **shell-command dispatch recipe column** to the tier table in
   `references/model-tiers.md` — e.g. a `Shell recipe (cross-harness)` column giving the literal
   `pi --mode json -p --no-session --provider <p> --model <m> --tools <t> "Task: ..."` invocation,
-  so any harness's orchestrator (not just pi's own `subagent` tool) can dispatch a step to a pi
+  so any harness's orchestrator (not just a pi extension tool) can dispatch a step to a pi
   child process and parse its JSON stream directly.
 - Work out how the orchestrator parses that JSON stream generically — likely a small shared
   parsing recipe (read `message_end`/`tool_result_end` events, extract final assistant text and
