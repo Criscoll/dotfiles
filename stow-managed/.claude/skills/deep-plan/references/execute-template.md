@@ -21,6 +21,10 @@ Artifact directory: <abs-path>
 - ROADMAP.md: <abs-path>/ROADMAP.md
 - CONTRACTS.md: <abs-path>/CONTRACTS.md
 - Items: <abs-path>/items/NN-<slug>/{REQUIREMENTS.md,PLAN.md,FAILURE.md}
+- Dispatch files: <abs-path>/items/NN-<slug>/dispatch/<gid>-{brief,report,diff}.md
+  (durable — on resume, the last group's report says where it stopped)
+- Review-package script: <abs-path-to-skill>/scripts/review-package (written
+  `<review-package>` below)
 - Log: <abs-path>/EXECUTION-LOG.md (append-only; create if missing)
 
 ## Effort tiers
@@ -82,25 +86,63 @@ when reviewing the named step, and include it in that group's brief.
 2. **Dispatch each group** from the Dispatch groups table — not each step
    individually — using the `subagent` tool (pi) or the `Agent` tool (Claude
    Code), at the group's tier, picking a concrete model per
-   `model-tiers.md`'s dispatch guidance. Give the sub-agent a self-contained
-   brief covering **every step in the group**: each step's tasks verbatim, any
-   Reuse entries those steps need, the item's Boundaries, the exact shape of
-   any contract the group produces, the union of the steps' `Files:`, every
-   step's `All sites:` command and `Done when:`, any tripwires on these steps,
-   and any skills to invoke. Include the absolute paths to the item's
-   REQUIREMENTS.md and PLAN.md, with an instruction to read both in full for
-   context but implement only this group's steps — a sub-agent that sees only
-   its fragment of the plan can complete every task and still miss the
-   requirement those tasks serve.
+   `model-tiers.md`'s dispatch guidance.
 
-   The brief must also require that **any divergence is reported as an open
-   question with a recommendation, never as a settled decision**, in the form
-   *"I did X. The plan implied Y. I recommend X because Z — confirm or
-   correct."* — and that the report lists every assumption the sub-agent made
-   about code outside its group (e.g. where a later step will mount something).
-3. **Review the result.** Wait for the sub-agent's report, then check its
-   report and `git diff` against **every** step's tasks in the group, the
-   item's Boundaries, and any tripwire on these steps.
+   **Briefs and reports travel as files, not as prompt text.** Everything you
+   paste into a dispatch prompt, and everything a sub-agent prints back, stays
+   in your context for the rest of a run that may span many items. So:
+
+   a. **Snapshot first:** `BASE=$(<review-package> snapshot)`. Record it in
+      the brief's header — the group's review diff is measured from it, which
+      keeps earlier groups' uncommitted changes out of this group's review.
+   b. **Write the brief** to `<abs-path>/items/NN-<slug>/dispatch/<gid>-brief.md`
+      (create `dispatch/` if missing; a re-dispatch gets its own file,
+      e.g. `<gid>-fix1-brief.md`). It covers **every step in the group**: each
+      step's tasks verbatim with its `Serves:` IDs, any Reuse entries those
+      steps need, the item's Boundaries, the exact shape of any contract the
+      group produces, the union of the steps' `Files:`, every step's `All
+      sites:` command and `Done when:`, any tripwires on these steps, and any
+      skills to invoke. Include the absolute paths to the item's
+      REQUIREMENTS.md and PLAN.md, with an instruction to read both in full
+      for context but implement only this group's steps — a sub-agent that
+      sees only its fragment of the plan can complete every task and still
+      miss the requirement those tasks serve. Describe this group only: don't
+      paste summaries of earlier groups; pass only the interfaces and
+      decisions from them that this group's code touches.
+   c. **Dispatch with a short prompt**: one line on where the group fits in
+      the item, the brief path ("read this first — it is your full
+      instructions"), and the report path
+      `<abs-path>/items/NN-<slug>/dispatch/<gid>-report.md`.
+
+   The brief must carry this report contract, verbatim:
+
+   > Write your full report to the report path. Your final reply is ONE line:
+   > `DONE | DIVERGED | BLOCKED — <report path>`.
+   > - DONE: every task done as briefed, every `Done when:` passes.
+   > - DIVERGED: done, but somewhere you departed from the brief or the plan.
+   > - BLOCKED: you could not finish; say exactly what stopped you.
+   >
+   > The report lists: files changed; each `Done when:` with its actual
+   > output; every divergence as an open question with a recommendation, never
+   > a settled decision — *"I did X. The plan implied Y. I recommend X because
+   > Z — confirm or correct."*; and every assumption you made about code
+   > outside this group (e.g. where a later step will mount something).
+   >
+   > Do not dispatch sub-agents of your own, for any purpose. Review is the
+   > orchestrator's job, and a sub-agent you spawn runs on a model nobody
+   > chose for this tier.
+3. **Review the result.** Read the status line, then build the review
+   package: `<review-package> diff $BASE <abs-path>/items/NN-<slug>/dispatch/<gid>-diff.md <each path in the group's Files:>`.
+   Its stdout lists the changed files and flags any outside the `Files:`
+   boundary — an out-of-bounds file is a Boundaries question to settle
+   before reading further (ignore hits under the artifact directory itself,
+   if it lives inside the repo and isn't gitignored). Then read the report
+   and the diff file, and check them against **every** step's tasks in the
+   group, the item's Boundaries, and any tripwire on these steps. A
+   `DIVERGED` status means the report holds open questions: settle each one
+   here, accepting it, rejecting it, or treating it as a fork. A `BLOCKED`
+   status is a rejection (re-dispatch with what was missing) unless the
+   block is in the plan itself, which makes it a fork.
    - Run each step's `Done when:` yourself. For a `Done when (review):`,
      confirm the diff shows what it names.
    - Re-run each `All sites:` command and account for every hit — changed,
@@ -120,7 +162,8 @@ when reviewing the named step, and include it in that group's brief.
      failure was about capability rather than unclear instructions,
      re-dispatch one tier up. Log the escalation either way.
 4. **Review the whole item against REQUIREMENTS.md.** Once every group has
-   landed, go through each numbered Validated Requirement and find where the
+   landed, go through each Validated Requirement by ID (`R1`, `R2`, …) —
+   starting from the steps whose `Serves:` cites it — and find where the
    item's whole change (including any of its commits already landed)
    satisfies it. Group reviews compare diffs to the plan; this compares the
    result to what the plan was for. Some gaps only show once every group is
@@ -142,6 +185,10 @@ when reviewing the named step, and include it in that group's brief.
      the cause is ambiguous, use the highest tier among that item's groups.
    - **Second fix dispatch:** one tier up from the first, capped at Deep
      Thinking.
+
+   Fix dispatches go through the same brief/report/snapshot files as step 2
+   (`<gid>-gate1-brief.md`, …), with the gate's actual failing output in the
+   brief.
 
    If the gate still fails after that bound, **this is a failure, not a fork**
    — go to the Failures section below rather than attempting a third fix. That
@@ -169,8 +216,11 @@ when reviewing the named step, and include it in that group's brief.
 2. Otherwise, choose the option most consistent with the item's REQUIREMENTS
    Goals and Boundaries and with CONTRACTS.md, preferring the smallest
    deviation from the plan that still resolves the divergence.
-3. Log the fork in EXECUTION-LOG.md: what diverged, the options considered,
-   the decision, and the reasoning.
+3. Log the fork in EXECUTION-LOG.md: what diverged and the options
+   considered, then the decision as one line —
+   `Ruling: <what you decided> — <why> — if wrong: <what it costs and how to undo it>`.
+   The "if wrong" clause is for the user reading the log afterwards: it tells
+   them which rulings deserve a second look.
 4. If the fork touches a contract:
    - **Widening** — purely additive; every existing consumer compiles and
      behaves identically. Append a dated note to the contract in
@@ -252,6 +302,7 @@ outside this protocol regardless of how the run went.
 
 ```
 ## <ISO 8601 timestamp> — item <n> group <gid>|step <k> — DONE|FORK|PATCH|ESCALATE|HALT-FAILURE|RE-PLAN|ITEM-DONE
-<2-5 lines: what happened, and for FORK/PATCH/ESCALATE/HALT-FAILURE/RE-PLAN, why>
+<2-5 lines: what happened, and for FORK/PATCH/ESCALATE/HALT-FAILURE/RE-PLAN, why.
+FORK entries end with their `Ruling:` line.>
 ```
 ````

@@ -89,6 +89,7 @@ reviewable too.)
 ### Step k — <title> · effort: <Lightweight|Moderate Thinking|Deep Thinking> — <why this tier>
 - [ ] <task>
 - [ ] <task>
+Serves: <R-IDs from this item's REQUIREMENTS.md, e.g. R1, R3>   (omit for [quick] items)
 Files: <exact paths this step may touch>
 All sites: <command that enumerates every place this change must land>   (only when there's more than one)
 Done when: <a runnable check that fails if the step's behaviour is absent>
@@ -201,6 +202,9 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
    - when two items edit the same file, the plans agree on which runs first
      and that the second's steps still apply after the first's edits;
    - every step across every plan has both an effort tier and a `Done when:`;
+   - every `R<n>` in each item's REQUIREMENTS.md is cited by at least one
+     step's `Serves:`, and no step cites an ID that doesn't exist — an
+     uncited requirement is planned work that nobody will do;
    - every `Done when:` and every contract `Verify` would actually fail if the
      behaviour it guards were absent — greps that count occurrences are the
      usual offender; replace them with a behavioural check, or with
@@ -246,7 +250,10 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
      `cat "$CLAUDE_SKILL_DIR/references/execute-template.md"`) in the
      artifact directory, with absolute paths throughout, the effort-tier
      definitions copied in verbatim from `references/model-tiers.md`, and the
-     dispatch groups table and tripwires filled in.
+     dispatch groups table and tripwires filled in. Resolve the review-package
+     script to an absolute path (`echo "$CLAUDE_SKILL_DIR/scripts/review-package"`)
+     — the orchestrator runs in a session that never loaded this skill, so
+     `$CLAUDE_SKILL_DIR` won't be set there.
    - Tell the user plainly that EXECUTE.md is the orchestrator's whole
      protocol — it dispatches, reviews, gates, commits, and logs without
      further prompting, only stopping to write a failure report and halt, or

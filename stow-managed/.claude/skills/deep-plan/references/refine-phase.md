@@ -49,6 +49,11 @@ else serves.
 ## Validated Requirements
 The verified, codebase-compatible ask for THIS item. What must be true when it
 is done. Each requirement concrete enough to plan against and to test against later.
+Number them `R1`, `R2`, … — plan steps cite these IDs, and the orchestrator's
+item review walks them one by one, so an uncited requirement is visible as a gap
+rather than silently dropped.
+- **R1** — <requirement>
+- **R2** — <requirement>
 
 ## What We Know
 Confirmed facts from the codebase, docs, or context that establish the item is

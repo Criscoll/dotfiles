@@ -31,7 +31,10 @@ retry logic assumed the API was idempotent and it isn't".
 4. **Re-run Refine for item N alone**, using `refine-phase.md`'s mechanics
    (restate, validate against the codebase as it exists *now* — including
    whatever the failed attempt partially applied — ask if unclear, rewrite
-   `REQUIREMENTS.md`). Then **re-run Plan for item N alone**, using
+   `REQUIREMENTS.md`, keeping existing `R<n>` IDs stable — new requirements
+   get the next unused number, and a retired one is struck through rather than
+   renumbered, so `EXECUTION-LOG.md` entries that cite IDs still point at the
+   right thing). Then **re-run Plan for item N alone**, using
    `plan-phase.md`'s mechanics (research, rewrite `PLAN.md` including a
    revisited Commits section if the split no longer makes sense). Stay scoped
    to item N in this step; downstream patching is next.

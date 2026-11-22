@@ -9,8 +9,10 @@ sub-agent profile in its own harness satisfies that tier.
 ### Tier definitions
 
 - **Lightweight** — fully specified mechanical edits with no design choice
-  left. The step's brief already names the exact change; the implementer just
-  makes it.
+  left. The brief spells out the literal change — the exact text, value, or
+  code to write — so the work is transcription plus running the check. A step
+  described in prose ("add a flag that does X") is not Lightweight even when
+  it's small; it needs Moderate Thinking at minimum.
 - **Moderate Thinking** — the default tier. Follows existing patterns across a
   few files; some judgment but no novel design.
 - **Deep Thinking** — subtle algorithmic, concurrency, or security logic;
@@ -20,6 +22,15 @@ sub-agent profile in its own harness satisfies that tier.
 **Rule:** pick the lowest tier that can do the step from its brief alone. If
 in doubt, pick the higher tier for steps that produce a contract another item
 consumes — a wrong contract shape is expensive to unwind downstream.
+
+**Cost is turns, not token price.** A step's real cost is how many turns the
+sub-agent takes to finish it, and the cheapest models routinely take two to
+three times as many turns on anything multi-step — re-reading files, retrying
+edits, misreading the brief — which costs more overall than a mid-tier model
+that finishes in one pass. So "lowest tier that can do it" means lowest tier
+that can do it *without flailing*: reserve Lightweight for literal edits, and
+treat a group whose brief has any prose instruction as Moderate Thinking or
+above.
 
 ### Choosing a model for each tier, at dispatch time
 

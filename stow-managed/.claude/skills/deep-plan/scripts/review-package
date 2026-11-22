@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Isolate one dispatch group's changes for review, when nothing is committed yet.
+#
+#   review-package snapshot
+#       Print a git tree id for the working tree as it is now — tracked edits and
+#       new untracked (non-ignored) files included. Run before dispatching a group.
+#
+#   review-package diff <base-tree> <out-file> [allowed-path ...]
+#       Snapshot again, write stat + full diff (base-tree → now) to <out-file>, and
+#       print a short summary: changed files, and any changed file that falls
+#       outside the allowed paths (the group's union of Files:). Allowed paths are
+#       git pathspecs, so directories and globs work.
+#
+# The real index is never touched: snapshots go through a throwaway index file.
+set -euo pipefail
+
+usage() {
+  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
+snapshot_tree() {
+  local tmp_index
+  tmp_index="$(mktemp "${TMPDIR:-/tmp}/review-package-index.XXXXXX")"
+  # Seed from the real index so `add -A` only re-hashes what changed.
+  cp "$(git rev-parse --git-path index)" "$tmp_index" 2>/dev/null || rm -f "$tmp_index"
+  GIT_INDEX_FILE="$tmp_index" git add -A
+  GIT_INDEX_FILE="$tmp_index" git write-tree
+  rm -f "$tmp_index"
+}
+
+cd "$(git rev-parse --show-toplevel)"
+
+case "${1:-}" in
+  snapshot)
+    [ $# -eq 1 ] || usage
+    snapshot_tree
+    ;;
+  diff)
+    [ $# -ge 3 ] || usage
+    base="$2"; out="$3"; shift 3
+    git cat-file -e "$base^{tree}" 2>/dev/null || { echo "Error: '$base' is not a tree id from 'review-package snapshot'" >&2; exit 1; }
+    head_tree="$(snapshot_tree)"
+    mkdir -p "$(dirname "$out")"
+    {
+      echo "# Review package: $base → $head_tree"
+      echo
+      echo '## Stat'
+      git diff --stat "$base" "$head_tree"
+      echo
+      echo '## Diff'
+      git diff -U10 "$base" "$head_tree"
+    } > "$out"
+
+    changed="$(git diff --name-only "$base" "$head_tree")"
+    if [ -z "$changed" ]; then
+      echo "No changes since snapshot $base."
+      exit 0
+    fi
+    echo "Changed files ($(printf '%s\n' "$changed" | wc -l | tr -d ' ')):"
+    printf '%s\n' "$changed" | sed 's/^/  /'
+    if [ $# -gt 0 ]; then
+      excludes=()
+      for p in "$@"; do excludes+=(":(exclude)$p"); done
+      outside="$(git diff --name-only "$base" "$head_tree" -- . "${excludes[@]}")"
+      if [ -n "$outside" ]; then
+        echo "OUTSIDE Files: boundary:"
+        printf '%s\n' "$outside" | sed 's/^/  /'
+      else
+        echo "All changes within Files: boundary."
+      fi
+    fi
+    echo "Full diff: $out"
+    ;;
+  *) usage ;;
+esac
