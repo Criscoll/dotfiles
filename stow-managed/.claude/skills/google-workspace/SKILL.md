@@ -1,38 +1,15 @@
 ---
 name: google-workspace
 description: >-
-  Read Gmail (list/search/read/label-move), manage Gmail labels
-  (create/rename/delete/merge labels), manage Gmail filters for automatic
-  sorting (list/create/delete; trash and forward actions unsupported),
-  backfill label actions onto
-  existing messages matching a query, download and view email attachments
-  (PDFs, etc.), manage Calendar (list/get/create/update), search/download
-  Google Drive files (list/search/get/download/export), organise them (list
-  permissions, trash/restore, move, rename), and read, create and edit native
-  Google Docs and Sheets content (read text/cells, append, insert, replace
-  sections, delete ranges, headings, bullets, text styles, Doc tables,
-  write/append/clear rows, find-replace, add/rename/delete tabs, sort, cell
-  formatting, borders, merges, column widths, frozen rows, dropdown/data
-  validation, filters, conditional formatting, charts, and reading all that back)
-  via gws-cli wrapper scripts in `~/bin/agent_scripts/`.
-  Enforced at the harness layer by a deny-by-default allow-list hook —
-  send, permanent delete, share/unshare and other destructive Gmail/Calendar/Drive
-  operations are structurally blocked and cannot be invoked regardless of how the
-  command is phrased.
-  Trigger phrases: "check email", "search gmail", "list emails", "read email",
-  "archive email", "label email", "mark as read", "create label", "rename label",
-  "delete label", "merge labels", "create filter", "delete filter",
-  "gmail filters", "auto-sort email", "backfill", "organize inbox",
-  "list calendar events", "create event", "update event", "google calendar",
-  "gmail", "workspace", "attachment", "download attachment", "email pdf",
-  "has attachment", "search drive", "find file", "download file",
-  "google drive", "drive file", "google doc", "read doc", "edit doc",
-  "update doc", "spreadsheet", "google sheet", "read sheet", "edit sheet",
-  "append row", "trash file", "restore file", "move file", "rename file",
-  "who has access", "drive permissions", "format cells", "freeze row",
-  "dropdown", "data validation", "conditional formatting", "sheet chart",
-  "filter view", "clear range", "docs-", "sheets-".
-disable-model-invocation: false
+  Gmail, Calendar, Drive, Docs and Sheets via gws-cli wrapper scripts in `~/bin/agent_scripts/`: search/read/label
+  email, manage labels and filters, download attachments, list/create/update calendar events, search/download/
+  organise Drive files, read and edit Google Docs and Sheets content (cells, rows, formatting, validation, charts).
+  A deny-by-default allow-list hook blocks send, permanent delete, share/unshare and other destructive operations.
+  Auto-invoke BEFORE any Gmail, Calendar, Drive, Doc or Sheet task. Trigger phrases: "check email", "search gmail",
+  "read email", "label email", "gmail filters", "backfill", "organize inbox", "attachment", "list calendar events",
+  "create event", "google calendar", "search drive", "download file", "google drive", "google doc", "edit doc",
+  "spreadsheet", "google sheet", "append row", "trash file", "drive permissions", "format cells",
+  "data validation", "conditional formatting", "sheet chart".
 ---
 
 You are running the google-workspace skill. Drive `gws-cli` for Gmail, Calendar,

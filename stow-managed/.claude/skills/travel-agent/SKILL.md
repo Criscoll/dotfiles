@@ -1,42 +1,15 @@
 ---
 name: travel-agent
 description: >-
-  Plan trips end-to-end — build itineraries, discover things to do, hunt flight and
-  hotel deals, and work through complex multi-leg or flexible-date ticket planning.
-  Surfaces visas and other lead-time applications up front so they aren't discovered
-  after dates are locked, and turns research into a day-by-day itinerary (geographic
-  clustering, realistic pacing, opening-day and arrival/departure-time checks) rather
-  than a flat attraction list. Keeps itinerary planning decision-light (the traveler
-  picks only anchors from short recommended shortlists; fillers are defaulted) and
-  mines offbeat sources such as Atlas Obscura, Wikivoyage, and Reddit.
-  Before running any price search, asks about layover tolerance, nonstop requirements,
-  airline quality bar, meal service, and day-of-week/leave-optimization rather than
-  optimizing for cheapest total alone; presents results grouped by trip leg (not a flat
-  segment list) with layovers attributed to the specific leg and segment pair they sit
-  between, overnight/red-eye flags, and budget-carrier caveats. For every candidate,
-  also gives a compact per-leg comparison table, a fine-print summary (overnight
-  sectors that slip past outer-bound-only red-eye filters, total layover time, arrival
-  day of week), and a leave-days-needed count — treating a saved leave day as real
-  money (the user's day rate) that belongs in the cost comparison alongside ticket
-  price, not just a soft scheduling preference. Auto-invoke BEFORE planning a trip,
-  researching flight or hotel prices, building or refining a travel itinerary,
-  building a day-by-day plan, comparing candidate travel dates, checking visa or
-  entry requirements for a trip, building a packing list or reviewing one for
-  gaps, or working inside a Travel_ task in 02_Workbench.
-  Trigger phrases: "plan a trip", "travel itinerary", "find flights", "flight deals",
-  "hotel deals", "best time to fly", "open-jaw", "multi-city", "travel dates",
-  "things to do in", "day trip", "layover", "nonstop", "direct flight",
-  "airline quality", "meal service", "budget airline", "red-eye", "overnight flight",
-  "day of week", "leave days", "leave day cost", "annual leave value", "day rate",
-  "where should we stay", "day-by-day itinerary", "what to do each day",
-  "do I need a visa", "visa", "entry requirements", "travel authorization",
-  "ESTA", "ETA", "ETIAS", "passport validity", "permit", "book ahead",
-  "opening hours", "things to book in advance", "packing list", "what to pack",
-  "what should I pack", "packing", "did I forget anything",
-  "Travel_" task, "duffel", "duffel-flight-search", "hidden gems", "atlas obscura",
-  "unusual things to do", "off the beaten path", "I can't decide", "decision fatigue",
-  "too many options".
-disable-model-invocation: false
+  Plan trips end-to-end: day-by-day itineraries, things to do, flight and hotel deal hunting, multi-leg or
+  flexible-date ticket planning, visa and lead-time checks, packing lists. Auto-invoke BEFORE planning a trip,
+  researching flight or hotel prices, building an itinerary, comparing travel dates, checking visa or entry
+  requirements, building a packing list, or working in a Travel_ task in 02_Workbench. Trigger phrases:
+  "plan a trip", "travel itinerary", "find flights", "flight deals", "hotel deals", "things to do in",
+  "day-by-day itinerary", "open-jaw", "multi-city", "layover", "nonstop", "red-eye", "leave days",
+  "where should we stay", "do I need a visa", "ESTA", "ETA", "ETIAS", "passport validity",
+  "packing list", "what to pack", "hidden gems", "atlas obscura", "off the beaten path",
+  "I can't decide", "too many options", "duffel".
 ---
 
 # Travel Agent

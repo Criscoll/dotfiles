@@ -19,8 +19,10 @@ artifacts — file extensions, command names, keywords). This file goes deeper.
 - **List artifacts, not intent.** The model matches on what it can observe in the
   prompt or context (`.py`, `uv run`, `pyproject.toml`), not on inferred goals.
   Enumerate the surface signals.
-- **One sentence.** The description sits in the always-loaded system-reminder index;
-  keep it to a single line so it isn't truncated.
+- **Mind the length cap.** The description sits in the always-loaded skill index. The
+  portable limit is 1024 characters (agentskills.io standard; pi enforces it), and Claude
+  Code truncates description plus `when_to_use` at 1536. Lead with the key use case and
+  best triggers; whatever is past the cap is lost. Put behavioural detail in the body.
 - **Err toward over-triggering.** Loading an irrelevant skill costs a few hundred
   tokens. *Not* loading a relevant one means the agent improvises and gets it wrong.
   When unsure whether a trigger belongs, include it.

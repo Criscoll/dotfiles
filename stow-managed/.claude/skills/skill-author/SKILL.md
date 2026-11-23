@@ -1,8 +1,7 @@
 ---
 name: skill-author
 description: >-
-  Create or update a Claude Code skill under stow-managed/.claude/skills/. Use when the user says "create a skill", "write a skill", "new skill called X", or "update skill X".
-disable-model-invocation: false
+  Create or update an agent skill (Agent Skills standard, works in Claude Code, pi and other harnesses) under stow-managed/.claude/skills/. Use when the user says "create a skill", "write a skill", "new skill called X", or "update skill X".
 ---
 
 You are running the skill-author skill. Your job is to create or update a skill in this dotfiles repo.
@@ -30,17 +29,30 @@ Skills are stowed (or placed directly) into `~/.claude/skills/` and picked up by
 cat "$CLAUDE_SKILL_DIR/references/pandas.md"
 ```
 
-**Frontmatter (required):**
+**Frontmatter.** Skills follow the open Agent Skills standard (agentskills.io), which pi, Claude Code, Codex, Cursor and others all read. Write the portable subset by default so a skill works in every harness this repo serves; add harness-specific fields only when you need them, since other harnesses ignore unknown fields silently.
+
 ```markdown
 ---
 name: <skill-name>
 description: >-
-  <one-liner that covers both purpose and trigger phrases>
-disable-model-invocation: false
+  <what it does + when to invoke + trigger phrases, 1024 characters or fewer>
 ---
 ```
 
-Always use the `>-` block scalar for `description`. Skill descriptions almost always contain `Trigger phrases: "..."` which introduces a colon inside an unquoted YAML value — strict YAML parsers (including pi's) reject this with "Nested mappings are not allowed in compact mappings". `>-` folds the value into a plain string and sidesteps the issue. Don't write `description: <inline text>` if the text contains a colon.
+Portable fields (the standard; pi documents exactly these):
+
+| Field | Notes |
+|---|---|
+| `name` | Lowercase letters, digits, single hyphens; max 64 chars; match the directory name (some harnesses enforce it). Prefer a descriptive name; a gerund (`processing-pdfs`) is optional, but never `helper`/`utils`/`tools`. |
+| `description` | **Max 1024 characters** (the standard's limit). A skill without one is not loaded by pi. |
+| `disable-model-invocation` | `true` hides the skill from automatic selection (explicit `/skill-name` only). The default is `false`, so don't write the line otherwise. |
+| `license`, `compatibility`, `metadata`, `allowed-tools` | Optional; `allowed-tools` is experimental. |
+
+Claude Code only (pi and others ignore these without an error, so the skill still loads, minus the behaviour): `when_to_use` (extra trigger text appended to `description`; the two together are truncated at 1,536 characters in the listing), `user-invocable: false`, `disallowed-tools`, `argument-hint`/`arguments`, `model`, `effort`, `context: fork` with `agent:`, `paths`. Verify against the current docs (code.claude.com/docs/en/skills) before relying on one, since this list moves fast; field names must match exactly or they are ignored.
+
+Don't depend on a Claude-Code-only field for correctness. If a skill needs `context: fork` to behave safely, say in the body what the fork was for, so another harness can still follow it.
+
+Always use the `>-` block scalar for `description`. Descriptions almost always contain `Trigger phrases: "..."`, which puts a colon inside an unquoted YAML value; strict parsers (including pi's) reject that with "Nested mappings are not allowed in compact mappings". `>-` folds the value into a plain string and sidesteps the issue.
 
 ## Description essentials
 
@@ -56,9 +68,15 @@ Weak (passive, no pre-condition):
 Strong (imperative, explicit pre-condition, observable triggers):
 > Apply Python best practices — covers build toolchain and package management. Auto-invoke BEFORE writing or running any Python code, reading/editing any .py file, or executing any uv/pip/poetry command. Trigger phrases: "python", "pip install", "virtualenv", "pyproject.toml", ".py file", "uv", "poetry".
 
+**Length budget:** 1024 characters is the hard portable cap (pi enforces it; Claude Code's own cap is 1536 for description plus `when_to_use`, truncating the tail). Put the key use case and the strongest triggers first, because the tail is what gets cut. Detail about *how* the skill behaves belongs in the body, not the description; the description only has to route.
+
 For the deeper rules, the auto-invoke-vs-explicit distinction, and the 20-query trigger-accuracy test (the single highest-leverage improvement), load `references/description-and-triggers.md`.
 
 ## Authoring approach
+
+The generic craft (concise bodies, degrees of freedom, references one level deep, checklists, feedback loops, anti-patterns) is settled in `docs/skill-authoring-best-practices-2026-06-17.md` at the dotfiles repo root; read it rather than re-deriving it. Steps below are the working method.
+
+0. **Evaluate before you document.** Don't write a skill for a problem you imagine. Do the task once without it, notice what you keep explaining, then capture that. After drafting, test it with a fresh session that has only the skill (not the session that wrote it): watch where it misses a step, feed the specific miss back, and revise. Write the 20-query trigger test (see `references/description-and-triggers.md`) before polishing the body, since a skill that never fires is wasted effort.
 
 1. Understand the skill's job in one sentence before writing anything.
 2. Write the prompt as a directive to an executing agent, not as documentation.
@@ -108,7 +126,9 @@ Rules:
 
 ## Review checklist (run before declaring done)
 
-- [ ] Description has all three parts: what + when + trigger phrases (and uses `>-`).
+- [ ] Description has all three parts: what + when + trigger phrases (and uses `>-`), and is 1024 characters or fewer (check: `python3 -c 'import re,sys; m=re.search(r"description: >-\n((?:  .*\n)+)",open(sys.argv[1]).read()); print(len(" ".join(l.strip() for l in m.group(1).splitlines())))' <skill>/SKILL.md`); key triggers come first.
+- [ ] Frontmatter uses only portable fields unless a harness-specific one is genuinely needed, and no default-valued fields (`disable-model-invocation: false`).
+- [ ] A fresh-session test was run, not just a read-through.
 - [ ] Instructions are reasoned, not rigid — `why` given instead of bare ALWAYS/NEVER.
 - [ ] Degrees of freedom fit the task — exact steps where fragile, direction where open.
 - [ ] Consistent terminology throughout; skill name is descriptive, not `helper`/`utils`/`tools`.
