@@ -18,7 +18,7 @@ The point of Roadmap is to break a large goal into a terse, ordered list of high
 
    **Folding rule.** Small items that naturally belong to a larger item should be absorbed into it. Don't give an item its own row just to tick a box.
 
-   **`[quick]` tag.** For small-but-necessary items that can't be folded — changes where the approach is self-evident from the roadmap description and no codebase research or design decisions are needed — append `[quick]` to the item line. A `[quick]` item skips Refine entirely (no REQUIREMENTS.md) and gets a compact PLAN.md instead of the full template — see `plan-phase.md`. It still gets dispatched by the orchestrator like any other item; batch mode has no separate inline-brief path. Use sparingly; if in doubt, make it a full item.
+   **`[quick]` tag.** For small-but-necessary items that can't be folded — changes where the approach is self-evident from the roadmap description and no codebase research or design decisions are needed — append `[quick]` to the item line. A `[quick]` item skips Refine entirely (no REQUIREMENTS.md) and gets a compact PLAN.md instead of the full template — see `plan-phase.md`. The executor runs it like any other item; batch mode has no separate inline-brief path. Use sparingly; if in doubt, make it a full item.
 
    **Ask when slicing is genuinely ambiguous.** If the natural boundaries aren't clear from the goal and the code — e.g. two plausible orderings, whether something is its own item or folds into another, where a slice's scope should end — use `AskUserQuestion` before writing the item into `ROADMAP.md`. Don't guess and leave it for the user to catch during the annotation round; that costs a full round-trip for something a single question would have resolved up front.
 

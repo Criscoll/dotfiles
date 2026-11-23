@@ -1,13 +1,13 @@
 ## Plan phase
 
 The point of Plan is to turn every item's approved requirements into a
-technical design durable enough for a fresh **orchestrator** session to
-execute hands-off — dispatching steps to sub-agents in tier-and-surface
-groups, reviewing the result, and committing per item without further human
-involvement until it halts or finishes.
+technical design durable enough for a fresh **executor** session to
+execute hands-off — implementing steps in review groups, checking its own
+diffs, and committing per item without further human involvement until it
+halts, reaches a strong-model handoff, or finishes.
 
-Read `references/model-tiers.md` before starting — every step you write needs
-an effort tier.
+Read `references/model-selection.md` before starting — you decide which steps,
+if any, get the `Needs strong model` flag.
 
 1. **Re-read `ROADMAP.md`, `CONTRACTS.md`, and every `items/NN-<slug>/REQUIREMENTS.md`
    from disk.** Resolve any Open Questions left in a REQUIREMENTS.md before
@@ -19,7 +19,7 @@ an effort tier.
 
 2. **Make each contract in `CONTRACTS.md` concrete.** For every `C<n>`, replace
    the behavioural `Shape` with an exact path, symbol, and signature or schema,
-   and fill in `Verify` — a runnable check the orchestrator uses before and
+   and fill in `Verify` — a runnable check the executor uses before and
    after an item runs to confirm the contract's **promised behaviour** holds,
    not merely that its symbols exist. A grep for a type member is a presence
    check: it passes even when the mechanism the contract describes is broken,
@@ -74,21 +74,21 @@ considered-and-rejected with the reason. That reasoning trail is context the
 implementer needs, not noise.
 
 ## Agent Tooling
-Skills or extensions the implementing sub-agent must explicitly invoke:
+Skills or extensions the executor must explicitly invoke:
 - `<skill-name>` — why the executor needs it
 (Omit this section only if no skills or extensions are relevant.)
 
 ## Steps
-Self-contained briefs a sub-agent can execute and review on its own. Size each
-step so a sub-agent could execute it from the brief alone, without needing to
-ask the orchestrator anything beyond a fork. (The orchestrator dispatches
-steps in groups — consecutive steps sharing a tier and code surface — per the
-Dispatch groups section of EXECUTE.md, so keep each step individually
-reviewable too.)
+Self-contained briefs the executor can implement and review on its own. Size
+each step so it can be executed from the brief alone, without needing to ask
+anything beyond a fork. (The executor reviews steps in groups — consecutive
+steps sharing a model and code surface — per the Groups section of EXECUTE.md,
+so keep each step individually reviewable too.)
 
-### Step k — <title> · effort: <Lightweight|Moderate Thinking|Deep Thinking> — <why this tier>
+### Step k — <title>
 - [ ] <task>
 - [ ] <task>
+Needs strong model: <why a worker model would get this wrong without anything failing>   (omit unless it applies — see references/model-selection.md)
 Serves: <R-IDs from this item's REQUIREMENTS.md, e.g. R1, R3>   (omit for [quick] items)
 Files: <exact paths this step may touch>
 All sites: <command that enumerates every place this change must land>   (only when there's more than one)
@@ -99,7 +99,7 @@ it whenever a step changes a pattern that exists in more than one place —
 parallel renderers, compact and desktop layouts, every call site of a
 signature, each branch of a mode switch. A change that lands at some but not
 all sites is the most common silent failure in this workflow. Name the
-command, not the list, so the orchestrator can re-run it against the code as
+command, not the list, so the executor can re-run it against the code as
 it actually is and account for every hit. Don't pin an expected count —
 counts are easy to get wrong (`rg -c` counts lines, not matches), and a wrong
 number reads as authoritative.
@@ -110,15 +110,15 @@ satisfy this field alone. Watch wiring steps (mounting components, threading
 props, registering handlers) most closely: their check tends to degrade to a
 typecheck, and that is where silent defects land. If no runnable command can
 observe the behaviour, write `Done when (review): <what the diff must show>`
-instead — the orchestrator confirms it by reading the diff, which is honest
+instead — the executor confirms it by reading the diff, which is honest
 where a typecheck standing in for it is not.
 
 ## Anticipated Forks (optional)
 Divergences you can already foresee (e.g. "if the existing helper doesn't
 accept a callback, wrap it instead of modifying its signature"), each with a
-resolution decided in advance so the orchestrator doesn't have to reason about
+resolution decided in advance so the executor doesn't have to reason about
 it live. State each one's **premise** — especially one resting on an earlier
-item's implementation detail — so the orchestrator can confirm it still holds
+item's implementation detail — so the executor can confirm it still holds
 before applying the resolution, rather than applying one whose basis has
 since changed.
 
@@ -131,13 +131,13 @@ which steps/files belong to it, in the order they should land. Most items
 should just say "single commit."
 
 ## Testing & Verification
-How the orchestrator will know each step, and the item as a whole, works. Name
+How the executor will know each step, and the item as a whole, works. Name
 the test framework and where tests live, the specific cases worth covering
 (not just "add tests"), and the verification gate the whole item must pass
 before it's committed (e.g. typecheck && lint && test && build). If the change
 isn't testable in the usual way, say how it will be verified instead.
 
-Every check in the gate must be runnable by a headless orchestrator — no
+Every check in the gate must be runnable by a headless executor — no
 browser, no GUI, no interactive session, no starting long-running services.
 A gate it can't execute gets either skipped quietly or halts a finished item.
 When a requirement can't be verified that way, put the closest automated
@@ -150,7 +150,7 @@ Two verification anti-patterns to call out in the plan when relevant:
   caching, metrics), scope verification to the new behavior only. Do not re-verify
   the underlying logic — it wasn't changed and wasn't a regression risk.
 
-- **Executor self-interference:** If a dispatched sub-agent runs inside an
+- **Executor self-interference:** If the executor runs inside an
   environment with its own input guards (hooks, extensions), verification
   commands that embed a guarded pattern — even as a quoted string or JSON
   fixture — may be silently intercepted. When this risk exists, note it and
@@ -159,18 +159,18 @@ Two verification anti-patterns to call out in the plan when relevant:
 
 ## Human verification (optional)
 Checks only a person can perform — visual inspection, profiler runs, on-device
-testing. The orchestrator never runs these and never blocks on them; it
+testing. The executor never runs these and never blocks on them; it
 reports them to the user at the end of the run as outstanding.
 
 ## Boundaries
 Behavioral guardrails for the implementer, in three tiers:
 - **✅ Always** — invariants the implementation must uphold
-- **⚠️ Ask first** — changes that require checking with the user before proceeding (the orchestrator treats these as a HALT, not a decision it can make itself)
+- **⚠️ Ask first** — changes that require checking with the user before proceeding (the executor treats these as a HALT, not a decision it can make itself)
 - **🚫 Never** — things the implementation must not do
 
 When a Boundary restricts a contract's surface, say whether *additive* changes
 are permitted — "don't extend C4" and "don't extend C4 except additively" are
-different rules, and the orchestrator would otherwise have to guess.
+different rules, and the executor would otherwise have to guess.
 
 ## Out of Scope
 What this item's plan explicitly does NOT address.
@@ -186,11 +186,11 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
 ```
 
    **`[quick]` items** get a compact `PLAN.md` instead of the full template:
-   just Goal, Steps (same dispatch-unit format above), Commits, Testing &
+   just Goal, Steps (same step format above), Commits, Testing &
    Verification (plus Human verification if any), and Boundaries — no
    Technical Context, Edge Cases, Key
-   Decisions, or Reuse sections. They still get dispatched by the
-   orchestrator exactly like any other item.
+   Decisions, or Reuse sections. The executor runs them exactly like any
+   other item.
 
 4. **Cross-plan consistency pass**, done in this same session with every
    item's PLAN.md in context at once (this is the reason Plan plans the whole
@@ -201,7 +201,11 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
      concrete shape from step 2;
    - when two items edit the same file, the plans agree on which runs first
      and that the second's steps still apply after the first's edits;
-   - every step across every plan has both an effort tier and a `Done when:`;
+   - every step across every plan has a `Done when:`, and every
+     `Needs strong model:` flag has a reason that meets the bar in
+     `references/model-selection.md` — flags are rare, each one costs the user
+     a manual handoff. Where dependency order allows, flagged steps are
+     contiguous, ideally at an item boundary;
    - every `R<n>` in each item's REQUIREMENTS.md is cited by at least one
      step's `Serves:`, and no step cites an ID that doesn't exist — an
      uncited requirement is planned work that nobody will do;
@@ -213,7 +217,7 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
      command, including each parallel implementation Refine recorded in
      What We Know;
    - every item has a runnable Testing & Verification gate that a headless
-     orchestrator can execute, and a Commits section;
+     executor can execute, and a Commits section;
    - no item's Boundaries conflict with another's (e.g. one item's ✅ Always
      contradicts another's 🚫 Never).
 
@@ -230,22 +234,13 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
    - **Collapse Key Decisions** in every PLAN.md: drop the Option A/B menu,
      keep what was chosen, briefly why, and what was considered-and-rejected
      with the reason.
-   - **Choose the execution mode** with `AskUserQuestion` (batch it with any
-     other gate question): `dispatch` (default — an orchestrator hands each
-     group to a sub-agent at its tier; lean context and independent review,
-     needs a harness that can spawn agents — pi does so via `bash` + `pi -p`)
-     or `serial` (one agent implements every step itself, then reviews its own
-     diffs mechanically; works in any harness, but long runs fill one context
-     and tiers aren't honoured). Write it as `Mode:` in EXECUTE.md, then
-     delete the other mode's marked block from the template, along with the
-     template's comment markers. Serial mode drops the Effort tiers section;
-     dispatch groups are still formed as review units.
-   - **Form dispatch groups and write them into EXECUTE.md** as a table: item,
-     group id, step range, tier, code surface. A group is a run of consecutive
-     steps sharing a tier and a surface. Grouping rounds a step's tier up,
-     never down. A group never spans a commit boundary. Dispatch any
-     contract-producing step alone, or paired only with the one step it is
-     tightly coupled to. Group boundaries are a judgment call, not a
+   - **Form groups and write them into EXECUTE.md** as a table: item, group
+     id, step range, model (`worker`, or `strong` for steps flagged
+     `Needs strong model`), code surface. A group is a run of consecutive
+     steps sharing a model and a surface; `worker` and `strong` steps are never
+     grouped together. A group never spans a commit boundary. Give a
+     contract-producing step its own group, or pair it only with the one step
+     it is tightly coupled to. Group boundaries are a judgment call, not a
      mechanical partition — where the cut is genuinely ambiguous, prefer the
      boundary that gives the more reviewable diff.
    - **Write the item-specific tripwires into EXECUTE.md.** For each item,
@@ -253,21 +248,20 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
      required places, would anything fail?* and *what here could pass every
      check while doing nothing?* Every place where nothing would fail is a
      tripwire: name the step, what a plausible-but-wrong diff looks like, and
-     the command or read that exposes it. Tripwires tell the orchestrator
+     the command or read that exposes it. Tripwires tell the executor
      where to look hardest during review — don't leave finding them to luck.
    - **Write `EXECUTE.md`** from the template in
      `references/execute-template.md` (read it now:
      `cat "$CLAUDE_SKILL_DIR/references/execute-template.md"`) in the
-     artifact directory, with absolute paths throughout, the effort-tier
-     definitions copied in verbatim from `references/model-tiers.md`, and the
-     dispatch groups table and tripwires filled in. Resolve the review-package
+     artifact directory, with absolute paths throughout and the groups table
+     and tripwires filled in. Resolve the review-package
      script to an absolute path (`echo "$CLAUDE_SKILL_DIR/scripts/review-package"`)
-     — the orchestrator runs in a session that never loaded this skill, so
+     — the executor runs in a session that never loaded this skill, so
      `$CLAUDE_SKILL_DIR` won't be set there.
    - Tell the user plainly that EXECUTE.md is the executor's whole
-     protocol — it dispatches (or implements, in serial mode), reviews, gates, commits, and logs without
-     further prompting, only stopping to write a failure report and halt, or
-     when finished.
+     protocol — it implements, reviews, gates, commits, and logs without
+     further prompting, only stopping to write a failure report and halt, to
+     hand a `strong` group to a stronger model, or when finished.
    - Hand over the pointer prompt as a **fenced code block** (never a `>`
      blockquote — it copies clean):
 
@@ -275,7 +269,10 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
      Read <abs-path>/EXECUTE.md in full, then follow its instructions exactly. Do not start until you've read the whole file.
      ```
 
-   - **Recommend running the orchestrator (or serial executor) at the Deep Thinking tier**, in a
-     fresh session (`/clear` first) — it needs to judge forks and review diffs
-     against plans it didn't write itself, which is exactly the Deep Thinking
-     use case from `model-tiers.md`.
+   - **Tell the user which model to run it on:** a capable worker model, in a
+     fresh session (`/clear` first) — it implements every step not flagged
+     `Needs strong model` and reviews its own diffs against plans it didn't
+     write. If any group is `strong`, name them (item, group, why) so the user
+     knows where the executor will stop and ask for a stronger model; the
+     handoff prompt comes from EXECUTE.md at that point. If none are flagged,
+     say so — the run won't need a model switch.

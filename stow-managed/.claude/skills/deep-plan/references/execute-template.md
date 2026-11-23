@@ -1,75 +1,51 @@
-## EXECUTE.md template (orchestrator protocol)
+## EXECUTE.md template (executor protocol)
 
-Fill this in with real absolute paths and the effort-tier definitions when
-writing `EXECUTE.md`. The orchestrator that reads this file runs it standalone
-— it does not re-read this reference file, so nothing here may be left
-implicit.
+Fill this in with real absolute paths when writing `EXECUTE.md`. The executor
+that reads this file runs it standalone — it does not re-read this reference
+file, so nothing here may be left implicit.
 
 ````markdown
 # Execute: <overall goal>
 
-Mode: <dispatch | serial>
-
-<!-- Plan phase: keep exactly one of the two blocks below, delete the other
-     and these comments, so the executor reads only its own protocol. -->
-
-<!-- [dispatch mode] -->
-You are the **orchestrator** for this roadmap. Your job is to **dispatch,
-review, gate, commit, and log** — not to re-plan what the plans already
-settled, and not to implement steps yourself. Every step in every PLAN.md
-must be executed by a dispatched sub-agent, not inline by you — you review
-and decide, sub-agents implement. Steps are dispatched in groups (see
-Dispatch groups below), never inline. Small review fixups of about 5 lines or
-fewer (e.g. a missing import) may be applied inline by you and logged;
-anything larger goes through a fresh dispatch.
-
-<!-- [serial mode] -->
 You are the **sole executor** for this roadmap: you implement every step
 yourself, in order, in this one session, then review your own work against
-the plan, gate, commit, and log. There are no sub-agents and no brief/report
-files. You are not independent of your own changes, so the checks below are
-deliberately mechanical — run them and read their output; don't rely on
-remembering that you did it right. Don't re-plan what the plans already
-settled. If the session grows long, the log and ticked PLAN.md steps are
-durable: the user can `/clear` and have you resume from section 0.
+the plan, gate, commit, and log. There are no sub-agents. You run on whatever
+model the user started this session on; steps marked `strong` in the groups
+table are the exception (see Strong-model handoffs). You are not independent of
+your own changes, so the checks below are deliberately mechanical — run them
+and read their output; don't rely on remembering that you did it right. Don't
+re-plan what the plans already settled. If the session grows long, the log and
+ticked PLAN.md steps are durable: the user can `/clear` and have you resume
+from section 0.
 
 Artifact directory: <abs-path>
 - ROADMAP.md: <abs-path>/ROADMAP.md
 - CONTRACTS.md: <abs-path>/CONTRACTS.md
 - Items: <abs-path>/items/NN-<slug>/{REQUIREMENTS.md,PLAN.md,FAILURE.md}
-- Dispatch files (dispatch mode): <abs-path>/items/NN-<slug>/dispatch/<gid>-{brief,report,diff}.md
-  (durable — on resume, the last group's report says where it stopped)
-- Diff files (serial mode): <abs-path>/items/NN-<slug>/dispatch/<gid>-diff.md
+- Diff files: <abs-path>/items/NN-<slug>/review/<gid>-diff.md
 - Review-package script: <abs-path-to-skill>/scripts/review-package (written
   `<review-package>` below)
 - Log: <abs-path>/EXECUTION-LOG.md (append-only; create if missing)
 
-## Effort tiers
+## Groups
 
-*(Dispatch mode only — in serial mode every step runs on the active model; omit this section.)*
+A group is a run of consecutive steps sharing a model (`worker` or `strong`)
+and a code surface. It is the **review unit**: you implement its steps, then
+review that group's diff before moving on. A group never spans a commit
+boundary, and `worker` and `strong` steps are never in the same group.
 
-<tier definitions and dispatch guidance copied verbatim from references/model-tiers.md>
-
-## Dispatch groups
-
-*(In serial mode a group is the **review unit**, not a dispatch unit: you implement its steps, then review that group's diff before moving on.)*
-
-Steps declare tiers individually, but **the dispatch unit is a group**: a run of consecutive
-steps sharing a tier and a code surface, briefed to one sub-agent and reviewed as one diff.
-Grouping only ever rounds a step up, never down. A group never spans a commit boundary.
-
-| Item | Group | Steps | Tier | Surface |
+| Item | Group | Steps | Model | Surface |
 | --- | --- | --- | --- | --- |
-| <n> | <n>A | <k>–<m> | <tier> | <what this group touches> |
+| <n> | <n>A | <k>–<m> | <worker|strong> | <what this group touches> |
 
-If a group turns out too large mid-run — the sub-agent reports it can't hold the whole brief,
-or the diff is unreviewable — split it at a step boundary and log a FORK. Never merge two
-groups, and never split a group across a commit.
+If a group turns out too large mid-run — the diff is unreviewable — split it at
+a step boundary and log a FORK. Never merge two groups, and never split a group
+across a commit.
 
 ## Item-specific tripwires
 
 Places where a plausible-looking diff is wrong and nothing would fail. Check each one explicitly
-when reviewing the named step, and include it in that group's brief.
+when reviewing the named step.
 
 - **Item <n>, step <k>** — <what must be true> · <why nothing fails if it isn't> · <the command
   or read that exposes it>
@@ -88,10 +64,11 @@ when reviewing the named step, and include it in that group's brief.
      write a FAILURE.md for item 1 (see the Failures section) explaining the
      dirty tree and stop — unrelated uncommitted changes would leak into the
      first item's commit.
-   - **Resume after a normal pause** (no pending FAILURE.md): any uncommitted
-     changes must match exactly the `Files:` of the step you're resuming
-     mid-way through. If they don't, treat it as a failure (see below) —
-     you cannot tell which changes belong to this run.
+   - **Resume after a normal pause or handoff** (no pending FAILURE.md): any
+     uncommitted changes must match exactly the `Files:` of the steps already
+     ticked in the item you're resuming mid-way through. If they don't, treat
+     it as a failure (see below) — you cannot tell which changes belong to
+     this run.
    - **Resume after a re-plan** (EXECUTION-LOG.md's last entry for this item
      is RE-PLAN): trust the re-plan's stated decision about the working tree
      in the updated PLAN.md's Technical Context — it already reconciled
@@ -100,133 +77,33 @@ when reviewing the named step, and include it in that group's brief.
 
 ## Per item
 
-Steps 2–3 and the fix dispatches in step 5 differ by mode. Follow your mode's
-version; everything else is shared.
-
 1. **Check contracts consumed.** Run the `Verify` check for every contract
    this item consumes (from CONTRACTS.md), and spot-check the plan's Reuse
    entries against the current codebase. A mismatch counts as a fork — handle
-   it via the Forks process below before dispatching any step.
-2. **Dispatch each group** *(dispatch mode)* from the Dispatch groups table — not each step
-   individually — at the group's tier, picking a concrete model per
-   `model-tiers.md`'s dispatch guidance. In Claude Code use the `Agent` tool.
-   In pi there is no sub-agent tool: spawn a child with `bash` (see **Dispatching
-   from pi** below the report contract).
+   it via the Forks process below before implementing any step.
+2. **Implement each group**, in table order. For each group:
 
-   **Briefs and reports travel as files, not as prompt text.** Everything you
-   paste into a dispatch prompt, and everything a sub-agent prints back, stays
-   in your context for the rest of a run that may span many items. So:
-
-   a. **Snapshot first:** `BASE=$(<review-package> snapshot)`. Record it in
-      the brief's header — the group's review diff is measured from it, which
-      keeps earlier groups' uncommitted changes out of this group's review.
-   b. **Write the brief** to `<abs-path>/items/NN-<slug>/dispatch/<gid>-brief.md`
-      (create `dispatch/` if missing; a re-dispatch gets its own file,
-      e.g. `<gid>-fix1-brief.md`). It covers **every step in the group**: each
-      step's tasks verbatim with its `Serves:` IDs, any Reuse entries those
-      steps need, the item's Boundaries, the exact shape of any contract the
-      group produces, the union of the steps' `Files:`, every step's `All
-      sites:` command and `Done when:`, any tripwires on these steps, and any
-      skills to invoke. Include the absolute paths to the item's
-      REQUIREMENTS.md and PLAN.md, with an instruction to read both in full
-      for context but implement only this group's steps — a sub-agent that
-      sees only its fragment of the plan can complete every task and still
-      miss the requirement those tasks serve. Describe this group only: don't
-      paste summaries of earlier groups; pass only the interfaces and
-      decisions from them that this group's code touches.
-   c. **Dispatch with a short prompt**: one line on where the group fits in
-      the item, the brief path ("read this first — it is your full
-      instructions"), and the report path
-      `<abs-path>/items/NN-<slug>/dispatch/<gid>-report.md`.
-
-   The brief must carry this report contract, verbatim:
-
-   > Write your full report to the report path. Your final reply is ONE line:
-   > `DONE | DIVERGED | BLOCKED — <report path>`.
-   > - DONE: every task done as briefed, every `Done when:` passes.
-   > - DIVERGED: done, but somewhere you departed from the brief or the plan.
-   > - BLOCKED: you could not finish; say exactly what stopped you.
-   >
-   > The report lists: files changed; each `Done when:` with its actual
-   > output; every divergence as an open question with a recommendation, never
-   > a settled decision — *"I did X. The plan implied Y. I recommend X because
-   > Z — confirm or correct."*; and every assumption you made about code
-   > outside this group (e.g. where a later step will mount something).
-   >
-   > Do not dispatch sub-agents of your own, for any purpose. Review is the
-   > orchestrator's job, and a sub-agent you spawn runs on a model nobody
-   > chose for this tier.
-   **Dispatching from pi.** Run the child as a foreground `bash` call, with the
-   transcript sent to a file so only the status line enters your context:
-
-   ```
-   pi -p --provider <provider> --model <model> --thinking <level> \
-     "<short dispatch prompt>" > <abs-path>/items/NN-<slug>/dispatch/<gid>-run.log 2>&1
-   echo "exit=$?"; tail -n 1 <abs-path>/items/NN-<slug>/dispatch/<gid>-run.log
-   ```
-
-   Pick the provider/model/thinking level per the tier (confirm names with
-   `pi --list-models`). The final line of the log is the child's status line.
-   A nonzero exit, or a last line that isn't `DONE | DIVERGED | BLOCKED — …`,
-   counts as `BLOCKED` — read `<gid>-run.log` only to say why in the log, then
-   re-dispatch or handle it as a failure. Set the `bash` timeout generously
-   (groups can run many minutes); a timed-out child is `BLOCKED`. Children run
-   with pi's normal toolset in the same working tree, so dispatch groups one
-   at a time.
-
-3. **Review the result** *(dispatch mode)*. Read the status line, then build the review
-   package: `<review-package> diff $BASE <abs-path>/items/NN-<slug>/dispatch/<gid>-diff.md <each path in the group's Files:>`.
-   Its stdout lists the changed files and flags any outside the `Files:`
-   boundary — an out-of-bounds file is a Boundaries question to settle
-   before reading further (ignore hits under the artifact directory itself,
-   if it lives inside the repo and isn't gitignored). Then read the report
-   and the diff file, and check them against **every** step's tasks in the
-   group, the item's Boundaries, and any tripwire on these steps. A
-   `DIVERGED` status means the report holds open questions: settle each one
-   here, accepting it, rejecting it, or treating it as a fork. A `BLOCKED`
-   status is a rejection (re-dispatch with what was missing) unless the
-   block is in the plan itself, which makes it a fork.
-   - Run each step's `Done when:` yourself. For a `Done when (review):`,
-     confirm the diff shows what it names.
-   - Re-run each `All sites:` command and account for every hit — changed,
-     or excluded for a stated reason. A change that lands at some but not all
-     sites passes every other check.
-   - Treat framing like "deliberate simplification", "scoped decision", or
-     "judgement call" as an unreviewed divergence: the sub-agent decided
-     something it was told to surface. Check it against REQUIREMENTS.md
-     yourself before accepting it.
-   - Check every assumption the report made about code outside the group
-     against the plan for that code now. A mismatch is a fork.
-   - **Accept** → tick all of the group's step tasks in PLAN.md, log a DONE
-     entry naming the group.
-   - **Reject** → re-dispatch once with specific corrections. **Scope the
-     re-dispatch to the failing step, or the specific task within it**, not
-     the whole group — the rest already passed its `Done when:`. If the
-     failure was about capability rather than unclear instructions,
-     re-dispatch one tier up. Log the escalation either way.
-2s. **Implement each group** *(serial mode, replaces steps 2–3)*, in table
-   order, in this session. For each group:
-
-   a. `BASE=$(<review-package> snapshot)`.
-   b. Read the group's steps in PLAN.md, the item's REQUIREMENTS.md, the
+   a. **If its Model is `strong`, apply Strong-model handoffs (below) before
+      anything else.**
+   b. `BASE=$(<review-package> snapshot)`.
+   c. Read the group's steps in PLAN.md, the item's REQUIREMENTS.md, the
       Reuse entries and Boundaries, and any tripwires named for these steps.
       Implement the tasks, staying within the steps' `Files:`.
-   c. **Review as if someone else wrote it.** Build the diff:
-      `<review-package> diff $BASE <abs-path>/items/NN-<slug>/dispatch/<gid>-diff.md <each path in the group's Files:>`.
+   d. **Review as if someone else wrote it.** Build the diff:
+      `<review-package> diff $BASE <abs-path>/items/NN-<slug>/review/<gid>-diff.md <each path in the group's Files:>`.
       Any file flagged outside `Files:` is a Boundaries question — settle it
       before continuing. Then **read the diff file**, not your memory of what
       you wrote, and check it against every step's tasks, the Boundaries and
       the tripwires. Run each step's `Done when:` and read the actual output;
-      re-run each `All sites:` command and account for every hit.
-   d. Anywhere you departed from the plan is a divergence: settle it with the
+      for a `Done when (review):`, confirm the diff shows what it names.
+      Re-run each `All sites:` command and account for every hit — changed,
+      or excluded for a stated reason.
+   e. Anywhere you departed from the plan is a divergence: settle it with the
       Forks process (log it) rather than leaving it implicit.
-   e. Tick the group's step tasks in PLAN.md and log a DONE entry naming the
-      group. If a fix is needed, make it and redo (c) — at most 2 rounds per
+   f. Tick the group's step tasks in PLAN.md and log a DONE entry naming the
+      group. If a fix is needed, make it and redo (d) — at most 2 rounds per
       group, then it's a failure.
-
-   Tiers aren't honoured in serial mode: log that once, at the first group of
-   the run, naming the active model.
-4. **Review the whole item against REQUIREMENTS.md.** Once every group has
+3. **Review the whole item against REQUIREMENTS.md.** Once every group has
    landed, go through each Validated Requirement by ID (`R1`, `R2`, …) —
    starting from the steps whose `Serves:` cites it — and find where the
    item's whole change (including any of its commits already landed)
@@ -234,46 +111,54 @@ version; everything else is shared.
    result to what the plan was for. Some gaps only show once every group is
    in — a behaviour wired into one of two parallel renderers passes each
    group's review and every gate. A requirement with no answer in the change
-   is a gap: if the diff departed from the plan, handle it as a rejection
-   (step 3); if the diff followed the plan and the plan fell short, handle it
-   as a fork.
-5. **Run the item's Testing & Verification gate.** On failure, allow up to
-   **2 fix dispatches**. Checks under the plan's `## Human verification` are
-   not part of the gate — don't run them or block on them; carry them to
-   Finish.
-
-   **Serial mode:** make up to 2 fix attempts yourself, reading the gate's
-   actual failing output each time; skip the tier rules below, and go to
-   Failures if the gate still fails.
-
-   **Dispatch mode** — tiers are declared per step and dispatched per group;
-   there is no "item tier". Pick the fix-dispatch tier like this:
-
-   - **First fix dispatch:** the tier of the group whose `Files:` the failure
-     points at, scoped to that group's steps. If the failure spans groups or
-     the cause is ambiguous, use the highest tier among that item's groups.
-   - **Second fix dispatch:** one tier up from the first, capped at Deep
-     Thinking.
-
-   Fix dispatches go through the same brief/report/snapshot files as step 2
-   (`<gid>-gate1-brief.md`, …), with the gate's actual failing output in the
-   brief.
-
-   If the gate still fails after that bound, **this is a failure, not a fork**
-   — go to the Failures section below rather than attempting a third fix. That
-   bound exists specifically to stop thrashing on a problem that's actually in
-   the plan, not the implementation.
-6. **Check contracts produced.** Run the `Verify` check for every contract
+   is a gap: if the diff departed from the plan, fix it (back in step 2d); if
+   the diff followed the plan and the plan fell short, handle it as a fork.
+4. **Run the item's Testing & Verification gate.** Checks under the plan's
+   `## Human verification` are not part of the gate — don't run them or block
+   on them; carry them to Finish. On failure, make up to **2 fix attempts**,
+   reading the gate's actual failing output each time. If the gate still fails,
+   **this is a failure, not a fork** — go to the Failures section rather than
+   attempting a third fix. That bound exists specifically to stop thrashing on
+   a problem that's actually in the plan, not the implementation.
+5. **Check contracts produced.** Run the `Verify` check for every contract
    this item produces.
-7. **Commit.** Follow the item's PLAN.md `## Commits` section — a single
+6. **Commit.** Follow the item's PLAN.md `## Commits` section — a single
    commit by default, or the declared multi-commit split, landed in the order
    given. For each commit, stage only the files belonging to that commit, by
    explicit path — never `-A` or a wildcard. Check the diff for secrets or
    runtime files before staging. Write a commit message that states what
    changed and why, on the current branch. Never create a new branch, push, or
    force-push.
-8. **Tick the item** in ROADMAP.md and log an ITEM-DONE entry with the commit
+7. **Tick the item** in ROADMAP.md and log an ITEM-DONE entry with the commit
    hash(es).
+
+## Strong-model handoffs
+
+A group marked `strong` was flagged by the planner as hard to get right and
+hard to notice when wrong. The user chooses the model for each session, so you
+cannot switch yourself — you stop and hand over. This is a normal pause, not a
+failure: no FAILURE.md.
+
+**Before implementing a `strong` group**, check two things: the last
+EXECUTION-LOG.md entry, and whether the prompt that started this session said
+you are the strong-model session for that group.
+
+- **Not the strong session** (the usual case): append a HANDOFF entry naming
+  the group and why it was flagged — unless the log's last entry is already
+  that HANDOFF, in which case don't duplicate it. Then stop and tell the user
+  to start a fresh session on a strong model with this prompt, filled in with
+  the real path and group id:
+
+  ```
+  Read <abs-path>/EXECUTE.md in full. You are the strong-model session for group <gid>: implement and review only that group (section 2 of "Per item"), tick its steps, log DONE, then stop. Do not continue to later groups, run the item gate, or commit.
+  ```
+
+  Then they switch back to the worker model and re-run the pointer prompt to
+  resume.
+- **The strong session** (prompt names this group, last log entry is its
+  HANDOFF): implement and review the group exactly as in step 2, log DONE, and
+  **stop**. Don't run the gate, commit, or touch later groups — the worker
+  session continues from the ticked steps.
 
 ## Forks — decide, log, patch
 
@@ -307,7 +192,7 @@ version; everything else is shared.
 ## Failures — document, halt, wait
 
 A failure is anything you cannot resolve within this protocol: a gate that
-still fails after the fix-dispatch bound, a fork that would cross an
+still fails after the fix-attempt bound, a fork that would cross an
 Ask-first/Never boundary or invalidate the item's Goal, or state you can't
 reconcile (e.g. a dirty tree at a fresh start). You do not guess your way past
 a failure and you do not keep retrying — you gather the facts, write them
@@ -327,7 +212,7 @@ after they've read what you wrote.
    > Halted: <ISO 8601 timestamp>
 
    ## What was attempted
-   Steps dispatched (or implemented, in serial mode), at what tier, and their outcomes.
+   Steps implemented and their outcomes, and which model ran them.
 
    ## What failed
    The actual gate/error output or the boundary/Goal that would have been
@@ -335,15 +220,17 @@ after they've read what you wrote.
 
    ## Root-cause theory
    Your best current theory: a wrong assumption in the plan, a transient issue
-   worth re-checking, missing context, or a genuine plan gap. Say which, and
-   why you believe it.
+   worth re-checking, missing context, a genuine plan gap, or a step that
+   needed a stronger model than the worker. Say which, and why you believe it.
 
    ## Working-tree state
    Output of `git status --porcelain` and a summary of any uncommitted diff,
    so the re-plan knows what it's building on top of.
 
    ## Recommendation for re-plan
-   What you'd point the re-plan at first — not a decision, a pointer.
+   What you'd point the re-plan at first — not a decision, a pointer. If the
+   cause looks like model capability, say which step the re-plan should flag
+   `Needs strong model`.
    ```
 
 3. **Append a HALT-FAILURE entry** to EXECUTION-LOG.md referencing the file.
@@ -359,10 +246,20 @@ after they've read what you wrote.
 
 When every item is checked: run the roadmap's final overall gate if one is
 named, write a summary EXECUTION-LOG.md entry (items completed, commits made,
-forks decided, contracts patched, escalations), and report to the user.
+forks decided, contracts patched, handoffs), and report to the user.
 List every `## Human verification` check from the completed items' plans, and
 any gate approximation a plan flagged as partial, explicitly as **outstanding**
 — the user is the only one who can close them.
+
+Because you reviewed your own work, suggest an independent check: a fresh
+session on a strong model that reviews the run's commits against each item's
+REQUIREMENTS.md and the rulings in EXECUTION-LOG.md. Give them this prompt,
+with real paths filled in:
+
+```
+Read <abs-path>/ROADMAP.md, CONTRACTS.md and EXECUTION-LOG.md, then review the commits the log lists against each item's REQUIREMENTS.md. Report gaps and any FORK rulings you disagree with. Do not change code.
+```
+
 Archiving the artifact directory is left to the next `/deep-plan` invocation.
 **Never** push, force-push, rewrite history, or switch branches — those are
 outside this protocol regardless of how the run went.
@@ -370,8 +267,8 @@ outside this protocol regardless of how the run went.
 ## EXECUTION-LOG.md entry format
 
 ```
-## <ISO 8601 timestamp> — item <n> group <gid>|step <k> — DONE|FORK|PATCH|ESCALATE|HALT-FAILURE|RE-PLAN|ITEM-DONE
-<2-5 lines: what happened, and for FORK/PATCH/ESCALATE/HALT-FAILURE/RE-PLAN, why.
+## <ISO 8601 timestamp> — item <n> group <gid>|step <k> — DONE|FORK|PATCH|HANDOFF|HALT-FAILURE|RE-PLAN|ITEM-DONE
+<2-5 lines: what happened, and for FORK/PATCH/HANDOFF/HALT-FAILURE/RE-PLAN, why.
 FORK entries end with their `Ruling:` line.>
 ```
 ````

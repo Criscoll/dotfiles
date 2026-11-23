@@ -1,6 +1,6 @@
 ## Re-plan phase (failure recovery)
 
-Triggered explicitly — never automatically. When the orchestrator (see
+Triggered explicitly — never automatically. When the executor (see
 `execute-template.md`) hits a failure, it documents and halts;
 it never re-plans itself. Getting the roadmap moving again is a deliberate,
 user-initiated step: they read the item's `FAILURE.md`, decide it's worth
@@ -50,7 +50,7 @@ retry logic assumed the API was idempotent and it isn't".
 6. **Reconcile the working tree explicitly.** Decide whether the new plan
    builds on the failed attempt's partial changes, requires reverting them
    first, or needs a mix — and write that decision into the plan's Technical
-   Context (this is what the orchestrator's "Resume after a re-plan" step
+   Context (this is what the executor's "Resume after a re-plan" step
    reads to know where to start). Don't leave this implicit; a silent
    assumption here is exactly the kind of gap that caused the original
    failure.
@@ -66,4 +66,4 @@ retry logic assumed the API was idempotent and it isn't".
      in item N, what (if anything) was patched downstream, and why.
    - Tell the user plainly:
 
-     > Item <n> re-planned. Run `/clear` to start a fresh session, then read `<path>/EXECUTE.md` again — the orchestrator will see the cleared FAILURE.md and resume from item <n>'s first step under the updated plan.
+     > Item <n> re-planned. Run `/clear` to start a fresh session, then read `<path>/EXECUTE.md` again — the executor will see the cleared FAILURE.md and resume from item <n>'s first step under the updated plan.
