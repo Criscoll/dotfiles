@@ -208,12 +208,18 @@ function buildRpcOptionAnswer(q: AskQuestion, opt: AskOption): AskAnswer {
 	};
 }
 
+/** A select() result that matches no offered label is text the client collected itself — keep it as a custom answer. */
+function customAnswerFromText(q: AskQuestion, text: string): AskAnswer {
+	const trimmed = text.trim() || "(no response)";
+	return { questionId: q.id, value: trimmed, label: trimmed, isCustom: true };
+}
+
 async function askRpcFreeform(
 	ctx: ExtensionContext,
 	q: AskQuestion,
-	progress: string,
+	title: string,
 ): Promise<AskAnswer | undefined> {
-	const value = await ctx.ui.input(`${progress}${q.header}`, "Type your answer...");
+	const value = await ctx.ui.input(title, "Type your answer...");
 	if (value === undefined) return undefined;
 	const trimmed = value.trim() || "(no response)";
 	return {
@@ -224,88 +230,152 @@ async function askRpcFreeform(
 	};
 }
 
-/** Returns true if the user cancelled. */
+type RpcStep = "next" | "back" | "cancel";
+
+const RPC_BACK_LABEL = "← Back";
+
+function describeAnswers(answers: AskAnswer[]): string {
+	return answers.map((a) => a.label).join(", ");
+}
+
+/** Asks one single-select question; fills `out` on "next". */
 async function runRpcSingleSelectQuestion(
 	ctx: ExtensionContext,
 	q: AskQuestion,
-	answers: AskAnswer[],
-	progress: string,
-): Promise<boolean> {
+	out: AskAnswer[],
+	title: string,
+	canGoBack: boolean,
+): Promise<RpcStep> {
 	const optionLabels = q.options.map(formatOptionLabel);
-	const labels = q.allowOther ? [...optionLabels, RPC_FREEFORM_SENTINEL] : optionLabels;
+	const labels = q.allowOther ? [...optionLabels, RPC_FREEFORM_SENTINEL] : [...optionLabels];
+	if (canGoBack) labels.push(RPC_BACK_LABEL);
 
-	const picked = await ctx.ui.select(`${progress}${q.header}`, labels);
-	if (picked === undefined) return true;
+	const picked = await ctx.ui.select(title, labels);
+	if (picked === undefined) return "cancel";
+	if (picked === RPC_BACK_LABEL) return "back";
 
 	if (picked === RPC_FREEFORM_SENTINEL) {
-		const answer = await askRpcFreeform(ctx, q, progress);
-		if (!answer) return true;
-		answers.push(answer);
-		return false;
+		const answer = await askRpcFreeform(ctx, q, title);
+		if (!answer) return "cancel";
+		out.splice(0, out.length, answer);
+		return "next";
 	}
 
 	const opt = q.options[optionLabels.indexOf(picked)];
-	answers.push(buildRpcOptionAnswer(q, opt));
-	return false;
+	out.splice(0, out.length, opt ? buildRpcOptionAnswer(q, opt) : customAnswerFromText(q, picked));
+	return "next";
 }
 
-/** Returns true if the user cancelled. */
+/** Asks one multi-select question; fills `out` on "next". */
 async function runRpcMultiSelectQuestion(
 	ctx: ExtensionContext,
 	q: AskQuestion,
-	answers: AskAnswer[],
-	progress: string,
-): Promise<boolean> {
+	out: AskAnswer[],
+	title: string,
+	canGoBack: boolean,
+): Promise<RpcStep> {
+	const picks: AskAnswer[] = [];
 	let remaining = [...q.options];
-	let pickedCount = 0;
 
 	for (;;) {
-		const doneLabel = `✓ Done selecting (${pickedCount} chosen)`;
+		const doneLabel = `✓ Done selecting (${picks.length} chosen)`;
 		const optionLabels = remaining.map(formatOptionLabel);
 		const labels = [...optionLabels, doneLabel];
 		if (q.allowOther) labels.push(RPC_FREEFORM_SENTINEL);
+		if (canGoBack) labels.push(RPC_BACK_LABEL);
 
-		const selection = await ctx.ui.select(`${progress}${q.header}`, labels);
-		if (selection === undefined) return true;
+		const selection = await ctx.ui.select(title, labels);
+		if (selection === undefined) return "cancel";
+		if (selection === RPC_BACK_LABEL) return "back";
 
 		if (selection === doneLabel) {
-			if (pickedCount === 0) {
+			if (picks.length === 0) {
 				ctx.ui.notify("Pick at least one option before finishing", "warning");
 				continue;
 			}
-			return false;
+			out.splice(0, out.length, ...picks);
+			return "next";
 		}
 
 		if (selection === RPC_FREEFORM_SENTINEL) {
-			const answer = await askRpcFreeform(ctx, q, progress);
-			if (!answer) return true;
-			answers.push(answer);
-			pickedCount++;
+			const answer = await askRpcFreeform(ctx, q, title);
+			if (!answer) return "cancel";
+			picks.push(answer);
 			continue;
 		}
 
 		const opt = remaining[optionLabels.indexOf(selection)];
-		answers.push(buildRpcOptionAnswer(q, opt));
-		pickedCount++;
+		if (!opt) {
+			picks.push(customAnswerFromText(q, selection));
+			continue;
+		}
+		picks.push(buildRpcOptionAnswer(q, opt));
 		remaining = remaining.filter((o) => o !== opt);
 
-		if (remaining.length === 0 && !q.allowOther) return false;
+		if (remaining.length === 0 && !q.allowOther) {
+			out.splice(0, out.length, ...picks);
+			return "next";
+		}
 	}
 }
 
+/**
+ * Sequential question flow with back-navigation. Every question after the
+ * first offers "← Back". With >1 question, a final review step lists all
+ * answers so any of them can be reopened before submitting.
+ */
 async function runRpcQuestions(ctx: ExtensionContext, questions: AskQuestion[]): Promise<AskResult> {
-	const answers: AskAnswer[] = [];
-	for (let i = 0; i < questions.length; i++) {
-		const q = questions[i];
-		const progress = questions.length > 1 ? `[${i + 1}/${questions.length}] ` : "";
-		const cancelled = q.multi
-			? await runRpcMultiSelectQuestion(ctx, q, answers, progress)
-			: await runRpcSingleSelectQuestion(ctx, q, answers, progress);
-		if (cancelled) {
-			return { questions, answers, cancelled: true };
+	const byQuestion: AskAnswer[][] = questions.map(() => []);
+	const collect = (): AskAnswer[] => byQuestion.flat();
+	const multiple = questions.length > 1;
+	let i = 0;
+	// When set, finishing the current question returns to review instead of advancing.
+	let returnToReview = false;
+
+	for (;;) {
+		if (i >= questions.length) {
+			if (!multiple) return { questions, answers: collect(), cancelled: false };
+			const submitLabel = "✓ Submit answers";
+			const reviewLabels = questions.map(
+				(q, idx) => `${idx + 1}. ${q.label}: ${describeAnswers(byQuestion[idx])}`,
+			);
+			const picked = await ctx.ui.select("Review answers (select one to change it)", [
+				...reviewLabels,
+				submitLabel,
+				RPC_BACK_LABEL,
+			]);
+			if (picked === undefined) return { questions, answers: collect(), cancelled: true };
+			if (picked === submitLabel) return { questions, answers: collect(), cancelled: false };
+			if (picked === RPC_BACK_LABEL) {
+				i = questions.length - 1;
+				returnToReview = true;
+				continue;
+			}
+			i = reviewLabels.indexOf(picked);
+			returnToReview = true;
+			continue;
 		}
+
+		const q = questions[i];
+		const progress = multiple ? `[${i + 1}/${questions.length}] ` : "";
+		const current = byQuestion[i].length > 0 ? ` (current: ${describeAnswers(byQuestion[i])})` : "";
+		const title = `${progress}${q.header}${current}`;
+		const canGoBack = i > 0 || returnToReview;
+		const draft: AskAnswer[] = [];
+
+		const step = q.multi
+			? await runRpcMultiSelectQuestion(ctx, q, draft, title, canGoBack)
+			: await runRpcSingleSelectQuestion(ctx, q, draft, title, canGoBack);
+
+		if (step === "cancel") return { questions, answers: collect(), cancelled: true };
+		if (step === "back") {
+			if (returnToReview) i = questions.length;
+			else i--;
+			continue;
+		}
+		byQuestion[i] = draft;
+		i = returnToReview ? questions.length : i + 1;
 	}
-	return { questions, answers, cancelled: false };
 }
 
 // ── The Renderer ─────────────────────────────────────────────────────────────
