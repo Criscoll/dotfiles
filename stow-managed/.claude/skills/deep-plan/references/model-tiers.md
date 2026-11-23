@@ -52,8 +52,9 @@ actually available before dispatching):
 - **Claude Code** (`Agent` tool, `model` param, `general-purpose` sub-agent):
   a frontier model for Deep Thinking, the default model for Moderate
   Thinking, a small/fast model for Lightweight.
-- **pi** (`subagent` tool, `implementer` agent, `provider`/`model`): the
-  strongest reasoning model configured for Deep Thinking, a balanced
+- **pi** (no sub-agent tool — a child `pi -p` process via `bash`, with
+  `--provider`/`--model`/`--thinking`; `pi --list-models` shows what's
+  configured): the strongest reasoning model for Deep Thinking, a balanced
   mid-tier model for Moderate Thinking, a fast/cheap model for Lightweight.
 
 If you want a durable anchor instead of re-deriving this each run, log which
@@ -64,6 +65,8 @@ not a fact about the skill, so it never goes stale.
 ### Fallback for other harnesses
 
 If the executing harness has no sub-agent mechanism, or none matching the
-tier's intent, run the step inline on whatever model is active and log in
-EXECUTION-LOG.md that tiers weren't honoured for that step. Otherwise use the
-nearest equivalent sub-agent and model available in that harness.
+tier's intent, the roadmap should have been planned with
+`Mode: serial` (plan-phase gate). If a dispatch-mode run finds it can't
+dispatch, don't improvise inline: log it and tell the user, who can switch
+EXECUTE.md to serial mode. Otherwise use the nearest equivalent sub-agent and
+model available in that harness.

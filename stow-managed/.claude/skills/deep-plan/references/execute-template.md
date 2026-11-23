@@ -8,6 +8,12 @@ implicit.
 ````markdown
 # Execute: <overall goal>
 
+Mode: <dispatch | serial>
+
+<!-- Plan phase: keep exactly one of the two blocks below, delete the other
+     and these comments, so the executor reads only its own protocol. -->
+
+<!-- [dispatch mode] -->
 You are the **orchestrator** for this roadmap. Your job is to **dispatch,
 review, gate, commit, and log** — not to re-plan what the plans already
 settled, and not to implement steps yourself. Every step in every PLAN.md
@@ -17,21 +23,36 @@ Dispatch groups below), never inline. Small review fixups of about 5 lines or
 fewer (e.g. a missing import) may be applied inline by you and logged;
 anything larger goes through a fresh dispatch.
 
+<!-- [serial mode] -->
+You are the **sole executor** for this roadmap: you implement every step
+yourself, in order, in this one session, then review your own work against
+the plan, gate, commit, and log. There are no sub-agents and no brief/report
+files. You are not independent of your own changes, so the checks below are
+deliberately mechanical — run them and read their output; don't rely on
+remembering that you did it right. Don't re-plan what the plans already
+settled. If the session grows long, the log and ticked PLAN.md steps are
+durable: the user can `/clear` and have you resume from section 0.
+
 Artifact directory: <abs-path>
 - ROADMAP.md: <abs-path>/ROADMAP.md
 - CONTRACTS.md: <abs-path>/CONTRACTS.md
 - Items: <abs-path>/items/NN-<slug>/{REQUIREMENTS.md,PLAN.md,FAILURE.md}
-- Dispatch files: <abs-path>/items/NN-<slug>/dispatch/<gid>-{brief,report,diff}.md
+- Dispatch files (dispatch mode): <abs-path>/items/NN-<slug>/dispatch/<gid>-{brief,report,diff}.md
   (durable — on resume, the last group's report says where it stopped)
+- Diff files (serial mode): <abs-path>/items/NN-<slug>/dispatch/<gid>-diff.md
 - Review-package script: <abs-path-to-skill>/scripts/review-package (written
   `<review-package>` below)
 - Log: <abs-path>/EXECUTION-LOG.md (append-only; create if missing)
 
 ## Effort tiers
 
+*(Dispatch mode only — in serial mode every step runs on the active model; omit this section.)*
+
 <tier definitions and dispatch guidance copied verbatim from references/model-tiers.md>
 
 ## Dispatch groups
+
+*(In serial mode a group is the **review unit**, not a dispatch unit: you implement its steps, then review that group's diff before moving on.)*
 
 Steps declare tiers individually, but **the dispatch unit is a group**: a run of consecutive
 steps sharing a tier and a code surface, briefed to one sub-agent and reviewed as one diff.
@@ -79,14 +100,18 @@ when reviewing the named step, and include it in that group's brief.
 
 ## Per item
 
+Steps 2–3 and the fix dispatches in step 5 differ by mode. Follow your mode's
+version; everything else is shared.
+
 1. **Check contracts consumed.** Run the `Verify` check for every contract
    this item consumes (from CONTRACTS.md), and spot-check the plan's Reuse
    entries against the current codebase. A mismatch counts as a fork — handle
    it via the Forks process below before dispatching any step.
-2. **Dispatch each group** from the Dispatch groups table — not each step
-   individually — using the `subagent` tool (pi) or the `Agent` tool (Claude
-   Code), at the group's tier, picking a concrete model per
-   `model-tiers.md`'s dispatch guidance.
+2. **Dispatch each group** *(dispatch mode)* from the Dispatch groups table — not each step
+   individually — at the group's tier, picking a concrete model per
+   `model-tiers.md`'s dispatch guidance. In Claude Code use the `Agent` tool.
+   In pi there is no sub-agent tool: spawn a child with `bash` (see **Dispatching
+   from pi** below the report contract).
 
    **Briefs and reports travel as files, not as prompt text.** Everything you
    paste into a dispatch prompt, and everything a sub-agent prints back, stays
@@ -131,7 +156,25 @@ when reviewing the named step, and include it in that group's brief.
    > Do not dispatch sub-agents of your own, for any purpose. Review is the
    > orchestrator's job, and a sub-agent you spawn runs on a model nobody
    > chose for this tier.
-3. **Review the result.** Read the status line, then build the review
+   **Dispatching from pi.** Run the child as a foreground `bash` call, with the
+   transcript sent to a file so only the status line enters your context:
+
+   ```
+   pi -p --provider <provider> --model <model> --thinking <level> \
+     "<short dispatch prompt>" > <abs-path>/items/NN-<slug>/dispatch/<gid>-run.log 2>&1
+   echo "exit=$?"; tail -n 1 <abs-path>/items/NN-<slug>/dispatch/<gid>-run.log
+   ```
+
+   Pick the provider/model/thinking level per the tier (confirm names with
+   `pi --list-models`). The final line of the log is the child's status line.
+   A nonzero exit, or a last line that isn't `DONE | DIVERGED | BLOCKED — …`,
+   counts as `BLOCKED` — read `<gid>-run.log` only to say why in the log, then
+   re-dispatch or handle it as a failure. Set the `bash` timeout generously
+   (groups can run many minutes); a timed-out child is `BLOCKED`. Children run
+   with pi's normal toolset in the same working tree, so dispatch groups one
+   at a time.
+
+3. **Review the result** *(dispatch mode)*. Read the status line, then build the review
    package: `<review-package> diff $BASE <abs-path>/items/NN-<slug>/dispatch/<gid>-diff.md <each path in the group's Files:>`.
    Its stdout lists the changed files and flags any outside the `Files:`
    boundary — an out-of-bounds file is a Boundaries question to settle
@@ -161,6 +204,28 @@ when reviewing the named step, and include it in that group's brief.
      the whole group — the rest already passed its `Done when:`. If the
      failure was about capability rather than unclear instructions,
      re-dispatch one tier up. Log the escalation either way.
+2s. **Implement each group** *(serial mode, replaces steps 2–3)*, in table
+   order, in this session. For each group:
+
+   a. `BASE=$(<review-package> snapshot)`.
+   b. Read the group's steps in PLAN.md, the item's REQUIREMENTS.md, the
+      Reuse entries and Boundaries, and any tripwires named for these steps.
+      Implement the tasks, staying within the steps' `Files:`.
+   c. **Review as if someone else wrote it.** Build the diff:
+      `<review-package> diff $BASE <abs-path>/items/NN-<slug>/dispatch/<gid>-diff.md <each path in the group's Files:>`.
+      Any file flagged outside `Files:` is a Boundaries question — settle it
+      before continuing. Then **read the diff file**, not your memory of what
+      you wrote, and check it against every step's tasks, the Boundaries and
+      the tripwires. Run each step's `Done when:` and read the actual output;
+      re-run each `All sites:` command and account for every hit.
+   d. Anywhere you departed from the plan is a divergence: settle it with the
+      Forks process (log it) rather than leaving it implicit.
+   e. Tick the group's step tasks in PLAN.md and log a DONE entry naming the
+      group. If a fix is needed, make it and redo (c) — at most 2 rounds per
+      group, then it's a failure.
+
+   Tiers aren't honoured in serial mode: log that once, at the first group of
+   the run, naming the active model.
 4. **Review the whole item against REQUIREMENTS.md.** Once every group has
    landed, go through each Validated Requirement by ID (`R1`, `R2`, …) —
    starting from the steps whose `Serves:` cites it — and find where the
@@ -177,8 +242,12 @@ when reviewing the named step, and include it in that group's brief.
    not part of the gate — don't run them or block on them; carry them to
    Finish.
 
-   Tiers are declared per step and dispatched per group — there is no "item
-   tier". Pick the fix-dispatch tier like this:
+   **Serial mode:** make up to 2 fix attempts yourself, reading the gate's
+   actual failing output each time; skip the tier rules below, and go to
+   Failures if the gate still fails.
+
+   **Dispatch mode** — tiers are declared per step and dispatched per group;
+   there is no "item tier". Pick the fix-dispatch tier like this:
 
    - **First fix dispatch:** the tier of the group whose `Files:` the failure
      points at, scoped to that group's steps. If the failure spans groups or
@@ -258,7 +327,7 @@ after they've read what you wrote.
    > Halted: <ISO 8601 timestamp>
 
    ## What was attempted
-   Steps dispatched, at what tier, and their outcomes.
+   Steps dispatched (or implemented, in serial mode), at what tier, and their outcomes.
 
    ## What failed
    The actual gate/error output or the boundary/Goal that would have been

@@ -14,8 +14,8 @@ so cross-item dependencies get caught now, not discovered mid-execution.
    These are where a change lands once and looks complete; record each set in
    `What We Know` for every item that touches it, so Plan can give the step an
    `All sites:` command.
-   Read-only recon sub-agents (e.g. `subagent` with the `scout` agent, or the
-   equivalent in-harness recon tool) may gather raw context to keep your own
+   Read-only recon sub-agents (e.g. pi's `scout` tool, Claude Code's `Explore`
+   agent, or the equivalent in-harness recon tool) may gather raw context to keep your own
    context lean — but you, the planner, must read any code that touches a
    boundary between items yourself; don't take a sub-agent's summary as the
    final word on a contract's shape.

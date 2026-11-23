@@ -230,6 +230,16 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
    - **Collapse Key Decisions** in every PLAN.md: drop the Option A/B menu,
      keep what was chosen, briefly why, and what was considered-and-rejected
      with the reason.
+   - **Choose the execution mode** with `AskUserQuestion` (batch it with any
+     other gate question): `dispatch` (default — an orchestrator hands each
+     group to a sub-agent at its tier; lean context and independent review,
+     needs a harness that can spawn agents — pi does so via `bash` + `pi -p`)
+     or `serial` (one agent implements every step itself, then reviews its own
+     diffs mechanically; works in any harness, but long runs fill one context
+     and tiers aren't honoured). Write it as `Mode:` in EXECUTE.md, then
+     delete the other mode's marked block from the template, along with the
+     template's comment markers. Serial mode drops the Effort tiers section;
+     dispatch groups are still formed as review units.
    - **Form dispatch groups and write them into EXECUTE.md** as a table: item,
      group id, step range, tier, code surface. A group is a run of consecutive
      steps sharing a tier and a surface. Grouping rounds a step's tier up,
@@ -254,8 +264,8 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
      script to an absolute path (`echo "$CLAUDE_SKILL_DIR/scripts/review-package"`)
      — the orchestrator runs in a session that never loaded this skill, so
      `$CLAUDE_SKILL_DIR` won't be set there.
-   - Tell the user plainly that EXECUTE.md is the orchestrator's whole
-     protocol — it dispatches, reviews, gates, commits, and logs without
+   - Tell the user plainly that EXECUTE.md is the executor's whole
+     protocol — it dispatches (or implements, in serial mode), reviews, gates, commits, and logs without
      further prompting, only stopping to write a failure report and halt, or
      when finished.
    - Hand over the pointer prompt as a **fenced code block** (never a `>`
@@ -265,7 +275,7 @@ Do NOT paste entire files — just the skeleton and signatures needed to write t
      Read <abs-path>/EXECUTE.md in full, then follow its instructions exactly. Do not start until you've read the whole file.
      ```
 
-   - **Recommend running the orchestrator at the Deep Thinking tier**, in a
+   - **Recommend running the orchestrator (or serial executor) at the Deep Thinking tier**, in a
      fresh session (`/clear` first) — it needs to judge forks and review diffs
      against plans it didn't write itself, which is exactly the Deep Thinking
      use case from `model-tiers.md`.
