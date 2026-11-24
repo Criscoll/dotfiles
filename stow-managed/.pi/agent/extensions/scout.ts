@@ -10,6 +10,11 @@
  *   - web:      web_search, web_fetch (lib/scout-web-tools.ts) — no shell, no files
  *
  * Children are not given this extension, so they cannot spawn scouts.
+ *
+ * Fire-and-forget: `scout` returns immediately and scouts run as background
+ * jobs. Each finished report is delivered as a follow-up message (arrives when
+ * the agent would otherwise stop, and wakes an idle agent). `scout_wait` blocks
+ * on outstanding scouts when the agent needs findings before continuing.
  */
 
 import { spawn } from "node:child_process";
@@ -207,15 +212,37 @@ async function runScout(
   onChange();
 }
 
-async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      await fn(items[i]);
-    }
-  });
-  await Promise.all(workers);
+let activeScouts = 0;
+const slotWaiters: Array<() => void> = [];
+
+async function acquireSlot(): Promise<void> {
+  if (activeScouts < MAX_CONCURRENCY) {
+    activeScouts++;
+    return;
+  }
+  await new Promise<void>((resolve) => slotWaiters.push(resolve));
+}
+
+function releaseSlot(): void {
+  const next = slotWaiters.shift();
+  if (next) next();
+  else activeScouts--;
+}
+
+interface Job {
+  id: string;
+  state: ScoutState;
+  abort: AbortController;
+  promise: Promise<void>;
+  /** Report already delivered as a follow-up, or claimed by scout_wait. */
+  handled: boolean;
+}
+
+function reportText(job: Job): string {
+  const head = `## Scout ${job.id} (${job.state.kind}): ${preview(job.state.brief, 100)}`;
+  return job.state.status === "done"
+    ? `${head}\n\n${job.state.report}`
+    : `${head}\n\nFAILED: ${job.state.error ?? "unknown error"}`;
 }
 
 const Brief = Type.Object({
@@ -231,19 +258,66 @@ const Brief = Type.Object({
 });
 
 export default function (pi: ExtensionAPI) {
+  const jobs = new Map<string, Job>();
+  let nextId = 1;
+  let ui: { setStatus(key: string, text: string | undefined): void } | undefined;
+
+  const updateStatus = () => {
+    const running = [...jobs.values()].filter((j) => j.state.status === "running").length;
+    ui?.setStatus("scout", running > 0 ? `scouts: ${running} running` : undefined);
+  };
+
+  pi.on("session_start", async (_event, ctx) => {
+    ui = ctx.hasUI ? ctx.ui : undefined;
+  });
+
+  pi.on("session_shutdown", async () => {
+    for (const job of jobs.values()) job.abort.abort();
+    jobs.clear();
+    ui?.setStatus("scout", undefined);
+    ui = undefined;
+  });
+
+  pi.registerMessageRenderer("scout-report", (message, options, theme) => {
+    const d = message.details as { scout?: ScoutState; id?: string } | undefined;
+    const s = d?.scout;
+    const container = new Container();
+    if (!s) {
+      container.addChild(new Text(String(message.content), options.outputPad, 0));
+      return container;
+    }
+    const icon = s.status === "done" ? theme.fg("success", "✓") : theme.fg("error", "✗");
+    container.addChild(
+      new Text(
+        `${icon} ${theme.bold("scout " + (d?.id ?? ""))} ${theme.fg("accent", s.kind)} ${theme.fg("dim", preview(s.brief, 60))}` +
+          theme.fg("muted", ` ${s.toolCalls} tool calls · $${s.cost.toFixed(4)}`),
+        options.outputPad,
+        0,
+      ),
+    );
+    if (s.status === "failed") container.addChild(new Text(theme.fg("error", `  ${s.error ?? "failed"}`), options.outputPad, 0));
+    else if (options.expanded) container.addChild(new Markdown(s.report, options.outputPad + 2, 0, getMarkdownTheme()));
+    else container.addChild(new Text(theme.fg("muted", "  (Ctrl+O to expand report)"), options.outputPad, 0));
+    return container;
+  });
+
   pi.registerTool({
     name: "scout",
     label: "Scout",
     description: [
-      "Fan out read-only research to isolated scouts that each return a short report.",
-      "Pass several independent briefs in ONE call to run them in parallel (max 8, 4 at a time).",
+      "Launch read-only research scouts in the BACKGROUND and return immediately; you keep working.",
+      "Each scout's compressed report arrives automatically as a follow-up message once it finishes (when you would otherwise stop).",
+      "Call scout_wait to block on them if you need the findings before you can continue.",
+      "Pass several independent briefs in ONE call (max 8, 4 run at a time).",
       "kind=codebase scouts read files (read/grep/find/ls) to map code; kind=web scouts search and read web pages.",
       "Scouts cannot edit files or run commands, and they do not see this conversation, so each brief must be self-contained.",
       "Reports are compressed; verify anything load-bearing yourself before acting on it.",
     ].join(" "),
-    promptSnippet: "Fan out read-only codebase/web research to parallel scouts that return short reports",
+    promptSnippet: "Launch background read-only codebase/web scouts; reports arrive later as follow-up messages",
     promptGuidelines: [
       "Use scout to explore unfamiliar code or read several web sources without filling your own context. Split the work into independent briefs and send them in one call.",
+      "scout returns immediately. Do other useful work that does not depend on the findings while scouts run; their reports arrive as follow-up messages.",
+      "Before any step that depends on a scout's findings, call scout_wait rather than guessing or ending your turn. Never claim scouting is complete until the reports have arrived.",
       "Do not use scout for edits, debugging, or small lookups you can do with one grep or read.",
       "A scout's report is a lead, not proof: read the cited file:line or URL yourself before relying on it for a change or a recommendation.",
     ],
@@ -251,48 +325,74 @@ export default function (pi: ExtensionAPI) {
       briefs: Type.Array(Brief, { minItems: 1, maxItems: MAX_BRIEFS, description: "Independent scouting briefs" }),
     }),
 
-    async execute(_id, params, signal, onUpdate, ctx) {
+    async execute(_id, params, _signal, _onUpdate, ctx) {
       if (params.briefs.length > MAX_BRIEFS) {
         return {
           content: [{ type: "text", text: `Too many briefs (${params.briefs.length}). Max is ${MAX_BRIEFS}.` }],
           details: { scouts: [] } satisfies ScoutDetails,
         };
       }
+      if (ctx.hasUI) ui = ctx.ui;
 
-      const scouts: ScoutState[] = params.briefs.map((b) => ({
-        kind: b.kind,
-        brief: b.brief,
-        status: "running",
-        toolCalls: 0,
-        report: "",
-        cost: 0,
-        turns: 0,
-      }));
-
-      const push = () => {
-        const done = scouts.filter((s) => s.status !== "running").length;
-        onUpdate?.({
-          content: [{ type: "text", text: `Scouting: ${done}/${scouts.length} finished` }],
-          details: { scouts: scouts.map((s) => ({ ...s })) } satisfies ScoutDetails,
-        });
-      };
-      push();
-
-      await mapLimit(params.briefs.map((b, i) => ({ b, i })), MAX_CONCURRENCY, async ({ b, i }) => {
-        await runScout(scouts[i], b.cwd ?? ctx.cwd, signal, push);
+      const launched: Job[] = params.briefs.map((b) => {
+        const state: ScoutState = {
+          kind: b.kind,
+          brief: b.brief,
+          status: "running",
+          toolCalls: 0,
+          report: "",
+          cost: 0,
+          turns: 0,
+        };
+        const job: Job = {
+          id: `s${nextId++}`,
+          state,
+          abort: new AbortController(),
+          handled: false,
+          promise: Promise.resolve(),
+        };
+        const cwd = b.cwd ?? ctx.cwd;
+        job.promise = (async () => {
+          await acquireSlot();
+          try {
+            if (job.abort.signal.aborted) {
+              state.status = "failed";
+              state.error = "cancelled";
+            } else {
+              await runScout(state, cwd, job.abort.signal, updateStatus);
+            }
+          } catch (err) {
+            state.status = "failed";
+            state.error = err instanceof Error ? err.message : String(err);
+          } finally {
+            releaseSlot();
+          }
+          updateStatus();
+          if (!job.handled && !job.abort.signal.aborted) {
+            job.handled = true;
+            pi.sendMessage(
+              { customType: "scout-report", content: reportText(job), display: true, details: { id: job.id, scout: { ...state } } },
+              { deliverAs: "followUp", triggerTurn: true },
+            );
+          }
+        })();
+        jobs.set(job.id, job);
+        return job;
       });
+      updateStatus();
 
-      const text = scouts
-        .map((s, i) => {
-          const head = `## Scout ${i + 1} (${s.kind}): ${preview(s.brief, 100)}`;
-          return s.status === "done" ? `${head}\n\n${s.report}` : `${head}\n\nFAILED: ${s.error ?? "unknown error"}`;
-        })
-        .join("\n\n");
-
+      const list = launched.map((j) => `- ${j.id} (${j.state.kind}): ${preview(j.state.brief, 100)}`).join("\n");
       return {
-        content: [{ type: "text", text }],
-        details: { scouts } satisfies ScoutDetails,
-        isError: scouts.every((s) => s.status === "failed"),
+        content: [
+          {
+            type: "text",
+            text:
+              `Launched ${launched.length} scout${launched.length === 1 ? "" : "s"} in the background:\n${list}\n\n` +
+              "Reports arrive as follow-up messages when they finish. Continue with work that does not depend on them; " +
+              "call scout_wait if you need the findings first.",
+          },
+        ],
+        details: { scouts: launched.map((j) => ({ ...j.state })) } satisfies ScoutDetails,
       };
     },
 
@@ -337,6 +437,44 @@ export default function (pi: ExtensionAPI) {
       }
       if (total > 0) container.addChild(new Text(theme.fg("dim", `total $${total.toFixed(4)}`), 0, 0));
       return container;
+    },
+  });
+
+  pi.registerTool({
+    name: "scout_wait",
+    label: "Scout wait",
+    description:
+      "Block until background scouts finish and return their reports. With no ids, waits for every scout whose report has not yet been delivered. " +
+      "Use it before any step that depends on scout findings. Does nothing if no scouts are outstanding.",
+    promptSnippet: "Wait for outstanding background scouts and return their reports",
+    parameters: Type.Object({
+      ids: Type.Optional(Type.Array(Type.String(), { description: "Scout ids (e.g. s1) to wait for. Default: all outstanding." })),
+    }),
+
+    async execute(_id, params, signal) {
+      const known = params.ids?.length
+        ? params.ids.map((id) => jobs.get(id)).filter((j): j is Job => !!j)
+        : [...jobs.values()].filter((j) => !j.handled);
+      const unknown = (params.ids ?? []).filter((id) => !jobs.has(id));
+      if (known.length === 0) {
+        const note = unknown.length ? ` Unknown ids: ${unknown.join(", ")}.` : "";
+        return { content: [{ type: "text", text: `No outstanding scouts.${note}` }], details: {} };
+      }
+      if (signal?.aborted) return { content: [{ type: "text", text: "Wait cancelled; scouts keep running." }], details: {} };
+
+      const claimed = known.filter((j) => !j.handled);
+      for (const j of claimed) j.handled = true;
+
+      const interrupted = new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
+      await Promise.race([Promise.all(known.map((j) => j.promise)), interrupted]);
+
+      if (signal?.aborted) {
+        for (const j of claimed) if (j.state.status === "running") j.handled = false;
+        return { content: [{ type: "text", text: "Wait cancelled; scouts keep running and will report as follow-ups." }], details: {} };
+      }
+
+      const text = known.map(reportText).join("\n\n") + (unknown.length ? `\n\nUnknown ids: ${unknown.join(", ")}` : "");
+      return { content: [{ type: "text", text }], details: { scouts: known.map((j) => ({ ...j.state })) } satisfies ScoutDetails };
     },
   });
 }
