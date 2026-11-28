@@ -73,22 +73,22 @@ EOF
 
 # Today (Mon Oct 26)
 
-- [x] Email NAB, MSA and Up to call off the 29 Oct settlement
-- [ ] Book the Alishan hotel for Thu 19 – Sun 22 Nov
+- [x] Email Bank A, Broker B and Lender C to call off the settlement
+- [ ] Book the Stopover hotel for Thu 19 – Sun 22 Nov
 
 # Weekly Goals
 
 - [x] Renew car registration
-- [ ] [Home Refinance NAB to Up](../03_Active/Home_Refinance_Mortgage_NAB_to_Up/outline.md)
-    - [x] Emails sent to NAB, MSA and Up to call off the 29 Oct settlement
-    - [ ] NAB's written confirmation of the cancellation received (by Tue 27 Oct)
-- [ ] [HK/Taiwan Travel](../03_Active/Travel_Hong_Kong_Taiwan_2026_2027/outline.md)
-    - Alishan hotel booked and Taiwan rail tickets purchased
+- [ ] [Home Refinance BankA to LenderC](../03_Active/Home_Refinance_Mortgage_BankA_to_LenderC/outline.md)
+    - [x] Emails sent to Bank A, Broker B and Lender C to call off the settlement
+    - [ ] Bank A's written confirmation of the cancellation received (by Tue 27 Oct)
+- [ ] [Overseas Trip](../03_Active/Travel_Overseas_Trip_2026_2027/outline.md)
+    - Stopover hotel booked and rail tickets purchased
 - [ ] ~Investigate flaky CI~
 
 # Progress
 
-Sun Oct 25 — Drafted the Alishan skeleton; refinance emails still unsent.
+Sun Oct 25 — Drafted the Stopover skeleton; refinance emails still unsent.
 ```
 
 Section order is Today → Weekly Goals → Progress: Today is what gets read and
@@ -116,7 +116,7 @@ counts as done.
 
 - **Success line** — a sub-item under a goal stating one outcome that counts as
   done. Make it clear, succinct and objective: one short line naming an end
-  state anyone could check yes/no ("Alishan hotel booking finalised"), not the
+  state anyone could check yes/no ("Stopover hotel booking finalised"), not the
   steps to get there. No label prefix — its position under the goal already says
   what it is — and no how-to or hedging. Keep a deadline only when it matters,
   as a short trailing clause ("by Tue 27 Oct"). A goal can have several.
@@ -157,7 +157,7 @@ from the command above) records which day the entries belong to; if it differs
 from today's date, the section is stale and needs `references/today-rollover.md`
 before anything else is added.
 
-- **Specific enough to start without thinking** — "Email NAB to cancel the
+- **Specific enough to start without thinking** — "Email Bank A to cancel the
   29 Oct settlement", not "deal with refinance". Same outcome test as goals.
 - **Related to the weekly goals, loosely.** Each entry should be a step toward,
   prep for, or unblocker of a goal; no formal link is needed. If an entry serves

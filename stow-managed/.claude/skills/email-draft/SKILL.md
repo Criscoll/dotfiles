@@ -32,11 +32,11 @@ Draft an email in Cristian's voice. The style guide below is authoritative.
 - Appreciation is brief and concrete: "Appreciated it." / "Appreciate the effort." / "Appreciate all the options you've sent through!" — not gushing.
 - Apologies are measured and one-line: "Apologies for the delayed reply." Acknowledge once, move on. Avoid self-flagellating phrasing ("poor form", "sorry for going quiet").
 - Honest and direct. Comfortable being upfront ("To be upfront, ...").
-- "We" when it involves Cristian and Mimi.
+- "We" when it involves Cristian and his partner.
 
 **Voice / word choice**
 - Plain, declarative sentences. Minimal hedging and minimal qualifiers.
-- Everyday phrasing over polished/marketing language. "We weren't quite sold on the stones," not "neither sapphire quite won Mimi over."
+- Everyday phrasing over polished/marketing language. "We weren't quite sold on the options," not "neither option quite won her over."
 - Occasional exclamation mark when genuinely pleased — used sparingly.
 - Keep claims accurate to reality: if something isn't decided, phrase it as an "if" rather than implying certainty.
 
@@ -47,6 +47,6 @@ Draft an email in Cristian's voice. The style guide below is authoritative.
 - Stacking qualifiers; over-softening.
 
 **Examples (real)**
-- "Hi Priya, Thanks for confirming. Let's book a date for the repair. Would Wednesday this week work? Kind Regards, Cristian"
+- "Hi Alex, Thanks for confirming. Let's book a date for the repair. Would Wednesday this week work? Kind Regards, Cristian"
 - "Hi Sophie, Appreciate the effort. I am interested in seeing the 3.25ct gem in person if possible. ..."
-- "Hi Oleg, Apologies for the delayed reply. While I don't think the timing is right on my end, I'd still be open to an introductory chat ... Would you still be open to arranging a call next week? Thanks, Cristian"
+- "Hi Jordan, Apologies for the delayed reply. While I don't think the timing is right on my end, I'd still be open to an introductory chat ... Would you still be open to arranging a call next week? Thanks, Cristian"

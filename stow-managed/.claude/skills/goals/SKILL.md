@@ -55,7 +55,7 @@ Read `$ARGUMENTS`. In pi, it comes from the `User:` line appended after this ski
   goal belongs to, or answering a question about this week's goals.
 
 `check` and `overlap` are modes only when the arguments are nothing but those words, in any
-order or case. "check whether the Alishan booking is on today's needle" is a request, not
+order or case. "check whether the Stopover booking is on today's needle" is a request, not
 the full sweep. If it's unclear which was meant, ask. Guessing `check` spends the tokens that
 request mode exists to save.
 
@@ -187,9 +187,9 @@ Run Setup in full, loading every sibling file in step 3.
 - **Granularity guard.** A log success line is an outcome; outline items are steps. A ticked
   line proposes ticking only the outline steps it fully covers. If an open step sits under it,
   report a conflict and ask whether the log tick is premature or the outline is stale. Don't
-  tick either side. Example: log `[X] Emails sent to NAB, MSA and Up…` against outline
-  `[ ] Email Up`.
-- **Equivalent wording is not a discrepancy.** "Finalise Alishan Hotel Booking" and "Alishan
+  tick either side. Example: log `[X] Emails sent to Bank A, Broker B and Lender C…` against outline
+  `[ ] Email Lender C`.
+- **Equivalent wording is not a discrepancy.** "Finalise Stopover Hotel Booking" and "Stopover
   hotel booking finalised" are the same item. Only differences in meaning or scope count.
   Never reword for style: calendar-management forbids rewording, and the wording is the
   user's.
@@ -219,8 +219,8 @@ mass-normalise old ones: the diff noise would hide the real change.
 
 - No git in `~/Repos/scribbles` (no fetch, pull or commit). The user manages that repo's
   history.
-- Never modify the recurring masters (`46gvt7r9isdp1kvv0bgve3ju3o` and the retired weekly
-  `12k1buhgem5sguhl882be01b7d`, both with no date suffix). Never blank a past instance: they
+- Never modify the recurring masters (the needle master and the retired weekly
+  master, both with no date suffix). Never blank a past instance: they
   are the historical record.
 - Never write to a `Goals for the Week` instance. The series is retired: its empty future
   instances are ignored and the old ones are history.

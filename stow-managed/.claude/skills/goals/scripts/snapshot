@@ -12,6 +12,7 @@ calendar-update. Exits 1 if any needle fetch failed; everything else still print
 `Goals for the Week` calendar series is retired and never fetched.
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -26,8 +27,23 @@ LOG_DIR = WORKBENCH / "00_Weekly_Logs"
 ACTIVE_DIR = WORKBENCH / "03_Active"
 BACKLOG_DIR = WORKBENCH / "02_Backlog"
 CALENDAR_GET = Path.home() / "bin" / "agent_scripts" / "calendar-get"
-GOALS_CALENDAR = "d7e8d2283058b1cf4501917e8a924a8d623fbcc595f5e7f1abc80cd88d823997@group.calendar.google.com"
-NEEDLE_MASTER = "46gvt7r9isdp1kvv0bgve3ju3o"  # Move the Needle; daily instances
+ENV_FILE = Path.home() / ".config" / "agent-scripts" / "env"
+
+
+def private_value(name):
+    """Calendar/event IDs are private: read them from the environment or the untracked env file."""
+    if os.environ.get(name):
+        return os.environ[name]
+    if ENV_FILE.is_file():
+        for line in ENV_FILE.read_text().splitlines():
+            m = re.match(rf"\s*(?:export\s+)?{name}=(.*)$", line)
+            if m:
+                return m.group(1).strip().strip("'\"")
+    sys.exit(f"snapshot: {name} is not set (environment or {ENV_FILE})")
+
+
+GOALS_CALENDAR = private_value("GOALS_CALENDAR_ID")
+NEEDLE_MASTER = private_value("NEEDLE_MASTER_ID")  # Move the Needle; daily instances
 WEEK_FILE_RE = re.compile(r"^(\d{4})-W(\d{2})\.md$")
 TODAY_HEADING_RE = re.compile(r"^# Today \((.+?)\)\s*$", re.MULTILINE)
 # One calendar-get is a single API call (seconds, longer on a uvx cold start); this bounds a

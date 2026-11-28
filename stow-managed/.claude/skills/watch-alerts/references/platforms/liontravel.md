@@ -1,6 +1,6 @@
 # Lion Travel 雄獅旅遊 (Taiwan OTA): probed, no watcher yet
 
-Probed from the VPS on 2026-10-15 while setting up Alishan hotel watchers. No watcher uses it
+Probed from the VPS on 2026-10-15 while setting up hotel watchers. No watcher uses it
 yet, so there is no tested `check()`. Hotel-specific facts belong in a watcher's `config.json`.
 
 ## Endpoint (JSON POST, no cookies)
@@ -18,11 +18,11 @@ Works from the VPS with the template's browser UA. The base host came from the b
 - No stock or no inventory = empty `Products`. That looks the same as "this OTA doesn't carry
   the hotel", so prove a positive date first.
 
-## Hotel codes seen (Chiayi / Alishan)
+## Hotel codes seen
 
-- Alishan Gou Hotel 阿里山閣 `TWCYIS23`: 0 products on the dates tried, while the direct engine had stock on some.
-- Alishan House 阿里山賓館 `TWCYIS24`: works; stock mirrored the hotel's direct ec-hotel engine.
-- Dafeng 大峯山莊 `TWCYIS39`: 0 products on every date tried (no inventory on Lion).
+- Hotel A `TWCYIS23`: 0 products on the dates tried, while the direct engine had stock on some.
+- Hotel B `TWCYIS24`: works; stock mirrored the hotel's direct ec-hotel engine.
+- Hotel C `TWCYIS39`: 0 products on every date tried (no inventory on Lion).
 
 ## Deep link
 

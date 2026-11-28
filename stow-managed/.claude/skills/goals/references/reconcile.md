@@ -18,13 +18,13 @@ Matching is semantic, not string equality. One line can map to several steps, an
 lines can map to one step. Keep a list of what's unmatched on each side: those become
 discrepancies.
 
-Worked example (W43). The HK/Taiwan Travel goal has three success lines:
+Worked example (W43). The Overseas Trip goal has three success lines:
 
-| Log success line | Outline (`Travel_Hong_Kong_Taiwan_2026_2027/outline.md`) |
+| Log success line | Outline (`Travel_Overseas_Trip_2026_2027/outline.md`) |
 |---|---|
-| Alishan skeleton for Thu 19 – Sun 22 Nov written… | the Alishan itinerary items |
-| Alishan hotel booking finalised | "Try to book better hotel for Alishan…" |
-| Taiwan train / bus tickets booked | the transport booking items |
+| Stopover skeleton for Thu 19 – Sun 22 Nov written… | the Stopover itinerary items |
+| Stopover hotel booking finalised | "Try to book better hotel for the stopover…" |
+| Train / bus tickets booked | the transport booking items |
 
 Map the daily layer the same way: `# Today` entries against today's Move the Needle items.
 The needle holds the top 1–3 of Today, so a Today entry that isn't on the needle is fine.
@@ -43,7 +43,7 @@ Each kind lists the fix to propose. The trust rules decide what's proposed and w
 3. **Outline contradiction.** A log line or needle item is something the outline shows as
    moot, superseded or cancelled. Propose a strike on the log line, adding `— <reason>`, and
    `🚫` on the needle item if there is one. Example: the refinance outline's "Status
-   (2026-10-23): Up declined; the refinance is off" makes any live line that assumes the
+   (2026-10-23): Lender C declined; the refinance is off" makes any live line that assumes the
    refinance proceeds moot.
 4. **Outline-only news.** An outline completion, or an open item due this week, changes
    whether a weekly goal is met. Propose ticking the goal or adding a new success line. The
@@ -65,7 +65,7 @@ Each kind lists the fix to propose. The trust rules decide what's proposed and w
      outcome-verb test.
 
 The granularity guard turns some completion mismatches into conflicts. Example: log
-`[X] Emails sent to NAB, MSA and Up…` while the refinance outline still has `[ ] Email Up`.
+`[X] Emails sent to Bank A, Broker B and Lender C…` while the refinance outline still has `[ ] Email Lender C`.
 Ask whether the log tick is premature or the outline is stale. Don't propose ticking either
 side.
 
@@ -95,11 +95,12 @@ written. The user is confirming a write, not an idea.
   or new items. Never reword or reorder. Every write follows the same sequence:
   1. `calendar-get --full` the instance.
   2. Edit that fresh HTML.
-  3. Write it to a temp file. Descriptions contain apostrophes ("Mimi's", "don't") that break
+  3. Write it to a temp file. Descriptions contain apostrophes ("Sam's", "don't") that break
      shell quoting.
   4. Pass it in:
      ```bash
+     . ~/.config/agent-scripts/env   # defines GOALS_CALENDAR_ID (untracked)
      ~/bin/agent_scripts/calendar-update <instance-id> \
-       --calendar d7e8d2283058b1cf4501917e8a924a8d623fbcc595f5e7f1abc80cd88d823997@group.calendar.google.com \
+       --calendar "$GOALS_CALENDAR_ID" \
        --description "$(cat /tmp/goals-desc.html)"
      ```

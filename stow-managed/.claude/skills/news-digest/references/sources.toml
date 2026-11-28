@@ -12,7 +12,7 @@
 # Used when the user asks for "the news" / "a digest" without naming a topic.
 categories = ["world", "business", "tech", "science"]
 # Standing interests: also surfaced as a "For you" section if anything matches.
-interest_keywords = ["Taiwan", "Hong Kong", "semiconductor", "TSMC"]
+interest_keywords = []
 
 [[source]]
 name = "BBC News"

@@ -33,7 +33,7 @@ The filter file on this laptop has **18 rules** covering:
 - Job/recruitment sorting
 - Property/real estate
 - Amazon order reference
-- Invoice forwarding to Mimi
+- Invoice forwarding to partner
 - Bulk archive/delete for specific senders
 - Star/flag for specific senders
 
@@ -140,7 +140,7 @@ Fix the existing rclone scripts to point at the Flatpak profile path, and narrow
 
 ### Option C: Hybrid (Gmail filters + trim Thunderbird)
 
-Move all sender-based label assignment into Gmail filters (exportable/importable JSON). Keep Thunderbird only for "Forward to Mimi" and "Mark Folder as Read." The `msgFilterRules.dat` shrinks to 2–3 rules and rarely changes.
+Move all sender-based label assignment into Gmail filters (exportable/importable JSON). Keep Thunderbird only for "Forward to partner" and "Mark Folder as Read." The `msgFilterRules.dat` shrinks to 2–3 rules and rarely changes.
 
 **Pros:**
 - Universal labeling + minimal Thunderbird-specific config

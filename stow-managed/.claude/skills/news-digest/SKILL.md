@@ -23,7 +23,7 @@ For a single factual lookup ("who won X", "what is the price of Y"), use the `we
    - Category ("tech news"): `news-feed -c tech`.
    - If the user's wording is ambiguous about time window or topic, pick a sensible default and state it at the top of the digest rather than asking.
 2. **Fetch headlines.** Check `errors` in the output and mention any dead feed in one line at the end; a quiet gap in coverage misleads the reader.
-3. **Optionally add "For you".** For general digests, also run `news-feed -k "<interest_keywords from sources.toml>"` and surface matches that the main run didn't already include.
+3. **Optionally add "For you".** If `interest_keywords` is empty, skip this step. Otherwise, for general digests, also run `news-feed -k "<interest_keywords from sources.toml>"` and surface matches that the main run didn't already include.
 4. **Select stories.** Aim for roughly 8–12 stories (fewer for a narrow topic). Cluster items about the same event across outlets into one story. Prefer stories covered by multiple independent outlets; cross-coverage is the cheapest reliability signal available. Drop pure opinion/live-blog/listicle items unless the user asked.
 5. **Read before summarising.** For each selected story, `webcrawl` the best 1–2 URLs (run them in parallel). If a page is paywalled or fails, summarise only what the feed blurb supports and mark it `(headline/blurb only — full article not read)`. Never fill the gap from memory.
 6. **Write the digest** in the format below.

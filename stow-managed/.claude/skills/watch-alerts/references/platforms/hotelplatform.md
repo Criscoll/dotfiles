@@ -1,6 +1,6 @@
 # hotelplatform.com.tw "d2c" (Taiwan hotel booking engine)
 
-Verified from the VPS on 2026-10-15 against a live Alishan hotel. Hotel-specific facts
+Verified from the VPS on 2026-10-15 against a live hotel. Hotel-specific facts
 (hotel/agent codes, party size, nights) belong in the watcher's `config.json`, not here.
 
 ## Identify it

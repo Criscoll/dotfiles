@@ -192,9 +192,9 @@ already resolve the choice on their own.
 
 **Presenting flight results — group by leg, not a flat list of flight
 numbers.** A trip is made of **legs** — the journey from one trip stop to the
-next (e.g. Sydney → Taiwan, Kaohsiung → Hong Kong, Hong Kong → Sydney). A leg
+next (e.g. City A → City B, City C → City D, City D → City A). A leg
 that isn't nonstop is made of multiple **segments** (individual flight
-numbers, e.g. CX162 SYD→HKG then CX402 HKG→TPE) joined by layovers. Keep this
+numbers, e.g. XX100 AAA→BBB then XX200 BBB→CCC) joined by layovers. Keep this
 distinction explicit in every table — a bare "layover: HKG 1h05m" line with
 no indication of which leg or which two segments it sits between forces the
 reader to reconstruct the itinerary themselves, which defeats the point of

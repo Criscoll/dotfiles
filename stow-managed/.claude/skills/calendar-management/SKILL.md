@@ -67,7 +67,7 @@ Why hyphen: it's on the main keyboard screen on every phone keyboard (no emoji s
 
 These events are fixed calendar anchors, not tasks. They must never receive a tick, cross, or note prefix:
 
-- `Relationship: Check in w Mimi on Progress`
+- `Relationship: Check in w Sam on Progress`
 - `Monthly Review`
 - `Monthly ETF DCA`
 - Any other fixed recurring event
@@ -129,20 +129,20 @@ Carried forward:      "Book dental appointment"     (move date only, no symbol c
 
 | Calendar | ID |
 |---|---|
-| 00_Primary (primary) | `cristiand2021@gmail.com` |
-| 01_Important | `8ea572bf0778ac8c77c8417ee697bc7b94f70e1d7763984dfe64e4e5fddf02fe@group.calendar.google.com` |
-| 02_Goals (excluded from triage, see below) | `d7e8d2283058b1cf4501917e8a924a8d623fbcc595f5e7f1abc80cd88d823997@group.calendar.google.com` |
-| 03_Reminders | `a6560fd6074976a9364691677a204c5c14ce4ad3a94b766e8a6175955b3bd162@group.calendar.google.com` |
-| 04_Holiday | `7a434e3ead1496b607442447dd7d39fe4b697d55e24955c7137981755aa8816a@group.calendar.google.com` |
-| 05_Habits | `7d2ad28a9792ca5bb5b6beb17fdd3c0494742f55f23a7cc9b938598c3649df31@group.calendar.google.com` |
-| 06_Tracker | `2d2d09f71b92dcdb2004d2b51f846ba560d4dfdad5b115b40c416ae96a09c8c0@group.calendar.google.com` |
+| 00_Primary (primary) | `primary` |
+| 01_Important | `<id: see calendar-calendars>` |
+| 02_Goals (excluded from triage, see below) | `$GOALS_CALENDAR_ID` |
+| 03_Reminders | `<id: see calendar-calendars>` |
+| 04_Holiday | `<id: see calendar-calendars>` |
+| 05_Habits | `<id: see calendar-calendars>` |
+| 06_Tracker | `<id: see calendar-calendars>` |
 | Holidays in Australia | `en.australian#holiday@group.v.calendar.google.com` |
 
-The names are display labels the user has renamed before, so the IDs are what count. If a name here looks wrong, or a `--calendar` call returns `Not Found`, run `~/bin/agent_scripts/calendar-calendars` to see the current names and IDs and update this table. The old `Chores` and `Ideal Week` calendars no longer exist.
+The names are display labels the user has renamed before, so match calendars by name. IDs are private and not stored in this repo: run `~/bin/agent_scripts/calendar-calendars` to get them (the 02_Goals ID is `GOALS_CALENDAR_ID` in `~/.config/agent-scripts/env`). If a name here looks wrong, or a `--calendar` call returns `Not Found`, re-run it and update this table. The old `Chores` and `Ideal Week` calendars no longer exist.
 
 **Not in triage scope** (skip these entirely):
-- `mimitran1305@gmail.com` — Mimi's personal calendar, shared with this account
-- `CliMi` — joint calendar, not for solo triage
+- `partner@example.com` — Sam's personal calendar, shared with this account
+- The joint partner calendar — not for solo triage
 - `02_Goals` — a goal-tracking calendar with its own model and procedures. **Excluded from the routine triage sweep.** Only work on it when the user explicitly asks (populate today's focus, close out a day). When they do, load `references/goals-calendar.md` first.
 
 The `--calendar <id>` flag is accepted by `calendar-list`, `calendar-get`, `calendar-create`, and `calendar-update`.

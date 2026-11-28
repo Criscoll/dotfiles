@@ -39,7 +39,7 @@ different ports:
 
 ```bash
 tailscale serve status
-# https://sploomvps.tailba1ff4.ts.net (tailnet only)
+# https://<node>.<tailnet>.ts.net (tailnet only)
 # |-- /:443   proxy http://127.0.0.1:8080   (finance app)
 # |-- /:8443  proxy http://127.0.0.1:6767   (paseo)
 ```
@@ -74,7 +74,7 @@ Extend this table as new devices take on an app-hosting role.
 
 | Hostname | Tailnet | IP | Role | Notes |
 |---|---|---|---|---|
-| `sploomvps` | `tailba1ff4` | `134.199.169.64` | Primary VPS — hosts Docker apps exposed via `tailscale serve` | Funnel policy-disabled on this tailnet |
+| `sploomvps` | `<tailnet>` | `<VPS_IP>` | Primary VPS — hosts Docker apps exposed via `tailscale serve` | Funnel policy-disabled on this tailnet |
 
 ## Current `tailscale serve` inventory on `sploomvps`
 
@@ -83,7 +83,7 @@ port is free before adding a new app.
 
 | External port | Backend | App | Notes |
 |---|---|---|---|
-| `:443` | `http://127.0.0.1:8080` | Financial spreadsheets app | Caddy container bound to loopback |
+| `:443` | `http://127.0.0.1:8080` | Private web app | Caddy container bound to loopback |
 | `:8443` | `http://127.0.0.1:6767` | Paseo (remote code-harness UI) | See `Project_LLM_Web_App/outline.md` in scribbles for the full deployment checklist |
 
 ## Adding a new app — checklist

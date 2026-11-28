@@ -17,22 +17,22 @@ Use markdown checkboxes so items can be checked off, grouped under category
 headings:
 
 ```markdown
-# Packing — Taiwan, 15–25 Nov 2026 (carry-on only)
+# Packing — Destination, 10 nights (carry-on only)
 
 ## Documents & money
-- [ ] Passport (expires 2028-03 — valid ✓)
-- [ ] Taiwan visa-exempt entry confirmed — no visa needed (see outline)
+- [ ] Passport (expiry checked — valid ✓)
+- [ ] Destination entry requirements confirmed — no visa needed (see outline)
 - [ ] Travel insurance policy (PDF on phone + printout)
 - [ ] Booking confirmations (flights, hotels)
-- [ ] Cash: some TWD for arrival; cards (Wise, no-FX-fee card)
+- [ ] Cash: some local currency for arrival; cards (Wise, no-FX-fee card)
 
 ## Electronics
 - [ ] Phone + charger
-- [ ] Plug adapter — Taiwan uses Type A/B (same as US); check hotel voltage 110V
+- [ ] Plug adapter — check destination plug type and hotel voltage
 - [ ] Power bank (carry-on only — must be in cabin bag, not checked)
 - [ ] Laptop + charger
 
-## Clothing (Nov = mild, 18–24°C, some rain)
+## Clothing (mild, some rain)
 - [ ] Light layers + one warm layer for evenings
 - [ ] Packable rain jacket / compact umbrella
 - [ ] Comfortable walking shoes (lots of city walking per itinerary)

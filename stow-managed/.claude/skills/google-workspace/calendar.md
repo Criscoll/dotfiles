@@ -125,7 +125,7 @@ EOF
 
 # All events on the same non-primary calendar
 ~/bin/agent_scripts/calendar-batch-update /tmp/calendar-updates.json \
-  --calendar "8ea572bf0778ac8c77c8417ee697bc7b94f70e1d7763984dfe64e4e5fddf02fe@group.calendar.google.com"
+  --calendar "<calendar-id>"
 
 # With a custom concurrency limit (default: 10)
 ~/bin/agent_scripts/calendar-batch-update /tmp/calendar-updates.json --concurrency 5

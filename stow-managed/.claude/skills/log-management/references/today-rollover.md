@@ -23,7 +23,7 @@ Add one line to the end of `# Progress` in the file that holds the stale Today,
 starting with the **heading's date** (not today's):
 
 ```markdown
-Mon Oct 26 — Emailed NAB, MSA and Up to call off the settlement; Alishan hotel not booked.
+Mon Oct 26 — Emailed Bank A, Broker B and Lender C to call off the settlement; Stopover hotel not booked.
 ```
 
 Summarise the ticked entries as short phrases and mention untouched or dropped

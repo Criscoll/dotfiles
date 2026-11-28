@@ -95,9 +95,9 @@ A compact illustration of sections 2–3:
 
 ```markdown
 ## Bottom line
-Moving nets ~A$73k/yr more than staying (+16%), driven almost entirely by the
-15% HK tax cap vs 47% AU marginal on bonus income. The result flips negative only
-if the 2027 bonus is taxed as AU-source — the one question worth resolving first.
+Option B nets ~$40k/yr more than option A (+10%), driven almost entirely by the
+15% flat-rate cap vs 45% marginal on bonus income. The result flips negative only
+if the bonus is taxed under option A's rules — the one question worth resolving first.
 
 ## Scenarios at a glance
 _All figures A$/yr, steady state._

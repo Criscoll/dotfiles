@@ -2,8 +2,8 @@
 
 ## Context
 
-A relocation/tax analysis session ran three scenarios (e.g. "stay", "relocate to HK", "relocate
-to AU") through the `finance` script that shared roughly 70% of their inputs (same income,
+A relocation/tax analysis session ran three scenarios (e.g. "stay", "relocate to country X", "relocate
+to country Y") through the `finance` script that shared roughly 70% of their inputs (same income,
 same mortgage terms, same savings rate) and differed only in a handful of fields (tax brackets,
 currency, cost of living). There was no way to express "run this base case three times with
 these overrides" — each scenario had to be invoked separately and the results tracked and

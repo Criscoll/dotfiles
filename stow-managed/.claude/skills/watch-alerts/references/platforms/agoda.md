@@ -1,15 +1,13 @@
 # Agoda (OTA)
 
-Verified from the VPS on 2026-10-15 against Alishan hotels. Property-specific facts
+Verified from the VPS on 2026-10-15 against live hotel pages. Property-specific facts
 (hotel ids, party size, nights) belong in the watcher's `config.json`, not here.
 
 ## Identify it / find the hotel id
 
 Property pages look like `https://www.agoda.com/<slug>/hotel/<city>-<cc>.html`. The page HTML
 contains `hotel_id=<n>`: `curl` the page with a browser UA and `grep -oE 'hotel_id=[0-9]+'`
-(e.g. Dafeng Hotel `528785`, Ali-Shan Kaofeng Hotel `328620`, Shermuh `317859`, Alishan Gou
-`17243874` via slug `alishan-gou-hotel-chiayi`). Guessed slugs don't always resolve
-(`alishan-gou-hotel` and `alishan-house` didn't); use the slug from an Agoda search result. Rung 1 (plain-HTTP JSON) works: no cookies, auth or captcha.
+(e.g. `528785`, `328620`). Guessed slugs don't always resolve (shortened hotel-name slugs sometimes fail); use the slug from an Agoda search result. Rung 1 (plain-HTTP JSON) works: no cookies, auth or captcha.
 
 ## Endpoint (plain GET, no cookies)
 
@@ -24,7 +22,7 @@ childAges=, travellerType=1, currencyCode=TWD, los=<nights>, hotel_id=<id>`, hea
   (int) and `price.display` (float).
 - **No sellable rooms = empty `masterRooms`** (still `isDataReady: true`).
 - **Listed but not sold on Agoda:** `isDataReady: false`, `supplierCount: 0` and no `masterRooms`
-  key on every date, including dates the hotel's own engine had stock (Alishan Gou, 2026-10-15).
+  key on every date, including dates the hotel's own engine had stock (one hotel, 2026-10-15).
   Prove a positive on a sold date before watching such a property; the `check()` below raises
   `CheckError` on this state rather than reporting "nothing free".
 - **Prices come back in USD** (`currencyInfo.code`) despite `currencyCode=TWD`, which is ignored

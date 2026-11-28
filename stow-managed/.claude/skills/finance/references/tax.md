@@ -15,7 +15,7 @@ must be last. Thresholds must be strictly ascending. `result` = total tax; also 
 `surcharge_amount`, `progressive_total`, `effective_rate_pct`. `--surcharge PCT` is an optional
 flat percentage of income added on top (e.g. AU's Medicare Levy).
 
-For HK-style two-method comparisons (progressive vs. a flat-rate alternative, taxed at
+For two-method comparisons (progressive vs. a flat-rate alternative, taxed at
 whichever is lower), add `--flat-rate PCT`: `result` becomes `min(progressive, flat)`, and the
 output includes `methods: {progressive, flat}` plus `method_used`.
 

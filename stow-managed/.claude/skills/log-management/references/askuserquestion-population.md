@@ -50,7 +50,7 @@ rg -n '^\s*- \[ \]' <task>/outline.md | rg -v '~'
 
 Turn the most plausible next outcomes into candidate success lines. Each
 must pass the outcome test in `SKILL.md`: reword vague items ("Research
-flights") into the concrete result ("Flight options sent to Mimi with a pick
+flights") into the concrete result ("Flight options sent to Sam with a pick
 requested by Sunday") before offering them. One question per task, up to 4 per
 call, **multi-select** — a goal can carry several success lines, and the user
 picks the outcomes this week must deliver. Option label = a short form of the
@@ -95,7 +95,7 @@ Candidates come from the goals, not from the task outlines: for each open goal,
 propose the next concrete step toward one of its open success lines today (and
 any carried entries from `today-rollover.md` step 3 are already in). One
 `multiSelect: true` question per cluster of goals, options = step phrased as a
-specific action ("Email NAB to cancel the 29 Oct settlement"), description = the
+specific action ("Email Bank A to cancel the settlement"), description = the
 goal it serves. Each step must pass the outcome test — specific enough to start
 without thinking. If there are more goals than fit in one call, ask about the
 ones nearest to being met first. Custom/Other text follows the same rules as

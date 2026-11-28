@@ -283,8 +283,7 @@ flight pair (list → detail):
 
 ### Rate limiting (2026-08 finding, now handled)
 
-The light-volume test above (3 calls) gave a false sense of security. A real
-HK/Taiwan trip session — an 8-candidate date sweep (16 calls) plus several
+The light-volume test above (3 calls) gave a false sense of security. A realmulti-city trip session — an 8-candidate date sweep (16 calls) plus several
 manual spot-checks fired back-to-back with no delay between them (~45 calls
 total) — hit sustained `429`s that a fixed 1s/2s/4s exponential backoff never
 recovered from, even across 5 retries spaced 90s apart.
@@ -317,7 +316,7 @@ the hood" above) automatically — no per-script opt-in.
 ## Case study: why LetsFG was rejected (2026-08)
 
 LetsFG (`pip install letsfg`, GitHub `LetsFG/LetsFG`) was tried first as the
-flight-search backend for a Hong Kong/Taiwan trip and abandoned in favor of
+flight-search backend for a multi-city trip and abandoned in favor of
 Duffel after failing the checklist above on multiple points:
 
 - **Prompt injection aimed at the agent.** Both the GitHub README and the

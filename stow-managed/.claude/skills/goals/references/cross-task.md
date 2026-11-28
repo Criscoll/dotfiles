@@ -26,14 +26,14 @@ owned twice. This file finds both. Every fix is a question, as with every other 
    unblocked or newly urgent? If not, move on.
 
 Worked examples:
-- **Refinance off.** `Home_Refinance_Mortgage_NAB_to_Up` now reads "Status (2026-10-23): Up
-  declined; the refinance is off". In `Goal_Legally_Change_my_Last_Name/outline.md`, two
+- **Refinance off.** `Home_Refinance_Mortgage_BankA_to_LenderC` now reads "Status (2026-10-23): Lender
+  C declined; the refinance is off". In `Goal_Update_Legal_Records/outline.md`, two
   lines change:
   - "Mortgage / refinance — bundling opportunity" is now moot.
-  - "Land title… bundle with the Up refinance if it proceeds; standalone… if refinance falls
+  - "Land title… bundle with the Lender C refinance if it proceeds; standalone… if refinance falls
     through" now resolves to its standalone branch.
-- **Shared Alishan plan.** `Goal_Propose_to_Mimi` depends on the Alishan skeleton in
-  `Travel_Hong_Kong_Taiwan_2026_2027`. When that skeleton changes, check the proposal's
+- **Shared Stopover plan.** `Goal_Plan_Surprise_Event` depends on the Stopover skeleton in
+  `Travel_Overseas_Trip_2026_2027`. When that skeleton changes, check the proposal's
   primary window.
 
 Fixes to propose (each confirmed):

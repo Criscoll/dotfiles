@@ -93,7 +93,7 @@ fall back to computing the answer yourself — surface the problem instead.
 | `npv` / `irr` | Value or rate of irregular dated cashflows | `references/returns-and-rates.md` |
 | `pct-change` | Percentage change | `references/returns-and-rates.md` |
 | `ear` | Effective annual rate (APR→EAR) | `references/returns-and-rates.md` |
-| `progressive-tax` | Tax across brackets, surcharge, HK flat-rate comparison | `references/tax.md` |
+| `progressive-tax` | Tax across brackets, surcharge, flat-rate-alternative comparison | `references/tax.md` |
 
 Before running a subcommand for the first time in a session, read its reference file
 (`cat "$CLAUDE_SKILL_DIR/references/<file>"`) — flags differ between subcommands and

@@ -1,6 +1,6 @@
 # ec-hotel.net webhotel-v4 (Taiwan hotel booking engine)
 
-Verified from the VPS on 2026-10-15 against a live Alishan hotel (hotel code `0905`).
+Verified from the VPS on 2026-10-15 against a live hotel (hotel code `0905`).
 Hotel-specific facts (hotel code, room codes, party size, nights) belong in the watcher's
 `config.json`, not here.
 

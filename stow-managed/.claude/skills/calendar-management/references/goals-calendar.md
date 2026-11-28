@@ -1,6 +1,6 @@
 # Goals calendar (`02_Goals`)
 
-Calendar ID: `d7e8d2283058b1cf4501917e8a924a8d623fbcc595f5e7f1abc80cd88d823997@group.calendar.google.com`
+Calendar ID: `$GOALS_CALENDAR_ID` (set in `~/.config/agent-scripts/env`, untracked)
 
 A personal goal-tracking calendar. The **event descriptions** carry the content; the summaries
 stay fixed. Treat it as a *record*, not a task list — closed days are kept as history and are
@@ -35,8 +35,8 @@ items).
 
 ### `Move the Needle` — the daily layer
 
-- Daily recurring, all-day. Master event ID `46gvt7r9isdp1kvv0bgve3ju3o`; instances
-  `46gvt7r9isdp1kvv0bgve3ju3o_YYYYMMDD`.
+- Daily recurring, all-day. Master event ID `$NEEDLE_MASTER_ID` (same env file); instances
+  `$NEEDLE_MASTER_ID_YYYYMMDD`.
 - Description = the 1–3 things that would move the current week's goals forward that day, as a
   flat `<ul><li>` list (see "Formatting" below).
 - Drawn from the weekly log's `# Today` and `# Weekly Goals` success lines (the log is the source
@@ -74,7 +74,7 @@ at every rollover. The log is now the only record of the week's goals.
 
 - **Never populate, normalise, roll over, mark or otherwise write** a `Goals for the Week`
   instance.
-- The recurring master `12k1buhgem5sguhl882be01b7d` still runs to the end of 2026 and keeps
+- The recurring master (retired weekly) still runs to the end of 2026 and keeps
   producing empty instances. Ignore them. Never modify the master; ending the recurrence is the
   user's call, not an agent's.
 - Instances up to 2026-W44 are the historical record, in the old format: `Closed-Ended:` and
@@ -140,11 +140,11 @@ something sound done while staying vague — `follow up`, `look into`, `research
 
 | Vague | Concrete |
 |---|---|
-| Follow up with HR BP on the HK Move | Message HR BP asking for a decision date on the HK move timeline |
-| Establish key dates for HK move deliverables | Write down the 3-5 hard HK move deadlines (visa, notice period, lease end) |
+| Follow up with HR on the Relocation | Message HR asking for a decision date on the relocation timeline |
+| Establish key dates for relocation deliverables | Write down the 3-5 hard relocation deadlines (visa, notice period, lease end) |
 
 This applies when *picking* items too, not just rewording existing ones — a `Move the Needle` day
-whose item is "research flights" hasn't earned its slot; "send Mimi 2-3 flight options and ask for
+whose item is "research flights" hasn't earned its slot; "send Sam 2-3 flight options and ask for
 a pick by Sunday" has.
 
 ## Reading and writing descriptions
@@ -156,8 +156,8 @@ a pick by Sunday" has.
 - **Preserve the user's structure with a minimal touch**: don't reorder items, don't reword. The
   one exception is the mechanical format-normalization pass above, which always runs first on the
   focused day. Beyond that, only append `✅`/`❌`/`🚫` marks and add items.
-- Never modify the recurring masters (`46gvt7r9isdp1kvv0bgve3ju3o` and
-  `12k1buhgem5sguhl882be01b7d` with no `_YYYYMMDD` suffix) — only dated instances.
+- Never modify the recurring masters (the needle master and
+  the retired weekly master, which have no `_YYYYMMDD` suffix) — only dated instances.
 
 ## Procedures
 
@@ -185,7 +185,7 @@ a pick by Sunday" has.
    Items already marked `🚫` are closed: don't offer or carry them. Apply on confirmation.
 3. Copy the confirmed items — **fresh, unmarked** — into the target day's `Move the Needle`
    description. The target is the **next day** by default; honor a specific day the user names
-   (e.g. "move the Alishan items to tomorrow").
+   (e.g. "move the Stopover items to tomorrow").
 4. **Never remove leftovers from the original day.** Its `❌` items stay as the record that the
    task wasn't done when it was supposed to be; the fresh copies in the target day are the retry.
    Only append marks and carried copies — the original description is never trimmed.

@@ -41,7 +41,7 @@ This skill serves two roles:
 ├── Cooking/            → Recipes, techniques
 ├── Learning/           → Economics, structured courses, study notes
 ├── Meditation/         → Practice notes, yoga nidra
-├── Mimi/              → Partner-specific: gifts, date ideas, personal tracking
+├── <Partner>/         → Partner-specific: gifts, date ideas, personal tracking
 ├── MISC/              → Genuinely uncategorizable
 ├── Glossary/           → Term definitions across domains
 └── External Notes/     → Read-only imported TIL notes — do not add new entries here
@@ -78,7 +78,7 @@ knowledge-base cache; use it.
 Work through these in order; stop at the first match:
 
 1. Does it belong to one of the six numbered categories? → place there.
-2. Is it one of the special folder domains (Cooking, Mimi, etc.)? → place there.
+2. Is it one of the special folder domains (Cooking, the partner folder, etc.)? → place there.
 3. Is it a term definition? → `Glossary/`.
 4. No match? → `MISC/` temporarily; note that a new subdirectory may be warranted.
 
