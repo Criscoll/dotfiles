@@ -116,7 +116,7 @@ Some repos (e.g. `scribbles`, `health-analytics`) use **git-crypt in GPG mode** 
 
 **Convention: one personal GPG key, added to every encrypted repo.** All repos use the same GPG identity — `git-crypt add-gpg-user YOUR_EMAIL` — so the same private key unlocks everything.
 
-**This repo encrypts `stow-managed/.claude/skills/dad/`** (rule in `.gitattributes`, key FAC6E7BA). After pulling, run `git-crypt unlock` here; on a machine without the key, add `^\.claude/skills/dad` to `.stow-local-ignore`, or stow links ciphertext as a broken skill. Never stage `skills/dad/` without the `.gitattributes` rule in place — the file would land in public history as plaintext.
+**This repo encrypts `stow-managed/.claude/skills/dad/` and `stow-managed/.claude/skills/introspection/`** (rules in `.gitattributes`, key FAC6E7BA). After pulling, run `git-crypt unlock` here; on a machine without the key, add `^\.claude/skills/dad` and `^\.claude/skills/introspection` to `.stow-local-ignore`, or stow links ciphertext as broken skills. Never stage either directory without the `.gitattributes` rule in place — the file would land in public history as plaintext.
 
 **Setting up on a new machine:**
 

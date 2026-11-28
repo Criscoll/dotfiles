@@ -1,1 +1,2 @@
 stow-managed/.claude/skills/dad/** filter=git-crypt diff=git-crypt
+stow-managed/.claude/skills/introspection/** filter=git-crypt diff=git-crypt
