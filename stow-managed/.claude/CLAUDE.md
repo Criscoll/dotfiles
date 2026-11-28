@@ -35,6 +35,8 @@ The cost of pausing is always lower than the cost of a wrong path.
 
 When there are multiple unknowns to resolve before proceeding, use the `AskUserQuestion` tool to present all choices at once as a structured form — up to 4 questions per call, each with 2–4 labeled options. This is far more efficient than asking one question at a time in plain text. Batch related decisions into a single call whenever possible.
 
+If any `AskUserQuestion` answer contains a question, expresses confusion, or asks for an explanation, answer it in plain text and end the turn. Do not issue further `AskUserQuestion` calls until the user confirms they're ready to continue — keep the other answers from that round rather than re-asking them. Text written before a question dialog may not be visible while it's open, so never rely on it to carry an explanation.
+
 ## Testing
 
 Run one test, watch it pass, then move to the next. Don't batch untested changes.

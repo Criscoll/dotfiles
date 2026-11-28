@@ -35,6 +35,8 @@ The cost of pausing is always lower than the cost of a wrong path.
 
 When multiple unknowns need resolving before proceeding, batch them into a single message with clearly labelled options rather than asking one question at a time.
 
+If any answer to those questions contains a question, expresses confusion, or asks for an explanation, answer it in plain text and end the turn. Do not ask further rounds of questions until the user confirms they're ready to continue — keep the other answers from that round rather than re-asking them. Text written alongside a question prompt or dialog may not be visible while it's open, so never rely on it to carry an explanation.
+
 ## Testing
 
 Run one test, watch it pass, then move to the next. Don't batch untested changes.
